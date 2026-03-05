@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RopiHR — Laporan Absensi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: {
+        coklat: '#3e2723', kuning: '#fbc02d', krem: '#fff8e1'
+      }}}
+    }
+  </script>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-gray-100 flex justify-center min-h-screen font-sans">
+<div class="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl relative">
+
+  <div class="bg-coklat pt-12 pb-6 px-6 shrink-0 rounded-b-3xl shadow-md z-10">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="home.html" class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white">
+          <i class="fa-solid fa-arrow-left"></i>
+        </a>
+        <h1 class="text-xl font-black text-kuning">Laporan Absen</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="gantiBulan(-1)" class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30 transition">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <span id="label-bulan" class="text-white text-sm font-bold min-w-[90px] text-center"></span>
+        <button onclick="gantiBulan(1)" class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30 transition">
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-y-auto no-scrollbar pb-32 -mt-4 pt-8">
+
+    <div class="px-6 mt-2">
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-green-50 rounded-2xl p-3 text-center border border-green-100 shadow-sm">
+          <p id="rekap-hadir" class="text-2xl font-black text-green-600">-</p>
+          <p class="text-[10px] font-black text-green-500 uppercase tracking-wide">Hadir</p>
+        </div>
+        <div class="bg-red-50 rounded-2xl p-3 text-center border border-red-100 shadow-sm">
+          <p id="rekap-telat" class="text-2xl font-black text-red-500">-</p>
+          <p class="text-[10px] font-black text-red-400 uppercase tracking-wide">Telat</p>
+        </div>
+        <div class="bg-blue-50 rounded-2xl p-3 text-center border border-blue-100 shadow-sm">
+          <p id="rekap-izin" class="text-2xl font-black text-blue-500">-</p>
+          <p class="text-[10px] font-black text-blue-400 uppercase tracking-wide">Izin/Cuti</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 mt-5">
+      <div class="bg-white rounded-3xl p-4 shadow-sm border border-gray-100">
+        <div class="grid grid-cols-7 text-center text-[10px] font-black text-gray-400 mb-2">
+          <div>Min</div><div>Sen</div><div>Sel</div><div>Rab</div>
+          <div>Kam</div><div>Jum</div><div>Sab</div>
+        </div>
+        <div id="grid-kalender" class="grid grid-cols-7 gap-y-1 text-center text-sm font-bold">
+          </div>
+      </div>
+    </div>
+
+    <div class="px-6 mt-6">
+      <h3 class="font-black text-coklat text-base mb-1">Riwayat Kehadiran</h3>
+      <p class="text-[11px] text-gray-400 mb-3"><i class="fa-solid fa-circle-info mr-1"></i>Klik kartu riwayat untuk melihat foto detail absen.</p>
+      <div id="list-riwayat" class="flex flex-col gap-3">
+        <div class="bg-gray-50 rounded-2xl p-4 text-center text-gray-400">
+          <div class="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p class="text-sm font-bold">Memuat riwayat...</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-sm bg-white border-t border-gray-100 px-6 py-3 flex justify-around z-20">
+    <a href="home.html" class="flex flex-col items-center text-gray-300 gap-0.5 hover:text-coklat transition-colors">
+      <i class="fa-solid fa-house text-xl"></i>
+      <span class="text-[10px] font-black">Home</span>
+    </a>
+    <a href="absen.html" class="flex flex-col items-center text-coklat gap-0.5">
+      <i class="fa-solid fa-clipboard-user text-xl"></i>
+      <span class="text-[10px] font-black">Absen</span>
+    </a>
+    <a href="cuti.html" class="flex flex-col items-center text-gray-300 gap-0.5 hover:text-coklat transition-colors">
+      <i class="fa-solid fa-calendar-minus text-xl"></i>
+      <span class="text-[10px] font-black">Cuti</span>
+    </a>
+    <a href="#" onclick="alert('Fitur Klaim Dana sedang dalam tahap pengembangan! 🚀'); return false;" class="flex flex-col items-center text-gray-200 gap-0.5">
+      <i class="fa-solid fa-wallet text-xl"></i>
+      <span class="text-[10px] font-black">Klaim</span>
+    </a>
+    <a href="#" onclick="alert('Fitur Slip Gaji sedang dalam tahap pengembangan! 🚀'); return false;" class="flex flex-col items-center text-gray-200 gap-0.5">
+      <i class="fa-solid fa-money-check-dollar text-xl"></i>
+      <span class="text-[10px] font-black">Gaji</span>
+    </a>
+  </nav>
+
+</div>
+
+<div id="modal-absen" class="hidden fixed inset-0 z-50 flex items-end" style="background:rgba(62,39,35,0.88); backdrop-filter:blur(4px)">
+  <div class="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl overflow-y-auto no-scrollbar"
+    style="max-height:92vh; padding: 1.5rem">
+
+    <div class="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0"></div>
+
+    <p id="modal-jam" class="text-4xl font-black text-coklat tracking-tight mb-1 shrink-0">--:--</p>
+
+    <div id="modal-label"
+      class="bg-coklat text-kuning text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full mb-3 shrink-0">
+      MASUK
+    </div>
+
+    <div id="box-gps"
+      class="w-full mb-3 bg-blue-50 text-blue-700 px-4 py-2.5 rounded-2xl text-sm font-bold flex items-center gap-2 justify-center shrink-0">
+      <div class="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      Mendeteksi lokasi...
+    </div>
+
+    <div id="box-wajah" class="hidden w-full mb-3 bg-orange-50 text-orange-700 px-4 py-2.5 rounded-2xl text-sm font-bold text-center shrink-0">
+      <i class="fa-regular fa-face-meh mr-1"></i> Arahkan wajah ke kamera...
+    </div>
+
+    <div id="box-kamera"
+      class="w-full flex-1 rounded-3xl overflow-hidden border-4 border-kuning bg-krem flex items-center justify-center relative mb-4 transition-colors duration-300 min-h-[250px]">
+      <i id="ikon-kamera" class="fa-solid fa-camera text-5xl text-kuning/30 absolute z-0"></i>
+      <video id="video-kamera" class="w-full h-full object-cover hidden relative z-10" autoplay playsinline muted style="transform:scaleX(-1)"></video>
+      <img id="preview-foto" class="w-full h-full object-cover hidden relative z-20" style="transform:scaleX(-1)">
+      <div id="badge-deteksi" class="hidden absolute top-3 right-3 text-white text-[10px] font-black px-2.5 py-1 rounded-full z-30"></div>
+    </div>
+
+    <div id="grup-jepret" class="w-full grid grid-cols-2 gap-3 shrink-0">
+      <button onclick="tutupModal()"
+        class="bg-gray-100 text-gray-500 font-black py-4 rounded-2xl hover:bg-gray-200">
+        Batal
+      </button>
+      <button id="btn-jepret" disabled onclick="jepretFoto()"
+        class="bg-gray-200 text-gray-400 font-black py-4 rounded-2xl flex items-center justify-center gap-2 cursor-not-allowed transition-all">
+        <i class="fa-solid fa-camera"></i>
+        <span id="teks-jepret">Tunggu GPS...</span>
+      </button>
+    </div>
+
+    <div id="grup-kirim" class="w-full grid grid-cols-2 gap-3 shrink-0 hidden">
+      <button onclick="ulangiFoto()"
+        class="bg-gray-100 text-gray-500 font-black py-4 rounded-2xl hover:bg-gray-200 active:scale-95 transition-all">
+        <i class="fa-solid fa-rotate-right mr-1"></i> Ulangi
+      </button>
+      <button onclick="kirimAbsen()" id="btn-kirim"
+        class="bg-green-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-green-600 active:scale-95 transition-all shadow-lg shadow-green-500/30">
+        <i class="fa-solid fa-paper-plane"></i> Kirim Absen
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<div id="modal-detail" class="hidden fixed inset-0 z-50 flex items-end" style="background:rgba(62,39,35,0.88); backdrop-filter:blur(4px)">
+  <div class="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl overflow-y-auto no-scrollbar" style="max-height:85vh; padding: 1.5rem">
+    <div class="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0"></div>
+    <h2 class="text-xl font-black text-coklat mb-4" id="detail-tanggal">Detail Absen</h2>
+    
+    <div class="w-full flex-1 overflow-y-auto no-scrollbar pb-6 pt-4 flex flex-col gap-4">
+      
+      <div class="bg-green-50 p-4 rounded-3xl border border-green-100 flex flex-col">
+        <div class="self-start bg-green-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2">Absen Masuk</div>
+        <p class="font-bold text-lg mb-2 text-green-800" id="detail-jam-in">-</p>
+        <div class="w-full h-40 bg-gray-200 rounded-2xl overflow-hidden relative">
+          <p class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold" id="teks-nofoto-in">Tidak ada foto</p>
+          <img id="detail-foto-in" class="w-full h-full object-cover hidden relative z-10" alt="Foto Masuk">
+        </div>
+      </div>
+
+      <div class="bg-orange-50 p-4 rounded-3xl border border-orange-100 flex flex-col mt-2">
+        <div class="self-start bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2">Absen Keluar</div>
+        <p class="font-bold text-lg mb-2 text-orange-800" id="detail-jam-out">-</p>
+        <div class="w-full h-40 bg-gray-200 rounded-2xl overflow-hidden relative">
+          <p class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold" id="teks-nofoto-out">Tidak ada foto</p>
+          <img id="detail-foto-out" class="w-full h-full object-cover hidden relative z-10" alt="Foto Keluar">
+        </div>
+      </div>
+
+    </div>
+
+    <button onclick="tutupDetail()" class="w-full mt-2 bg-gray-100 text-gray-500 font-black py-4 rounded-2xl hover:bg-gray-200 shrink-0">
+      Tutup Detail
+    </button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// KONFIGURASI
+// ══════════════════════════════════════
+const BACKEND = 'http://localhost:3333';
+const ERPNEXT_URL = 'http://103.187.147.240'; 
+const JAM_MASUK_KANTOR = '07:00'; 
+const JAM_PULANG_KANTOR = '15:30'; 
+
+const LOKASI_FALLBACK = [
+  { nama: 'PH Klaten', lat: -7.615, lng: 110.687, radius: 100 }
+];
+
+const userData = localStorage.getItem('ropi_user');
+if (!userData) window.location.href = 'index.html';
+const user = JSON.parse(userData);
+
+let modeAbsen       = 'MASUK';
+let streamKamera    = null;
+let intervalDeteksi = null;
+let intervalJam     = null;
+let koordinatGPS    = null;
+let fotoBase64      = null; 
+let lokasiKantor    = [...LOKASI_FALLBACK];
+let bulanAktif      = new Date().getMonth();
+let tahunAktif      = new Date().getFullYear();
+let dataRiwayat     = [];
+
+window.addEventListener('load', async () => {
+  renderKalender();
+  await ambilLokasiKantor();
+  await ambilRiwayatAbsen();
+
+  // ✨ CEK PERINTAH AUTO BUKA KAMERA DARI HALAMAN HOME ✨
+  const urlParams = new URLSearchParams(window.location.search);
+  const modeAuto = urlParams.get('mode');
+  const isAuto = urlParams.get('auto');
+
+  if (isAuto === 'true' && modeAuto) {
+    // Beri jeda 500ms agar halaman merender sempurna dulu sebelum membuka kamera berat
+    setTimeout(() => {
+      bukaModalAbsen(modeAuto);
+    }, 500);
+  }
+});
+
+async function ambilLokasiKantor() {
+  try {
+    const branch = user.branch || '';
+    const url = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}` : `${BACKEND}/api/locations`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.success && data.locations?.length > 0) { lokasiKantor = data.locations; }
+  } catch (e) { console.warn('Pakai lokasi fallback'); }
+}
+
+async function ambilRiwayatAbsen() {
+  const listEl = document.getElementById('list-riwayat');
+  try {
+    const dari  = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
+    const akhir = new Date(tahunAktif, bulanAktif + 1, 0);
+    const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
+
+    const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}`);
+    const data = await res.json();
+
+    if (data.success && data.data) {
+      dataRiwayat = data.data;
+      renderRiwayat();
+      renderKalender(); 
+      hitungRekap();
+    } else {
+      listEl.innerHTML = pesanKosong('Belum ada data absensi bulan ini');
+    }
+  } catch (e) {
+    listEl.innerHTML = pesanKosong('Gagal memuat riwayat');
+  }
+}
+
+function pesanKosong(teks) {
+  return `<div class="bg-gray-50 rounded-2xl p-6 text-center text-gray-400"><i class="fa-solid fa-clipboard-list text-3xl mb-2 block text-gray-200"></i><p class="text-sm font-bold">${teks}</p></div>`;
+}
+
+function renderRiwayat() {
+  const listEl = document.getElementById('list-riwayat');
+  if (!dataRiwayat || !dataRiwayat.length) { listEl.innerHTML = pesanKosong('Belum ada data absensi bulan ini'); return; }
+
+  const grouped = {};
+  dataRiwayat.forEach(item => {
+    const tgl = item.time?.substring(0, 10) || item.attendance_date;
+    if (!grouped[tgl]) grouped[tgl] = { in: null, out: null };
+    
+    if (item.log_type === 'IN') {
+      if (!grouped[tgl].in || item.time > grouped[tgl].in) grouped[tgl].in = item.time;
+    }
+    if (item.log_type === 'OUT') {
+      if (!grouped[tgl].out || item.time > grouped[tgl].out) grouped[tgl].out = item.time;
+    }
+  });
+
+  const sorted = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+  listEl.innerHTML = sorted.map(tgl => {
+    const data = grouped[tgl];
+    const d    = new Date(tgl);
+    const label = d.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'short' });
+    const jamIn  = data.in  ? data.in.substring(11, 16) : '-';
+    const jamOut = data.out ? data.out.substring(11, 16) : '-';
+
+    let badges = [];
+    if (jamIn !== '-' && jamIn > JAM_MASUK_KANTOR) {
+      const jamNumIn = parseInt(jamIn.substring(0, 2)) * 60 + parseInt(jamIn.substring(3, 5));
+      const batasTelat = 7 * 60;
+      const selisih = jamNumIn - batasTelat;
+      badges.push(`<span class="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded">Telat ${selisih} mnt</span>`);
+    }
+    if (jamOut !== '-' && jamOut < JAM_PULANG_KANTOR) {
+      badges.push(`<span class="bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded">Pulang Cepat</span>`);
+    }
+    if (jamIn !== '-' && badges.length === 0) {
+      badges.push(`<span class="text-green-600 text-[10px] font-black uppercase">Sesuai Jadwal</span>`);
+    }
+
+    const statusHtml = `<div class="flex flex-col gap-1 items-end">${badges.join('')}</div>`;
+    const ikonEl = data.in ? `<div class="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-500"><i class="fa-solid fa-check"></i></div>` : `<div class="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center text-gray-400"><i class="fa-solid fa-minus"></i></div>`;
+
+    return `<div onclick="bukaDetailRiwayat('${tgl}')" class="cursor-pointer bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm active:scale-95 transition-transform">
+      <div class="flex gap-3 items-center">
+        ${ikonEl}
+        <div>
+          <p class="font-bold text-coklat text-sm">${label}</p>
+          <p class="text-xs text-gray-400">Masuk: ${jamIn} · Keluar: ${jamOut}</p>
+        </div>
+      </div>
+      <div class="text-right">${statusHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function hitungRekap() {
+  const grouped = {};
+  dataRiwayat.forEach(item => {
+    const tgl = item.time?.substring(0, 10) || item.attendance_date;
+    if (!grouped[tgl]) grouped[tgl] = { in: null };
+    if (item.log_type === 'IN') {
+      if (!grouped[tgl].in || item.time > grouped[tgl].in) grouped[tgl].in = item.time;
+    }
+  });
+
+  let hadir = Object.keys(grouped).length;
+  let telat = 0;
+  
+  Object.values(grouped).forEach(d => {
+    if (d.in) {
+      const jamNum = parseInt(d.in.substring(11, 13)) * 60 + parseInt(d.in.substring(14, 16));
+      if (jamNum > 7 * 60) telat++;
+    }
+  });
+
+  document.getElementById('rekap-hadir').textContent = hadir;
+  document.getElementById('rekap-telat').textContent  = telat;
+  document.getElementById('rekap-izin').textContent   = '-';
+}
+
+function renderKalender() {
+  const labelBulan = new Date(tahunAktif, bulanAktif, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  document.getElementById('label-bulan').textContent = labelBulan;
+  const grid   = document.getElementById('grid-kalender');
+  const hariPertama = new Date(tahunAktif, bulanAktif, 1).getDay();
+  const totalHari   = new Date(tahunAktif, bulanAktif + 1, 0).getDate();
+
+  const statusPerHari = {};
+  dataRiwayat.forEach(item => {
+    if (item.log_type === 'IN') {
+      const d = new Date(item.time || item.attendance_date);
+      const tgl = d.getDate();
+      if (d.getMonth() === bulanAktif && d.getFullYear() === tahunAktif) {
+        if (!statusPerHari[tgl] || item.time > statusPerHari[tgl]) statusPerHari[tgl] = item.time;
+      }
+    }
+  });
+
+  let html = '';
+  for (let i = 0; i < hariPertama; i++) html += `<div></div>`;
+  for (let d = 1; d <= totalHari; d++) {
+    const isHariIni = d === new Date().getDate() && bulanAktif === new Date().getMonth();
+    const checkin = statusPerHari[d];
+    let kelas = 'w-8 h-8 flex items-center justify-center mx-auto rounded-full text-sm relative';
+    let dot = '';
+    if (isHariIni) kelas += ' bg-coklat text-kuning font-black';
+    else if (checkin) {
+      const isTelat = checkin.substring(11, 16) > JAM_MASUK_KANTOR;
+      kelas += isTelat ? ' bg-red-100 text-red-600' : ' bg-green-100 text-green-700';
+      dot = `<span class="absolute -bottom-1 w-1.5 h-1.5 ${isTelat ? 'bg-red-500' : 'bg-green-500'} rounded-full"></span>`;
+    }
+    html += `<div><div class="${kelas}">${d}${dot}</div></div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function gantiBulan(arah) {
+  bulanAktif += arah;
+  if (bulanAktif > 11) { bulanAktif = 0; tahunAktif++; }
+  else if (bulanAktif < 0) { bulanAktif = 11; tahunAktif--; }
+  dataRiwayat = [];
+  ambilRiwayatAbsen();
+}
+
+function hitungJarak(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function cekRadius(lat, lng) {
+  let terdekat = { valid: false, nama: '?', jarak: Infinity, radius: 100 };
+  for (const k of lokasiKantor) {
+    const jarak = Math.round(hitungJarak(lat, lng, k.lat, k.lng));
+    if (jarak <= k.radius) return { valid: true, nama: k.nama, jarak, radius: k.radius };
+    if (jarak < terdekat.jarak) terdekat = { valid: false, nama: k.nama, jarak, radius: k.radius };
+  }
+  return terdekat;
+}
+
+async function bukaModalAbsen(mode) {
+  modeAbsen = mode;
+  koordinatGPS = null;
+  fotoBase64 = null; 
+
+  document.getElementById('modal-label').textContent = mode;
+  document.getElementById('modal-label').className = mode === 'MASUK' ? 'bg-coklat text-kuning text-[10px] font-black uppercase px-4 py-1 rounded-full mb-3 shrink-0' : 'bg-kuning text-coklat text-[10px] font-black uppercase px-4 py-1 rounded-full mb-3 shrink-0';
+
+  document.getElementById('video-kamera').classList.remove('hidden');
+  document.getElementById('preview-foto').classList.add('hidden');
+  document.getElementById('grup-jepret').classList.remove('hidden');
+  document.getElementById('grup-kirim').classList.add('hidden');
+  document.getElementById('ikon-kamera').classList.remove('hidden');
+  document.getElementById('box-wajah').classList.add('hidden');
+  document.getElementById('badge-deteksi').classList.add('hidden');
+  setBorderKamera('kuning');
+  setJepret(false, 'Menunggu GPS...');
+  setGPS('loading', 'Mendeteksi lokasi...');
+
+  document.getElementById('modal-absen').classList.remove('hidden');
+
+  clearInterval(intervalJam);
+  intervalJam = setInterval(() => { document.getElementById('modal-jam').textContent = new Date().toLocaleTimeString('id-ID'); }, 1000);
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    koordinatGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    const cek = cekRadius(koordinatGPS.lat, koordinatGPS.lng);
+    if (!cek.valid) {
+      setGPS('error', `Di luar radius! ${cek.jarak}m`);
+      setJepret(false, 'Lokasi tidak sesuai');
+    } else {
+      setGPS('ok', `Lokasi: ${cek.nama} ✓`);
+      await nyalakanKamera();
+    }
+  }, () => setGPS('error', 'GPS Mati'), { enableHighAccuracy: true });
+}
+
+function tutupModal() {
+  clearInterval(intervalJam); clearInterval(intervalDeteksi);
+  if (streamKamera) { streamKamera.getTracks().forEach(t => t.stop()); streamKamera = null; }
+  document.getElementById('video-kamera').srcObject = null;
+  document.getElementById('modal-absen').classList.add('hidden');
+  
+  // Jika ditutup dari auto mode, hapus parameter dari URL agar tidak otomatis terbuka lagi saat refresh
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('auto')) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+async function nyalakanKamera() {
+  try {
+    streamKamera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+    const video = document.getElementById('video-kamera');
+    video.srcObject = streamKamera;
+    video.classList.remove('hidden');
+    document.getElementById('ikon-kamera').classList.add('hidden');
+    await video.play();
+    muatFaceAPI();
+  } catch { setJepret(false, 'Kamera Gagal'); }
+}
+
+async function muatFaceAPI() {
+  document.getElementById('box-wajah').classList.remove('hidden');
+  if (window.faceapi?.nets?.tinyFaceDetector?.isLoaded) { mulaiDeteksi(); return; }
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';
+  script.onload = async () => {
+    await window.faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model');
+    mulaiDeteksi();
+  };
+  document.head.appendChild(script);
+}
+
+function mulaiDeteksi() {
+  const video = document.getElementById('video-kamera');
+  intervalDeteksi = setInterval(async () => {
+    if (!window.faceapi || video.paused) return;
+    const hasil = await window.faceapi.detectAllFaces(video, new window.faceapi.TinyFaceDetectorOptions());
+    if (hasil.length > 0) {
+      setWajah('ok');
+      setJepret(true, 'Jepret!');
+      setBorderKamera('green-400');
+    } else {
+      setWajah('cari');
+      setJepret(false, 'Cari wajah...');
+      setBorderKamera('orange-300');
+    }
+  }, 600);
+}
+
+// ✨ OPTIMASI 700 USER: KOMPRESI GAMBAR DI SINI ✨
+function jepretFoto() {
+  clearInterval(intervalDeteksi); 
+  const video = document.getElementById('video-kamera');
+  const canvas = document.createElement('canvas');
+  
+  // Paksa dimensi maksimal 480px agar foto yang dikirim sangat ringan
+  const MAX_WIDTH = 480;
+  let scaleSize = 1;
+  
+  if (video.videoWidth > MAX_WIDTH) {
+    scaleSize = MAX_WIDTH / video.videoWidth;
+  }
+  
+  canvas.width = video.videoWidth * scaleSize; 
+  canvas.height = video.videoHeight * scaleSize;
+  
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  
+  // Kompresi JPEG kualitas 60%
+  fotoBase64 = canvas.toDataURL('image/jpeg', 0.6);
+
+  const imgPreview = document.getElementById('preview-foto');
+  imgPreview.src = fotoBase64;
+  imgPreview.classList.remove('hidden');
+  
+  video.classList.add('hidden');
+  document.getElementById('badge-deteksi').classList.add('hidden');
+  document.getElementById('box-wajah').classList.add('hidden');
+  setBorderKamera('coklat');
+
+  document.getElementById('grup-jepret').classList.add('hidden');
+  document.getElementById('grup-kirim').classList.remove('hidden');
+}
+
+function ulangiFoto() {
+  fotoBase64 = null;
+  document.getElementById('preview-foto').classList.add('hidden');
+  document.getElementById('video-kamera').classList.remove('hidden');
+  document.getElementById('grup-kirim').classList.add('hidden');
+  document.getElementById('grup-jepret').classList.remove('hidden');
+  mulaiDeteksi(); 
+}
+
+async function kirimAbsen() {
+  if (!koordinatGPS || !fotoBase64) return;
+  
+  const btnKirim = document.getElementById('btn-kirim');
+  btnKirim.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengirim...';
+  btnKirim.disabled = true;
+
+  const logTypeERP = modeAbsen === 'MASUK' ? 'IN' : 'OUT';
+
+  try {
+    const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employee_id: user.employee_id,
+        tipe:         logTypeERP,
+        latitude:     koordinatGPS.lat,
+        longitude:    koordinatGPS.lng,
+        branch:       user.branch || '',
+        image_verification: fotoBase64 
+      })
+    });
+    const hasil = await res.json();
+
+    if (res.ok) {
+      tutupModal();
+      tampilNotif(`Absen ${modeAbsen} berhasil!`, 'hijau');
+      setTimeout(() => location.href = 'absen.html', 1500); // Redirect bersih tanpa parameter
+    } else {
+      btnKirim.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Coba Lagi';
+      btnKirim.disabled = false;
+      tampilNotif(hasil.message || 'Absen gagal', 'merah');
+    }
+  } catch {
+    btnKirim.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Coba Lagi';
+    btnKirim.disabled = false;
+    tampilNotif('Gagal konek ke server', 'merah');
+  }
+}
+
+function bukaDetailRiwayat(tgl) {
+  const inData = dataRiwayat.filter(i => i.log_type === 'IN' && (i.time || i.attendance_date).startsWith(tgl)).sort((a,b) => b.time.localeCompare(a.time))[0];
+  const outData = dataRiwayat.filter(i => i.log_type === 'OUT' && (i.time || i.attendance_date).startsWith(tgl)).sort((a,b) => b.time.localeCompare(a.time))[0];
+
+  const d = new Date(tgl);
+  document.getElementById('detail-tanggal').textContent = d.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  if (inData) {
+    document.getElementById('detail-jam-in').textContent = `Pukul: ${inData.time.substring(11, 16)}`;
+    const fotoIn = inData.custom_foto_absen;
+    if (fotoIn && fotoIn.startsWith('data:image')) {
+      document.getElementById('detail-foto-in').src = fotoIn;
+      document.getElementById('detail-foto-in').classList.remove('hidden');
+      document.getElementById('teks-nofoto-in').classList.add('hidden');
+    } else if (fotoIn) {
+      let urlFotoIn = fotoIn;
+      if (urlFotoIn.startsWith('/files')) urlFotoIn = ERPNEXT_URL + urlFotoIn;
+      document.getElementById('detail-foto-in').src = urlFotoIn;
+      document.getElementById('detail-foto-in').classList.remove('hidden');
+      document.getElementById('teks-nofoto-in').classList.add('hidden');
+    } else {
+        document.getElementById('detail-foto-in').classList.add('hidden');
+        document.getElementById('teks-nofoto-in').classList.remove('hidden');
+    }
+  } else {
+    document.getElementById('detail-jam-in').textContent = 'Belum Absen';
+    document.getElementById('detail-foto-in').classList.add('hidden');
+    document.getElementById('teks-nofoto-in').classList.remove('hidden');
+  }
+
+  if (outData) {
+    document.getElementById('detail-jam-out').textContent = `Pukul: ${outData.time.substring(11, 16)}`;
+    const fotoOut = outData.custom_foto_absen;
+    if (fotoOut && fotoOut.startsWith('data:image')) {
+      document.getElementById('detail-foto-out').src = fotoOut;
+      document.getElementById('detail-foto-out').classList.remove('hidden');
+      document.getElementById('teks-nofoto-out').classList.add('hidden');
+    } else if (fotoOut) {
+      let urlFotoOut = fotoOut;
+      if (urlFotoOut.startsWith('/files')) urlFotoOut = ERPNEXT_URL + urlFotoOut;
+      document.getElementById('detail-foto-out').src = urlFotoOut;
+      document.getElementById('detail-foto-out').classList.remove('hidden');
+      document.getElementById('teks-nofoto-out').classList.add('hidden');
+    } else {
+        document.getElementById('detail-foto-out').classList.add('hidden');
+        document.getElementById('teks-nofoto-out').classList.remove('hidden');
+    }
+  } else {
+    document.getElementById('detail-jam-out').textContent = 'Belum Absen';
+    document.getElementById('detail-foto-out').classList.add('hidden');
+    document.getElementById('teks-nofoto-out').classList.remove('hidden');
+  }
+
+  document.getElementById('modal-detail').classList.remove('hidden');
+}
+
+function tutupDetail() {
+  document.getElementById('modal-detail').classList.add('hidden');
+}
+
+function setGPS(tipe, pesan) {
+  const el = document.getElementById('box-gps');
+  const cls = { loading: 'bg-blue-50 text-blue-700', ok: 'bg-green-50 text-green-700', error: 'bg-red-50 text-red-600' };
+  el.className = `w-full mb-3 px-4 py-2.5 rounded-2xl text-sm font-bold flex items-center gap-2 justify-center shrink-0 ${cls[tipe]}`;
+  el.innerHTML = tipe === 'loading' ? '<div class="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>' + pesan : pesan;
+}
+
+function setWajah(tipe) {
+  const el = document.getElementById('box-wajah');
+  el.className = tipe === 'ok' ? 'w-full mb-3 bg-green-50 text-green-700 px-4 py-2.5 rounded-2xl text-sm font-bold text-center shrink-0' : 'w-full mb-3 bg-orange-50 text-orange-700 px-4 py-2.5 rounded-2xl text-sm font-bold text-center shrink-0';
+  el.innerHTML = tipe === 'ok' ? '<i class="fa-solid fa-face-smile mr-1"></i> Wajah Terdeteksi ✓' : '<i class="fa-regular fa-face-meh mr-1"></i> Arahkan wajah...';
+}
+
+function setJepret(aktif, teks) {
+  const btn = document.getElementById('btn-jepret');
+  document.getElementById('teks-jepret').textContent = teks;
+  btn.disabled = !aktif;
+  btn.className = aktif ? 'bg-coklat text-kuning font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all' : 'bg-gray-200 text-gray-400 font-black py-4 rounded-2xl flex items-center justify-center gap-2 cursor-not-allowed';
+}
+
+function setBorderKamera(warna) {
+  document.getElementById('box-kamera').className = `w-full flex-1 rounded-3xl overflow-hidden border-4 border-${warna} bg-krem flex items-center justify-center relative mb-4 transition-colors duration-300`;
+}
+
+function tampilNotif(pesan, warna) {
+  const el = document.createElement('div');
+  el.className = `fixed top-6 left-1/2 -translate-x-1/2 z-[999] px-5 py-3 rounded-2xl shadow-xl font-bold text-sm text-white flex items-center gap-2 ${warna === 'hijau' ? 'bg-green-500' : 'bg-red-500'}`;
+  el.innerHTML = `<i class="fa-solid ${warna === 'hijau' ? 'fa-check-circle' : 'fa-circle-exclamation'}"></i> ${pesan}`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+window.addEventListener('beforeunload', () => {
+  if (streamKamera) streamKamera.getTracks().forEach(t => t.stop());
+});
+</script>
+</body>
+</html>

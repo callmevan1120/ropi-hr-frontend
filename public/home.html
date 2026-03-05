@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RopiHR — Home</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: {
+        coklat: '#3e2723', kuning: '#fbc02d', krem: '#fff8e1'
+      }}}
+    }
+  </script>
+</head>
+<body class="bg-gray-100 flex justify-center min-h-screen font-sans">
+<div class="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl">
+
+  <div class="bg-coklat pt-12 pb-20 px-6 rounded-b-[2.5rem] shrink-0">
+    <div class="flex justify-between items-center">
+      <div>
+        <h2 class="text-xl font-black text-kuning">
+          Halo, <span id="nama-user">...</span> 👋
+        </h2>
+        <p id="jabatan-user" class="text-white/70 text-sm mt-0.5">Selamat datang</p>
+      </div>
+      <a href="profil.html"
+        class="w-14 h-14 rounded-full bg-kuning border-2 border-kuning flex items-center justify-center text-coklat font-black text-xl shadow-lg">
+        <span id="inisial-user">?</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="flex-1 px-6 -mt-12 relative z-10 overflow-y-auto pb-24">
+
+    <div class="bg-white rounded-3xl p-5 shadow-lg border border-gray-100 mb-6 relative overflow-hidden">
+      <div class="absolute top-0 left-0 w-full h-1.5 bg-kuning"></div>
+      <p class="text-gray-400 text-xs font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
+      <p id="status-absen" class="text-coklat font-bold text-sm mb-4">Mengecek status...</p>
+      
+      <div id="container-tombol-absen">
+        <button id="btn-absen-dinamis" onclick="window.location.href='absen.html?mode=MASUK&auto=true'" 
+          class="w-full bg-gray-200 text-gray-500 font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all text-lg shadow-sm mb-2">
+          <i class="fa-solid fa-spinner fa-spin fa-fw"></i> Menyiapkan Tombol...
+        </button>
+      </div>
+
+    </div>
+
+    <h3 class="font-black text-coklat text-base mb-3">Menu</h3>
+    <div class="flex flex-col gap-3">
+      <a href="cuti.html"
+        class="bg-krem p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 bg-kuning rounded-full flex items-center justify-center text-coklat text-lg shrink-0">
+            <i class="fa-solid fa-calendar-minus"></i>
+          </div>
+          <div>
+            <p class="font-black text-coklat text-sm">Cuti & Izin</p>
+            <p class="text-gray-400 text-xs">Ajukan dan pantau cuti</p>
+          </div>
+        </div>
+        <i class="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+      </a>
+
+      <a href="#" onclick="alert('Fitur Klaim Dana sedang dalam tahap pengembangan bersama tim Finance! 🚀'); return false;"
+        class="bg-gray-50 opacity-70 p-4 rounded-2xl flex items-center justify-between cursor-pointer">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 text-lg shrink-0">
+            <i class="fa-solid fa-file-invoice-dollar"></i>
+          </div>
+          <div>
+            <p class="font-black text-gray-400 text-sm">Klaim Dana <span class="text-[8px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded ml-1">SEGERA</span></p>
+            <p class="text-gray-400 text-xs">Ajukan reimbursement</p>
+          </div>
+        </div>
+        <i class="fa-solid fa-lock text-gray-300 text-sm"></i>
+      </a>
+
+      <a href="#" onclick="alert('Fitur Slip Gaji sedang dalam tahap pengembangan bersama tim Finance! 🚀'); return false;"
+        class="bg-gray-50 opacity-70 p-4 rounded-2xl flex items-center justify-between cursor-pointer">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 text-lg shrink-0">
+            <i class="fa-solid fa-money-check-dollar"></i>
+          </div>
+          <div>
+            <p class="font-black text-gray-400 text-sm">Slip Gaji <span class="text-[8px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded ml-1">SEGERA</span></p>
+            <p class="text-gray-400 text-xs">Lihat dan download slip</p>
+          </div>
+        </div>
+        <i class="fa-solid fa-lock text-gray-300 text-sm"></i>
+      </a>
+    </div>
+  </div>
+
+  <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-sm bg-white border-t border-gray-100 px-6 py-3 flex justify-around z-20">
+    <a href="home.html" class="flex flex-col items-center text-coklat gap-0.5">
+      <i class="fa-solid fa-house text-xl"></i>
+      <span class="text-[10px] font-black">Home</span>
+    </a>
+    <a href="absen.html" class="flex flex-col items-center text-gray-300 gap-0.5 hover:text-coklat transition-colors">
+      <i class="fa-solid fa-clipboard-user text-xl"></i>
+      <span class="text-[10px] font-black">Absen</span>
+    </a>
+    <a href="cuti.html" class="flex flex-col items-center text-gray-300 gap-0.5 hover:text-coklat transition-colors">
+      <i class="fa-solid fa-calendar-minus text-xl"></i>
+      <span class="text-[10px] font-black">Cuti</span>
+    </a>
+    <a href="#" onclick="alert('Fitur Klaim Dana sedang dalam tahap pengembangan! 🚀'); return false;" class="flex flex-col items-center text-gray-200 gap-0.5">
+      <i class="fa-solid fa-wallet text-xl"></i>
+      <span class="text-[10px] font-black">Klaim</span>
+    </a>
+    <a href="#" onclick="alert('Fitur Slip Gaji sedang dalam tahap pengembangan! 🚀'); return false;" class="flex flex-col items-center text-gray-200 gap-0.5">
+      <i class="fa-solid fa-money-check-dollar text-xl"></i>
+      <span class="text-[10px] font-black">Gaji</span>
+    </a>
+  </nav>
+
+</div>
+
+<script>
+// KONFIGURASI BACKEND
+const BACKEND = 'http://localhost:3333';
+
+// Cek login
+const userData = localStorage.getItem('ropi_user');
+if (!userData) window.location.href = 'index.html';
+
+const user = JSON.parse(userData);
+document.getElementById('nama-user').textContent    = user.name || 'Karyawan';
+document.getElementById('jabatan-user').textContent = user.role || 'Karyawan Roti Ropi';
+document.getElementById('inisial-user').textContent = (user.name || 'K').charAt(0).toUpperCase();
+
+// ✨ FUNGSI SINKRONISASI OTOMATIS & TOMBOL DINAMIS ✨
+async function ambilStatusHariIni() {
+  const btnDinamis = document.getElementById('btn-absen-dinamis');
+
+  try {
+    const tglHariIni = new Date().toISOString().substring(0, 10);
+    const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${tglHariIni}&to=${tglHariIni}`);
+    const data = await res.json();
+    
+    const elStatus = document.getElementById('status-absen');
+
+    if (data.success && data.data && data.data.length > 0) {
+      const terakhir = data.data.sort((a, b) => b.time.localeCompare(a.time))[0];
+      const jam = terakhir.time.substring(11, 16);
+      const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
+      
+      elStatus.textContent = `✓ Absen ${tipe} pukul ${jam}`;
+      localStorage.setItem('ropi_status_absen', `✓ Absen ${tipe} pukul ${jam}`);
+
+      // LOGIKA TOMBOL PINTAR:
+      if (terakhir.log_type === 'IN') {
+        btnDinamis.innerHTML = '<i class="fa-solid fa-right-from-bracket fa-fw"></i> Absen Keluar Sekarang';
+        btnDinamis.className = 'w-full bg-red-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg shadow-lg shadow-red-500/30';
+        btnDinamis.onclick = () => window.location.href = 'absen.html?mode=KELUAR&auto=true';
+      } else {
+        btnDinamis.innerHTML = '<i class="fa-solid fa-right-to-bracket fa-fw"></i> Absen Masuk Sekarang';
+        btnDinamis.className = 'w-full bg-green-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg shadow-lg shadow-green-500/30';
+        btnDinamis.onclick = () => window.location.href = 'absen.html?mode=MASUK&auto=true';
+      }
+
+    } else {
+      elStatus.textContent = 'Belum ada catatan absen hari ini';
+      localStorage.removeItem('ropi_status_absen');
+      
+      // Default Tombol MASUK
+      btnDinamis.innerHTML = '<i class="fa-solid fa-right-to-bracket fa-fw"></i> Absen Masuk Sekarang';
+      btnDinamis.className = 'w-full bg-green-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg shadow-lg shadow-green-500/30';
+      btnDinamis.onclick = () => window.location.href = 'absen.html?mode=MASUK&auto=true';
+    }
+  } catch (e) {
+    console.error('Gagal sinkronisasi status:', e);
+    document.getElementById('status-absen').textContent = localStorage.getItem('ropi_status_absen') || 'Gagal memuat status';
+    
+    // Fallback darurat jika server lambat
+    btnDinamis.innerHTML = '<i class="fa-solid fa-camera fa-fw"></i> Buka Kamera Absen';
+    btnDinamis.className = 'w-full bg-coklat text-kuning font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg shadow-lg';
+    btnDinamis.onclick = () => window.location.href = 'absen.html';
+  }
+}
+
+// Jalankan fungsi saat halaman dibuka
+ambilStatusHariIni();
+</script>
+</body>
+</html>
