@@ -146,18 +146,22 @@ const Cuti = () => {
 
         </div>
 
-        {/* ✨ NAVIGATION BOTTOM HANYA 3 MENU ✨ */}
-        <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-6 py-4 flex justify-around z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
-          <Link to="/home" className="flex flex-col items-center text-gray-300 gap-1 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-house text-xl"></i>
+        {/* ✨ NAVIGATION BOTTOM: 4 TOMBOL ✨ */}
+        <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+          <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+            <i className="fa-solid fa-house text-xl mb-1"></i>
             <span className="text-[10px] font-black uppercase">Home</span>
           </Link>
-          <Link to="/absen" className="flex flex-col items-center text-gray-300 gap-1 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-clipboard-user text-xl"></i>
+          <Link to="/absen" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+            <i className="fa-solid fa-clipboard-user text-xl mb-1"></i>
             <span className="text-[10px] font-black uppercase">Absen</span>
           </Link>
-          <div className="flex flex-col items-center text-[#3e2723] gap-1">
-            <i className="fa-solid fa-calendar-minus text-xl drop-shadow-md"></i>
+          <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+            <i className="fa-solid fa-envelope-open-text text-xl mb-1"></i>
+            <span className="text-[10px] font-black uppercase">Izin</span>
+          </Link>
+          <div className="flex flex-col items-center text-[#3e2723] w-1/4">
+            <i className="fa-solid fa-calendar-minus text-xl mb-1 drop-shadow-md"></i>
             <span className="text-[10px] font-black uppercase">Cuti</span>
           </div>
         </nav>

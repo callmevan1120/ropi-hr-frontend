@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Sensitive data (API Keys, Secrets)
+.env
+.env.development
+.env.production
+.env.local
+.env.*.local

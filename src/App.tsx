@@ -6,6 +6,7 @@ import Absen from './pages/Absen';
 import Cuti from './pages/Cuti';
 import Profil from './pages/Profil';
 import Shift from './pages/Shift';
+import Izin from './pages/Izin';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/cuti" element={<Cuti />} />
         <Route path="/profil" element={<Profil />} />
         <Route path="/shift" element={<Shift />} />
+        <Route path="/izin" element={<Izin />} />
       </Routes>
     </BrowserRouter>
   );

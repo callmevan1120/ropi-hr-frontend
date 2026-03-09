@@ -1,0 +1,21 @@
+{
+  "name": "ropi HR - PT. Juara Roti Indonesia",
+  "short_name": "ropi HR",
+  "description": "Web App Absensi & Izin Karyawan Roti Ropi",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc", 
+  "theme_color": "#3e2723",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

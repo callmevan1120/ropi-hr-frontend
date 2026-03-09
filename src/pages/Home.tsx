@@ -126,84 +126,70 @@ const Home = () => {
             </button>
           </div>
 
-          <h3 className="font-black text-[#3e2723] text-base mb-3">Menu</h3>
+          <h3 className="font-black text-[#3e2723] text-base mb-3">Menu Laporan</h3>
           <div className="flex flex-col gap-3">
             
-            {/* MENU CUTI & IZIN */}
-            <Link to="/cuti" className="bg-[#fff8e1] p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-transparent hover:border-[#fbc02d]">
+            {/* MENU IZIN (BARU) */}
+            <Link to="/izin" className="bg-[#fff8e1] p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-transparent hover:border-[#fbc02d]">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 bg-[#fbc02d] rounded-full flex items-center justify-center text-[#3e2723] text-lg shrink-0">
+                  <i className="fa-solid fa-envelope-open-text"></i>
+                </div>
+                <div>
+                  <p className="font-black text-[#3e2723] text-sm">Pengajuan Izin</p>
+                  <p className="text-gray-400 text-xs">Izin sakit & keperluan lain</p>
+                </div>
+              </div>
+              <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
+            </Link>
+
+            {/* MENU CUTI TAHUNAN */}
+            <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-lg shrink-0">
                   <i className="fa-solid fa-calendar-minus"></i>
                 </div>
                 <div>
-                  <p className="font-black text-[#3e2723] text-sm">Cuti & Izin</p>
-                  <p className="text-gray-400 text-xs">Ajukan dan pantau cuti</p>
+                  <p className="font-black text-[#3e2723] text-sm">Cuti Tahunan</p>
+                  <p className="text-gray-400 text-xs">Cek sisa kuota cuti</p>
                 </div>
               </div>
               <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
             </Link>
 
             {/* MENU REKAP ABSEN */}
-            <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-gray-200">
+            <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 bg-[#3e2723] rounded-full flex items-center justify-center text-[#fbc02d] text-lg shrink-0">
                   <i className="fa-solid fa-clipboard-list"></i>
                 </div>
                 <div>
-                  <p className="font-black text-[#3e2723] text-sm">Laporan Absen</p>
-                  <p className="text-gray-400 text-xs">Lihat riwayat dan rekap absen</p>
+                  <p className="font-black text-[#3e2723] text-sm">Riwayat Absen</p>
+                  <p className="text-gray-400 text-xs">Rekap kehadiran bulanan</p>
                 </div>
               </div>
               <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
             </Link>
-
-            {/* MENU PROFIL (Selalu Tampil) */}
-            <Link to="/profil" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 text-lg shrink-0">
-                  <i className="fa-solid fa-user-gear"></i>
-                </div>
-                <div>
-                  <p className="font-black text-[#3e2723] text-sm">Profil Saya</p>
-                  <p className="text-gray-400 text-xs">Lihat data diri & akun</p>
-                </div>
-              </div>
-              <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
-            </Link>
-            
           </div>
-
-          {/* PENGINGAT HARIAN STATIS */}
-          <div className="mt-6">
-            <h3 className="font-black text-[#3e2723] text-base mb-3">Pengingat Harian</h3>
-            <div className="bg-[#fff8e1] p-4 rounded-3xl border border-[#fbc02d]/40 flex gap-4 shadow-sm items-start">
-              <div className="w-10 h-10 bg-[#fbc02d] rounded-full flex items-center justify-center text-[#3e2723] shrink-0 mt-0.5">
-                <i className="fa-solid fa-lightbulb text-lg"></i>
-              </div>
-              <div>
-                <p className="font-black text-[#3e2723] text-sm">Tips Absen Lancar</p>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed font-medium">
-                  Pastikan GPS HP kamu selalu menyala dan izinkan akses kamera agar proses absen lebih cepat. Semangat kerjanya! 🚀
-                </p>
-              </div>
-            </div>
-          </div>
-
         </div>
 
-        {/* ✨ NAVIGATION BOTTOM DIBUAT 3 MENU (Tanpa Shift) ✨ */}
-        <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-6 py-3 flex justify-around z-20">
-          <Link to="/home" className="flex flex-col items-center text-[#3e2723] gap-0.5">
-            <i className="fa-solid fa-house text-xl"></i>
-            <span className="text-[10px] font-black">Home</span>
+        {/* ✨ NAVIGATION BOTTOM: 4 TOMBOL ✨ */}
+        <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+          <div className="flex flex-col items-center text-[#3e2723] w-1/4">
+            <i className="fa-solid fa-house text-xl mb-1"></i>
+            <span className="text-[10px] font-black uppercase">Home</span>
+          </div>
+          <Link to="/absen" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+            <i className="fa-solid fa-clipboard-user text-xl mb-1"></i>
+            <span className="text-[10px] font-black uppercase">Absen</span>
           </Link>
-          <Link to="/absen" className="flex flex-col items-center text-gray-300 gap-0.5 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-clipboard-user text-xl"></i>
-            <span className="text-[10px] font-black">Absen</span>
+          <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+            <i className="fa-solid fa-envelope-open-text text-xl mb-1"></i>
+            <span className="text-[10px] font-black uppercase">Izin</span>
           </Link>
-          <Link to="/cuti" className="flex flex-col items-center text-gray-300 gap-0.5 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-calendar-minus text-xl"></i>
-            <span className="text-[10px] font-black">Cuti</span>
+          <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+            <i className="fa-solid fa-calendar-minus text-xl mb-1"></i>
+            <span className="text-[10px] font-black uppercase">Cuti</span>
           </Link>
         </nav>
       </div>
