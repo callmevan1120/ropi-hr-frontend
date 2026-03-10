@@ -144,7 +144,7 @@ const Absen = () => {
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
-  const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Menunggu GPS...' });
+  const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Cek GPS...' });
   const [isKirimLoading, setIsKirimLoading] = useState(false);
   const [koordinatGPS, setKoordinatGPS] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -295,7 +295,7 @@ const Absen = () => {
     setKameraBorder('border-[#fbc02d]');
     setWajahStatus({ show: false, ok: false });
     setGpsStatus({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
-    setJepretState({ aktif: false, teks: 'Menunggu GPS...' });
+    setJepretState({ aktif: false, teks: 'Cek GPS...' });
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
     
     navigator.geolocation.getCurrentPosition(
@@ -306,9 +306,8 @@ const Absen = () => {
         
         if (!cek.valid) {
           setGpsStatus({ tipe: 'error', pesan: `Di luar radius! ${cek.jarak}m` });
-          setJepretState({ aktif: false, teks: 'Lokasi tidak sesuai' });
+          setJepretState({ aktif: false, teks: 'Lokasi Jauh' });
         } else {
-          // 🔥 VALIDASI KETAT: Blokir Akun Outlet (Shift 1/dll) di PH Klaten 🔥
           const lokasiTerdeteksi = cek.nama.toLowerCase();
           const cabangUser = (user?.branch || '').toLowerCase();
           
@@ -320,8 +319,7 @@ const Absen = () => {
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
             setGpsStatus({ tipe: 'ok', pesan: `Lokasi: ${cek.nama} ✓` });
-            // 🔥 REVISI: Ubah teks setelah GPS ketemu sebelum kamera nyala
-            setJepretState({ aktif: false, teks: 'Menyiapkan Kamera...' }); 
+            setJepretState({ aktif: false, teks: 'Buka Kamera...' }); 
             await nyalakanKamera();
           }
         }
@@ -343,10 +341,9 @@ const Absen = () => {
         video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 640 } },
       });
       if (videoRef.current) { videoRef.current.srcObject = streamRef.current; await videoRef.current.play(); }
-      // 🔥 REVISI: Ubah teks saat kamera sudah nyala & menunggu AI Wajah
-      setJepretState({ aktif: false, teks: 'Memuat Sensor Wajah...' });
+      setJepretState({ aktif: false, teks: 'Muat AI...' });
       muatFaceAPI();
-    } catch { setJepretState({ aktif: false, teks: 'Kamera Gagal' }); }
+    } catch { setJepretState({ aktif: false, teks: 'Kamera Error' }); }
   };
 
   const muatFaceAPI = () => {
@@ -371,7 +368,7 @@ const Absen = () => {
         setKameraBorder('border-green-400');
       } else {
         setWajahStatus({ show: true, ok: false });
-        setJepretState({ aktif: false, teks: 'Cari wajah...' });
+        setJepretState({ aktif: false, teks: 'Cari Wajah...' });
         setKameraBorder('border-orange-300');
       }
     }, 600);
@@ -697,7 +694,7 @@ const Absen = () => {
           </Link>
         </nav>
 
-        {/* ── MODAL KAMERA (DENGAN REVISI KOTAK GPS & VALIDASI KETAT) ── */}
+        {/* ── MODAL KAMERA (DENGAN REVISI KOTAK KAMERA LEBIH LUAS) ── */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
@@ -707,21 +704,21 @@ const Absen = () => {
                 {modeAbsen}
               </div>
               
-              {/* REVISI: Kotak GPS Flex Center & FontAwesome Spinner */}
               <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${
                 gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : 
                 gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 
                 'bg-blue-50 text-blue-700 border-blue-100'
               }`}>
                 {gpsStatus.tipe === 'loading' ? (
-                  <i className="fa-solid fa-spinner fa-spin text-sm" />
+                  <i className="fa-solid fa-spinner fa-spin text-sm shrink-0" />
                 ) : (
-                  <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm`} />
+                  <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm shrink-0`} />
                 )}
-                <span>{gpsStatus.pesan}</span>
+                <span className="leading-tight">{gpsStatus.pesan}</span>
               </div>
 
-              <div className={`w-full h-[340px] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
+              {/* REVISI: Mengubah h-[340px] menjadi aspect-[3/4] w-full agar jauh lebih tinggi dan luas */}
+              <div className={`w-full aspect-[3/4] max-h-[65vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
                 {!fotoBase64
                   ? <video ref={videoRef} className="w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline muted />
                   : <img src={fotoBase64} className="w-full h-full object-cover z-20" style={{ transform: 'scaleX(-1)' }} alt="Preview" />
@@ -730,19 +727,25 @@ const Absen = () => {
 
               {!fotoBase64 ? (
                 <div className="w-full grid grid-cols-2 gap-3">
-                  <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-4 rounded-2xl active:scale-95">Batal</button>
-                  <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-4 rounded-2xl flex justify-center gap-2 active:scale-95 ${jepretState.aktif ? 'bg-[#3e2723] text-[#fbc02d] shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-                    <i className="fa-solid fa-camera" /> {jepretState.teks}
+                  <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
+                  <button 
+                    disabled={!jepretState.aktif} 
+                    onClick={jepretFoto} 
+                    className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? 'bg-[#3e2723] text-[#fbc02d] shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  >
+                    <i className="fa-solid fa-camera shrink-0 text-lg" /> 
+                    <span className="leading-tight text-left">{jepretState.teks}</span>
                   </button>
                 </div>
               ) : (
                 <div className="w-full grid grid-cols-2 gap-3">
-                  <button onClick={() => { setFotoBase64(null); nyalakanKamera(); }} className="bg-gray-100 text-gray-500 font-black py-4 rounded-2xl active:scale-95">
-                    <i className="fa-solid fa-rotate-right" /> Ulangi
+                  <button onClick={() => { setFotoBase64(null); nyalakanKamera(); }} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm">
+                    <i className="fa-solid fa-rotate-right shrink-0 text-lg" />
+                    <span className="leading-none">Ulangi</span>
                   </button>
-                  <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-green-500 text-white font-black py-4 rounded-2xl shadow-lg flex justify-center gap-2 active:scale-95">
-                    {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin" /> : <i className="fa-solid fa-paper-plane" />}
-                    {isKirimLoading ? 'Mengirim...' : 'Kirim'}
+                  <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-green-500 text-white font-black py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 text-sm">
+                    {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin shrink-0 text-lg" /> : <i className="fa-solid fa-paper-plane shrink-0 text-lg" />}
+                    <span className="leading-none">{isKirimLoading ? 'Mengirim...' : 'Kirim'}</span>
                   </button>
                 </div>
               )}
