@@ -37,17 +37,12 @@ interface LeaveRecord {
 const formatJamLokal = (utcString?: string): string => {
   if (!utcString) return '-';
   
-  // 1. Ubah spasi menjadi 'T' (menstandarkan format tanggal)
   let safeString = utcString.replace(' ', 'T');
-  
-  // 2. PAKSA browser menganggap ini waktu UTC dengan menambahkan huruf 'Z'
   if (!safeString.endsWith('Z') && !safeString.includes('+')) {
     safeString += 'Z';
   }
 
   const date = new Date(safeString);
-  
-  // 3. Ubah ke jam lokal (Otomatis +7 jika di Indonesia)
   return date.toLocaleTimeString('id-ID', { 
     hour: '2-digit', 
     minute: '2-digit', 
@@ -302,17 +297,31 @@ const Absen = () => {
     setGpsStatus({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
     setJepretState({ aktif: false, teks: 'Menunggu GPS...' });
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
+    
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setKoordinatGPS(coords);
         const cek = cekRadius(coords.lat, coords.lng);
+        
         if (!cek.valid) {
           setGpsStatus({ tipe: 'error', pesan: `Di luar radius! ${cek.jarak}m` });
           setJepretState({ aktif: false, teks: 'Lokasi tidak sesuai' });
         } else {
-          setGpsStatus({ tipe: 'ok', pesan: `Lokasi: ${cek.nama} ✓` });
-          await nyalakanKamera();
+          // 🔥 VALIDASI KETAT: Blokir Akun Outlet (Shift 1/dll) di PH Klaten 🔥
+          const lokasiTerdeteksi = cek.nama.toLowerCase();
+          const cabangUser = (user?.branch || '').toLowerCase();
+          
+          const isLokasiPusat = lokasiTerdeteksi.includes('klaten') || lokasiTerdeteksi.includes('ph');
+          const isUserPusat = cabangUser.includes('klaten') || cabangUser.includes('ph');
+
+          if (isLokasiPusat && !isUserPusat) {
+            setGpsStatus({ tipe: 'error', pesan: `Ditolak! Anda terdaftar di Cabang: ${user?.branch || 'Lain'}` });
+            setJepretState({ aktif: false, teks: 'Akses Ditolak' });
+          } else {
+            setGpsStatus({ tipe: 'ok', pesan: `Lokasi: ${cek.nama} ✓` });
+            await nyalakanKamera();
+          }
         }
       },
       () => { setGpsStatus({ tipe: 'error', pesan: 'GPS Mati / Ditolak' }); setJepretState({ aktif: false, teks: 'Izinkan GPS' }); },
@@ -424,7 +433,7 @@ const Absen = () => {
   let rekapTelat = 0;
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
     if (d.in?.time) {
-      const jamAbsen = formatJamLokal(d.in.time);
+      const jamAbsen = formatJamLokal(d.in.time); 
       const shiftInfo = getJamShift(d.in.shift || '', tgl, user?.branch, masterShifts);
       if (toMenit(jamAbsen) > toMenit(shiftInfo.in)) rekapTelat++;
     }
@@ -470,7 +479,7 @@ const Absen = () => {
         dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />;
       } else if (checkin) {
         const shiftInfo = getJamShift(dataIn?.shift || '', strTgl, user?.branch, masterShifts);
-        const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in);
+        const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in); 
         kelas += isTelat ? 'bg-red-100 text-red-600 font-bold' : 'bg-green-100 text-green-700 font-bold';
         dot = <span className={`absolute -bottom-0.5 w-1 h-1 rounded-full ${isTelat ? 'bg-red-400' : 'bg-green-400'}`} />;
       } else {
@@ -684,7 +693,7 @@ const Absen = () => {
           </Link>
         </nav>
 
-        {/* ── MODAL KAMERA ── */}
+        {/* ── MODAL KAMERA (DENGAN REVISI KOTAK GPS & VALIDASI KETAT) ── */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
@@ -694,16 +703,18 @@ const Absen = () => {
                 {modeAbsen}
               </div>
               
-              <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black text-center leading-relaxed shadow-sm border ${
+              {/* 🔥 REVISI: Kotak GPS Flex Center & FontAwesome Spinner 🔥 */}
+              <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${
                 gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : 
                 gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 
                 'bg-blue-50 text-blue-700 border-blue-100'
               }`}>
-                {gpsStatus.tipe === 'loading' && (
-                  <div className="inline-block w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2" />
+                {gpsStatus.tipe === 'loading' ? (
+                  <i className="fa-solid fa-spinner fa-spin text-sm" />
+                ) : (
+                  <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm`} />
                 )}
-                <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : gpsStatus.tipe === 'ok' ? 'fa-location-dot' : 'fa-satellite'} mr-1`} />
-                {gpsStatus.pesan}
+                <span>{gpsStatus.pesan}</span>
               </div>
 
               <div className={`w-full h-[340px] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
