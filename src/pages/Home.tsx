@@ -15,6 +15,21 @@ interface BtnConfig {
   mode: string;
 }
 
+// ── HELPER: KONVERSI UTC KE WIB (SAMA SEPERTI DI ABSEN.TSX) ──
+const formatJamLokal = (utcString?: string): string => {
+  if (!utcString) return '-';
+  let safeString = utcString.replace(' ', 'T');
+  if (!safeString.endsWith('Z') && !safeString.includes('+')) {
+    safeString += 'Z';
+  }
+  const date = new Date(safeString);
+  return date.toLocaleTimeString('id-ID', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    hour12: false 
+  }).replace('.', ':');
+};
+
 const Home = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app'; 
@@ -48,7 +63,9 @@ const Home = () => {
       if (data.success && data.data && data.data.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const terakhir = data.data.sort((a: any, b: any) => b.time.localeCompare(a.time))[0];
-        const jam = terakhir.time.substring(11, 16);
+        
+        // 🔥 REVISI: Menggunakan formatJamLokal untuk teks di Home
+        const jam = formatJamLokal(terakhir.time);
         const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
 
         const statusText = `✓ Absen ${tipe} pukul ${jam}`;
@@ -129,7 +146,7 @@ const Home = () => {
           <h3 className="font-black text-[#3e2723] text-base mb-3">Menu Laporan</h3>
           <div className="flex flex-col gap-3">
             
-            {/* MENU IZIN (BARU) */}
+            {/* MENU IZIN */}
             <Link to="/izin" className="bg-[#fff8e1] p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-transparent hover:border-[#fbc02d]">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 bg-[#fbc02d] rounded-full flex items-center justify-center text-[#3e2723] text-lg shrink-0">
@@ -173,7 +190,7 @@ const Home = () => {
           </div>
         </div>
 
-        {/* ✨ NAVIGATION BOTTOM: 4 TOMBOL ✨ */}
+        {/* NAVIGATION BOTTOM */}
         <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
           <div className="flex flex-col items-center text-[#3e2723] w-1/4">
             <i className="fa-solid fa-house text-xl mb-1"></i>

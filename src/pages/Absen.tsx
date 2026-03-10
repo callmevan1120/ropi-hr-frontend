@@ -33,11 +33,21 @@ interface LeaveRecord {
   status: string;
 }
 
-// ── HELPER: KONVERSI UTC KE WIB ──
+// ── HELPER: KONVERSI UTC KE WIB (VERSI DIPAKSA) ──
 const formatJamLokal = (utcString?: string): string => {
   if (!utcString) return '-';
-  const date = new Date(utcString);
-  // Mengonversi ke format HH:mm sesuai zona waktu lokal (WIB)
+  
+  // 1. Ubah spasi menjadi 'T' (menstandarkan format tanggal)
+  let safeString = utcString.replace(' ', 'T');
+  
+  // 2. PAKSA browser menganggap ini waktu UTC dengan menambahkan huruf 'Z'
+  if (!safeString.endsWith('Z') && !safeString.includes('+')) {
+    safeString += 'Z';
+  }
+
+  const date = new Date(safeString);
+  
+  // 3. Ubah ke jam lokal (Otomatis +7 jika di Indonesia)
   return date.toLocaleTimeString('id-ID', { 
     hour: '2-digit', 
     minute: '2-digit', 
@@ -674,7 +684,7 @@ const Absen = () => {
           </Link>
         </nav>
 
-        {/* ── MODAL KAMERA (DENGAN REVISI KOTAK GPS & SAFE AREA) ── */}
+        {/* ── MODAL KAMERA ── */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
@@ -684,7 +694,6 @@ const Absen = () => {
                 {modeAbsen}
               </div>
               
-              {/* 🔥 REVISI: Kotak GPS yang lebih rapi 🔥 */}
               <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black text-center leading-relaxed shadow-sm border ${
                 gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : 
                 gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 
@@ -726,7 +735,7 @@ const Absen = () => {
           </div>
         )}
 
-        {/* ── MODAL DETAIL (DENGAN SAFE AREA & JAM WIB) ── */}
+        {/* ── MODAL DETAIL ── */}
         {detailModal.show && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10 h-[85vh]">
@@ -753,7 +762,6 @@ const Absen = () => {
                   <div key={label} className={`bg-${color}-50 p-4 rounded-3xl border border-${color}-100 flex flex-col`}>
                     <div className={`self-start bg-${color}-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2`}>{label}</div>
                     
-                    {/* 🔥 REVISI: Menggunakan formatJamLokal 🔥 */}
                     <p className={`font-bold text-lg mb-2 text-${color}-800`}>
                       {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
                     </p>

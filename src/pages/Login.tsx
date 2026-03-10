@@ -5,6 +5,10 @@ const Login = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  
+  // 🔥 STATE BARU UNTUK HIDE/SHOW PASSWORD
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  
   const navigate = useNavigate();
 
   // 🚀 KITA HARDCODE LINK-NYA BIAR 1000% AMAN DARI ERROR VITE
@@ -77,19 +81,32 @@ const Login = () => {
                 />
               </div>
             </div>
+            
+            {/* 🔥 REVISI KOTAK PASSWORD 🔥 */}
             <div>
               <div className="relative">
                 <i className="fa-solid fa-lock absolute left-5 top-4 text-[#3e2723] opacity-50 text-lg"></i>
                 <input
-                  type="password"
+                  // Tipe input berubah dinamis berdasarkan state showPassword
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
-                  className="w-full bg-white border-2 border-transparent rounded-2xl py-4 pl-14 pr-4 text-lg focus:border-[#fbc02d] outline-none transition-all shadow-sm"
+                  className="w-full bg-white border-2 border-transparent rounded-2xl py-4 pl-14 pr-12 text-lg focus:border-[#fbc02d] outline-none transition-all shadow-sm"
                   required
                 />
+                {/* Tombol Mata */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-4 text-[#3e2723] opacity-50 hover:opacity-100 transition-opacity focus:outline-none"
+                  aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                >
+                  <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-lg`}></i>
+                </button>
               </div>
             </div>
+
             <button
               type="submit"
               disabled={isLoading}
