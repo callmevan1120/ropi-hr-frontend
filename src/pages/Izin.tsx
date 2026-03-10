@@ -200,8 +200,8 @@ const Izin = () => {
   // Otomatis cari field attachment dari semua kemungkinan nama field ERPNext
   const getAttachment = (item: LeaveRecord): string | undefined => {
     const possibleFields = [
+      'attachment',       // ← field utama dari File doctype ERPNext
       'custom_attachment',
-      'attachment', 
       'leave_attachment',
       'custom_foto_bukti',
       'custom_bukti',
