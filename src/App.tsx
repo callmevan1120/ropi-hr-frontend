@@ -1,18 +1,34 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-// KITA CUMA IMPORT LOGIN
+// Import semua halaman yang sudah kita "sehatkan"
 import Login from './pages/Login';
+import Home from './pages/Home';
+import Absen from './pages/Absen';
+import Cuti from './pages/Cuti';
+import Profil from './pages/Profil';
+import Izin from './pages/Izin';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rute Penunjuk Jalan */}
+        {/* 1. Rute Penunjuk Jalan (Default) */}
+        {/* Jika user buka ropi-hr.vercel.app tanpa path, lempar ke /login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
 
-        {/* HANYA HALAMAN INI YANG HIDUP */}
+        {/* 2. Halaman Login */}
         <Route path="/login" element={<Login />} />
+
+        {/* 3. Halaman Utama & Fitur (Semua Aktif!) */}
+        <Route path="/home" element={<Home />} />
+        <Route path="/absen" element={<Absen />} />
+        <Route path="/cuti" element={<Cuti />} />
+        <Route path="/profil" element={<Profil />} />
+        <Route path="/izin" element={<Izin />} />
+
+        {/* 4. Rute Sapu Jagat (Fallback) */}
+        {/* Jika user ngetik rute aneh-aneh atau rute tidak ditemukan, balikkan ke login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
