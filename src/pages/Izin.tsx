@@ -193,7 +193,8 @@ const Izin = () => {
   const prosesUrlFoto = (url?: string) => {
     if (!url) return '';
     if (url.startsWith('data:image')) return url;
-    if (url.startsWith('/files')) return ERPNEXT_URL + url;
+    // Proxy lewat backend agar tidak kena Mixed Content (HTTP vs HTTPS)
+    if (url.startsWith('/files')) return `${BACKEND}/api/attendance/file?path=${encodeURIComponent(url)}`;
     return url;
   };
 
