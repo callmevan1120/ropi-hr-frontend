@@ -16,6 +16,12 @@ interface LeaveHistory {
   reason?: string;
 }
 
+// Helper: apakah tipe ini termasuk CUTI (bukan izin)
+const isCuti = (leaveType: string) => {
+  const lower = leaveType.toLowerCase();
+  return lower.includes('cuti') || lower.includes('tahunan');
+};
+
 const Cuti = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
@@ -45,7 +51,9 @@ const Cuti = () => {
       const data = await res.json();
 
       if (data.success) {
-        setLeaveHistory(data.history || []);
+        // Filter hanya yang merupakan CUTI (bukan izin)
+        const cutiOnly = (data.history || []).filter((item: LeaveHistory) => isCuti(item.leave_type));
+        setLeaveHistory(cutiOnly);
         setLeaveBalance(data.balance !== undefined ? String(data.balance) : '0');
       } else {
         setLeaveBalance('0');
@@ -58,6 +66,35 @@ const Cuti = () => {
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const s = status?.toLowerCase();
+    if (s === 'approved') {
+      return (
+        <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+          <i className="fa-solid fa-circle-check text-[9px]"></i> Disetujui
+        </span>
+      );
+    }
+    if (s === 'rejected') {
+      return (
+        <span className="flex items-center gap-1 bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+          <i className="fa-solid fa-circle-xmark text-[9px]"></i> Ditolak
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+        <i className="fa-solid fa-clock text-[9px]"></i> Menunggu
+      </span>
+    );
+  };
+
   return (
     <div className="bg-gray-100 flex justify-center min-h-screen font-sans">
       <style>{`
@@ -66,7 +103,7 @@ const Cuti = () => {
       `}</style>
 
       <div className="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl relative">
-        
+
         {/* Header */}
         <div className="bg-[#3e2723] pt-12 pb-6 px-6 shrink-0 shadow-md z-10">
           <div className="flex items-center justify-between">
@@ -84,7 +121,8 @@ const Cuti = () => {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
-          
+
+          {/* Sisa Kuota */}
           <div className="px-6 pt-5">
             <h3 className="font-black text-[#3e2723] text-base mb-3">Sisa Kuota Cuti</h3>
             <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
@@ -97,12 +135,13 @@ const Cuti = () => {
               </div>
             </div>
             <p className="mt-3 text-[10px] text-gray-400 leading-relaxed italic">
-              * Jika ada ketidaksesuaian jatah atau ingin mengajukan cuti/izin sakit, harap hubungi bagian HRD.
+              * Jika ada ketidaksesuaian jatah atau ingin mengajukan cuti, harap hubungi bagian HRD.
             </p>
           </div>
 
+          {/* Riwayat Cuti */}
           <div className="px-6 mt-8">
-            <h3 className="font-black text-[#3e2723] text-base mb-4">Riwayat & Status</h3>
+            <h3 className="font-black text-[#3e2723] text-base mb-4">Riwayat Cuti</h3>
             <div className="flex flex-col gap-3">
               {isLoading ? (
                 <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400">
@@ -112,33 +151,46 @@ const Cuti = () => {
               ) : errorMsg ? (
                 <div className="text-center text-red-400 text-xs font-bold py-10">{errorMsg}</div>
               ) : leaveHistory.length > 0 ? (
-                leaveHistory.map((item, index) => {
-                  let statusStyle = 'bg-yellow-100 text-yellow-700';
-                  if (item.status === 'Approved') statusStyle = 'bg-green-100 text-green-700';
-                  if (item.status === 'Rejected') statusStyle = 'bg-red-100 text-red-700';
-
-                  return (
-                    <div key={index} className="bg-white p-4 rounded-2xl border border-gray-100 flex flex-col gap-1 shadow-sm transition-all active:scale-95">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-black text-[#3e2723] text-sm">{item.leave_type}</p>
-                          <p className="text-[10px] text-gray-400 font-bold">{item.from_date} s/d {item.to_date}</p>
+                leaveHistory.map((item, index) => (
+                  <div
+                    key={index}
+                    className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-[#fff8e1] rounded-full flex items-center justify-center shrink-0">
+                          <i className="fa-solid fa-calendar-minus text-[#fbc02d] text-sm"></i>
                         </div>
-                        <span className={`${statusStyle} text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tighter`}>
-                          {item.status}
-                        </span>
+                        <p className="text-sm font-black text-[#3e2723] leading-tight">{item.leave_type}</p>
                       </div>
-                      {item.reason && (
-                        <p className="text-[10px] text-gray-500 mt-1 border-t border-gray-50 pt-2 italic">
-                          "{item.reason}"
-                        </p>
-                      )}
+                      {getStatusBadge(item.status)}
                     </div>
-                  );
-                })
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium pl-10">
+                      <i className="fa-regular fa-calendar text-[10px]"></i>
+                      <span>
+                        {formatDate(item.from_date)}
+                        {item.from_date !== item.to_date && (
+                          <> &rarr; {formatDate(item.to_date)}</>
+                        )}
+                      </span>
+                    </div>
+
+                    {item.reason && (
+                      <p className="text-[11px] text-gray-400 pl-10 mt-2 leading-relaxed italic">
+                        <i className="fa-solid fa-quote-left text-[8px] mr-1 text-gray-300"></i>
+                        {item.reason}
+                      </p>
+                    )}
+                  </div>
+                ))
               ) : (
-                <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400 font-bold text-sm">
-                  Belum ada riwayat cuti tercatat.
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-16 h-16 bg-[#fff8e1] rounded-full flex items-center justify-center mb-4">
+                    <i className="fa-solid fa-calendar-minus text-2xl text-[#fbc02d]"></i>
+                  </div>
+                  <p className="text-sm font-black text-[#3e2723]">Belum Ada Riwayat Cuti</p>
+                  <p className="text-[11px] text-gray-400 mt-1">Riwayat cuti tahunan kamu akan muncul di sini</p>
                 </div>
               )}
             </div>
@@ -146,7 +198,7 @@ const Cuti = () => {
 
         </div>
 
-        {/* ✨ NAVIGATION BOTTOM: 4 TOMBOL ✨ */}
+        {/* Navigation Bottom */}
         <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
           <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
             <i className="fa-solid fa-house text-xl mb-1"></i>
