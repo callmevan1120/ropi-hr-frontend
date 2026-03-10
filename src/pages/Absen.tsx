@@ -414,7 +414,7 @@ const Absen = () => {
   let rekapTelat = 0;
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
     if (d.in?.time) {
-      const jamAbsen = formatJamLokal(d.in.time); // Perbaikan: Gunakan helper
+      const jamAbsen = formatJamLokal(d.in.time);
       const shiftInfo = getJamShift(d.in.shift || '', tgl, user?.branch, masterShifts);
       if (toMenit(jamAbsen) > toMenit(shiftInfo.in)) rekapTelat++;
     }
@@ -460,7 +460,7 @@ const Absen = () => {
         dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />;
       } else if (checkin) {
         const shiftInfo = getJamShift(dataIn?.shift || '', strTgl, user?.branch, masterShifts);
-        const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in); // Perbaikan: Gunakan helper
+        const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in);
         kelas += isTelat ? 'bg-red-100 text-red-600 font-bold' : 'bg-green-100 text-green-700 font-bold';
         dot = <span className={`absolute -bottom-0.5 w-1 h-1 rounded-full ${isTelat ? 'bg-red-400' : 'bg-green-400'}`} />;
       } else {
@@ -593,8 +593,8 @@ const Absen = () => {
                 <>
                   {tampilKeys.map(tgl => {
                     const d = groupedRiwayat[tgl];
-                    const jamIn = formatJamLokal(d.in?.time); // Perbaikan: Gunakan helper
-                    const jamOut = formatJamLokal(d.out?.time); // Perbaikan: Gunakan helper
+                    const jamIn = formatJamLokal(d.in?.time); 
+                    const jamOut = formatJamLokal(d.out?.time); 
                     const dateLabel = new Date(tgl).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
                     const shiftName = d.in?.shift || d.out?.shift || '';
                     const shiftInfo = getJamShift(shiftName, tgl, user?.branch, masterShifts);
@@ -674,19 +674,29 @@ const Absen = () => {
           </Link>
         </nav>
 
-        {/* ── MODAL KAMERA ── */}
+        {/* ── MODAL KAMERA (DENGAN REVISI KOTAK GPS & SAFE AREA) ── */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6">
+            <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
               <div className="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0" />
               <p className="text-4xl font-black text-[#3e2723] tracking-tight mb-1">{jamModal}</p>
               <div className={`text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full mb-3 ${modeAbsen === 'MASUK' ? 'bg-[#3e2723] text-[#fbc02d]' : 'bg-[#fbc02d] text-[#3e2723]'}`}>
                 {modeAbsen}
               </div>
-              <div className={`w-full mb-3 px-4 py-2.5 rounded-2xl text-sm font-bold flex items-center gap-2 justify-center ${gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600' : gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
-                {gpsStatus.tipe === 'loading' && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
+              
+              {/* 🔥 REVISI: Kotak GPS yang lebih rapi 🔥 */}
+              <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black text-center leading-relaxed shadow-sm border ${
+                gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : 
+                gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 
+                'bg-blue-50 text-blue-700 border-blue-100'
+              }`}>
+                {gpsStatus.tipe === 'loading' && (
+                  <div className="inline-block w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2" />
+                )}
+                <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : gpsStatus.tipe === 'ok' ? 'fa-location-dot' : 'fa-satellite'} mr-1`} />
                 {gpsStatus.pesan}
               </div>
+
               <div className={`w-full h-[340px] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
                 {!fotoBase64
                   ? <video ref={videoRef} className="w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline muted />
@@ -716,10 +726,10 @@ const Absen = () => {
           </div>
         )}
 
-        {/* ── MODAL DETAIL (SUDAH WIB) ── */}
+        {/* ── MODAL DETAIL (DENGAN SAFE AREA & JAM WIB) ── */}
         {detailModal.show && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 h-[85vh]">
+            <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10 h-[85vh]">
               <div className="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0" />
               <h2 className="text-xl font-black text-[#3e2723] mb-1">
                 {new Date(detailModal.tgl).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -742,9 +752,12 @@ const Absen = () => {
                 ].map(({ label, color, data }) => (
                   <div key={label} className={`bg-${color}-50 p-4 rounded-3xl border border-${color}-100 flex flex-col`}>
                     <div className={`self-start bg-${color}-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2`}>{label}</div>
+                    
+                    {/* 🔥 REVISI: Menggunakan formatJamLokal 🔥 */}
                     <p className={`font-bold text-lg mb-2 text-${color}-800`}>
                       {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
                     </p>
+                    
                     <div className="w-full h-40 bg-gray-200 rounded-2xl overflow-hidden relative">
                       {data?.custom_foto_absen
                         ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-cover" alt={label} />
