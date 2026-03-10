@@ -15,7 +15,7 @@ interface BtnConfig {
   mode: string;
 }
 
-// ── HELPER: KONVERSI UTC KE WIB (SAMA SEPERTI DI ABSEN.TSX) ──
+// ── HELPER: KONVERSI UTC KE WIB ──
 const formatJamLokal = (utcString?: string): string => {
   if (!utcString) return '-';
   let safeString = utcString.replace(' ', 'T');
@@ -43,6 +43,9 @@ const Home = () => {
     mode: '',
   });
 
+  // State untuk mengontrol Accordion Panduan
+  const [bukaPanduan, setBukaPanduan] = useState<string | null>(null);
+
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) {
@@ -64,7 +67,6 @@ const Home = () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const terakhir = data.data.sort((a: any, b: any) => b.time.localeCompare(a.time))[0];
         
-        // 🔥 REVISI: Menggunakan formatJamLokal untuk teks di Home
         const jam = formatJamLokal(terakhir.time);
         const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
 
@@ -109,6 +111,10 @@ const Home = () => {
     }
   };
 
+  const togglePanduan = (id: string) => {
+    setBukaPanduan(bukaPanduan === id ? null : id);
+  };
+
   return (
     <div className="bg-gray-100 flex justify-center min-h-screen font-sans">
       <div className="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl relative">
@@ -144,8 +150,7 @@ const Home = () => {
           </div>
 
           <h3 className="font-black text-[#3e2723] text-base mb-3">Menu Laporan</h3>
-          <div className="flex flex-col gap-3">
-            
+          <div className="flex flex-col gap-3 mb-8">
             {/* MENU IZIN */}
             <Link to="/izin" className="bg-[#fff8e1] p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-transparent hover:border-[#fbc02d]">
               <div className="flex items-center gap-3">
@@ -187,6 +192,78 @@ const Home = () => {
               </div>
               <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
             </Link>
+          </div>
+
+          {/* 🔥 SECTION BARU: BUKU PANDUAN 🔥 */}
+          <h3 className="font-black text-[#3e2723] text-base mb-3 flex items-center gap-2">
+            <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
+          </h3>
+          <div className="flex flex-col gap-2">
+            
+            {/* Panduan 1: Cara Absen */}
+            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+              <button 
+                onClick={() => togglePanduan('absen')}
+                className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
+              >
+                <span className="font-bold text-[#3e2723] text-sm">1. Cara Absen Harian</span>
+                <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'absen' ? 'rotate-180' : ''}`}></i>
+              </button>
+              {bukaPanduan === 'absen' && (
+                <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                  <ul className="list-decimal pl-4 space-y-1.5">
+                    <li>Pastikan Anda berada di area kantor/outlet.</li>
+                    <li>Klik tombol warna hijau/merah di atas (Absen Masuk/Keluar).</li>
+                    <li>Izinkan akses lokasi (GPS) dan Kamera jika diminta browser.</li>
+                    <li>Posisikan wajah Anda hingga kotak kamera berwarna hijau dan muncul teks "Jepret!".</li>
+                    <li><strong>Penting:</strong> Pastikan Anda memegang mesin fingerprint/area sekitar sesuai instruksi HR.</li>
+                    <li>Klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Panduan 2: Izin & Cuti */}
+            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+              <button 
+                onClick={() => togglePanduan('izin')}
+                className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
+              >
+                <span className="font-bold text-[#3e2723] text-sm">2. Pengajuan Izin & Cuti</span>
+                <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'izin' ? 'rotate-180' : ''}`}></i>
+              </button>
+              {bukaPanduan === 'izin' && (
+                <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                  <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
+                  <ul className="list-disc pl-4 space-y-1.5 mb-2">
+                    <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak/Penting. Wajib melampirkan bukti (Surat Dokter, dll).</li>
+                    <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan.</li>
+                  </ul>
+                  <p>Buka menu "Pengajuan Izin" atau "Cuti Tahunan", isi tanggal mulai dan selesai, serta alasan yang jelas. Status pengajuan bisa dicek di riwayat.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Panduan 3: Solusi Error */}
+            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+              <button 
+                onClick={() => togglePanduan('error')}
+                className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
+              >
+                <span className="font-bold text-[#3e2723] text-sm">3. Solusi Jika Error</span>
+                <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'error' ? 'rotate-180' : ''}`}></i>
+              </button>
+              {bukaPanduan === 'error' && (
+                <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                  <ul className="list-disc pl-4 space-y-2">
+                    <li><strong>Lokasi Jauh/Tidak Sesuai:</strong> Pastikan GPS HP Anda menyala dan di-setting "Akurasi Tinggi". Buka Google Maps sebentar untuk memancing sinyal GPS, lalu coba absen lagi.</li>
+                    <li><strong>Kamera Error:</strong> Pastikan Anda menggunakan browser Chrome/Safari terbaru dan sudah memberikan izin kamera.</li>
+                    <li><strong>Layar Putih/Blank:</strong> Keluar dari akun (Logout) atau hapus cache browser Anda.</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
 
