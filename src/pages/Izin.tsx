@@ -14,11 +14,13 @@ interface LeaveRecord {
   description: string;
   status: string;
   total_leave_days: number;
+  custom_attachment?: string; // Menambahkan custom_attachment sesuai respons API biasanya
 }
 
 const Izin = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
+  const ERPNEXT_URL = 'http://103.187.147.240'; // Ditambahkan untuk proses URL File
 
   const [user, setUser] = useState<User | null>(null);
   const [leaveTypes, setLeaveTypes] = useState<string[]>([]);
@@ -34,10 +36,11 @@ const Izin = () => {
   const [attachment, setAttachment] = useState<string | null>(null);
   const [attachmentName, setAttachmentName] = useState<string>('');
 
-  // ✨ State Riwayat
+  // State Riwayat & Preview Modal
   const [leaveHistory, setLeaveHistory] = useState<LeaveRecord[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [showForm, setShowForm] = useState<boolean>(true);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null); // State baru untuk Modal Preview
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
@@ -63,7 +66,6 @@ const Izin = () => {
     }
   };
 
-  // ✨ FETCH RIWAYAT IZIN
   const fetchLeaveHistory = async (employeeId: string) => {
     setIsLoadingHistory(true);
     try {
@@ -122,14 +124,12 @@ const Izin = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         alert('✅ Izin berhasil diajukan! Menunggu persetujuan HRD.');
-        // Reset form
         setSelectedType('');
         setFromDate('');
         setToDate('');
         setReason('');
         setAttachment(null);
         setAttachmentName('');
-        // Refresh riwayat & tampilkan
         fetchLeaveHistory(user.employee_id);
         setShowForm(false);
       } else {
@@ -142,7 +142,6 @@ const Izin = () => {
     }
   };
 
-  // ✨ HELPER STATUS BADGE
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase();
     if (s === 'approved') {
@@ -159,7 +158,6 @@ const Izin = () => {
         </span>
       );
     }
-    // Open / default = menunggu
     return (
       <span className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-[10px] font-black px-2 py-0.5 rounded-full">
         <i className="fa-solid fa-clock text-[9px]"></i> Menunggu
@@ -167,11 +165,18 @@ const Izin = () => {
     );
   };
 
-  // ✨ FORMAT TANGGAL
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
     const d = new Date(dateStr);
     return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  // Helper memproses URL gambar agar bisa dibaca jika formatnya path dari ERPNext
+  const prosesUrlFoto = (url?: string) => {
+    if (!url) return '';
+    if (url.startsWith('data:image')) return url;
+    if (url.startsWith('/files')) return ERPNEXT_URL + url;
+    return url;
   };
 
   return (
@@ -187,7 +192,6 @@ const Izin = () => {
             <h1 className="text-xl font-black text-[#fbc02d]">Pengajuan Izin</h1>
           </div>
 
-          {/* ✨ TAB SWITCHER */}
           <div className="flex mt-4 bg-white/10 rounded-xl p-1 gap-1">
             <button
               onClick={() => setShowForm(true)}
@@ -299,7 +303,6 @@ const Izin = () => {
                   onChange={handleFileChange}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-sm text-gray-500 outline-none focus:border-[#fbc02d] transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-[#fff8e1] file:text-[#3e2723] hover:file:bg-[#fbc02d]/50 cursor-pointer"
                 />
-                {/* Preview foto jika sudah dipilih */}
                 {attachment && attachment.startsWith('data:image') && (
                   <div className="mt-2 relative w-full h-28 rounded-xl overflow-hidden border border-[#fbc02d]/40">
                     <img src={attachment} alt="preview" className="w-full h-full object-cover" />
@@ -349,7 +352,6 @@ const Izin = () => {
         {!showForm && (
           <div className="flex-1 overflow-y-auto pb-32 pt-5 px-6">
 
-            {/* Tombol refresh */}
             <div className="flex justify-between items-center mb-4">
               <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">
                 Riwayat Pengajuan
@@ -363,7 +365,6 @@ const Izin = () => {
               </button>
             </div>
 
-            {/* Loading skeleton */}
             {isLoadingHistory && (
               <div className="flex flex-col gap-3">
                 {[1, 2, 3].map((i) => (
@@ -372,7 +373,6 @@ const Izin = () => {
               </div>
             )}
 
-            {/* Empty state */}
             {!isLoadingHistory && leaveHistory.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 bg-[#fff8e1] rounded-full flex items-center justify-center mb-4">
@@ -389,7 +389,6 @@ const Izin = () => {
               </div>
             )}
 
-            {/* List riwayat */}
             {!isLoadingHistory && leaveHistory.length > 0 && (
               <div className="flex flex-col gap-3">
                 {leaveHistory.map((item) => (
@@ -397,7 +396,6 @@ const Izin = () => {
                     key={item.name}
                     className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm"
                   >
-                    {/* Baris atas: tipe izin + badge status */}
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-[#fff8e1] rounded-full flex items-center justify-center shrink-0">
@@ -408,7 +406,6 @@ const Izin = () => {
                       {getStatusBadge(item.status)}
                     </div>
 
-                    {/* Tanggal */}
                     <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium mb-1.5 pl-10">
                       <i className="fa-regular fa-calendar text-[10px]"></i>
                       <span>
@@ -424,17 +421,65 @@ const Izin = () => {
                       )}
                     </div>
 
-                    {/* Alasan */}
                     {item.description && (
-                      <p className="text-[11px] text-gray-400 pl-10 leading-relaxed line-clamp-2">
+                      <p className="text-[11px] text-gray-400 pl-10 mb-2 leading-relaxed line-clamp-2">
                         <i className="fa-solid fa-quote-left text-[8px] mr-1 text-gray-300"></i>
                         {item.description}
                       </p>
+                    )}
+
+                    {/* 🔥 TOMBOL LIHAT BUKTI 🔥 */}
+                    {item.custom_attachment && (
+                      <div className="pl-10 mt-2">
+                        <button
+                          onClick={() => setPreviewUrl(prosesUrlFoto(item.custom_attachment))}
+                          className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          <i className="fa-regular fa-image"></i> Lihat Bukti
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════ */}
+        {/* MODAL PREVIEW GAMBAR BUKTI    */}
+        {/* ══════════════════════════════ */}
+        {previewUrl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
+            <div className="bg-white w-full max-w-sm mx-auto rounded-3xl flex flex-col overflow-hidden shadow-2xl">
+              <div className="flex justify-between items-center p-4 border-b border-gray-100">
+                <h3 className="font-black text-[#3e2723] text-sm">Bukti Lampiran</h3>
+                <button 
+                  onClick={() => setPreviewUrl(null)}
+                  className="w-8 h-8 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              <div className="p-2 bg-gray-50 max-h-[70vh] overflow-y-auto flex items-center justify-center">
+                {previewUrl.toLowerCase().endsWith('.pdf') ? (
+                  <p className="text-sm font-bold text-gray-500 p-8 text-center flex flex-col gap-2">
+                    <i className="fa-solid fa-file-pdf text-3xl text-red-500"></i>
+                    File berupa PDF tidak bisa dipreview di sini.
+                  </p>
+                ) : (
+                  <img src={previewUrl} alt="Bukti Izin" className="w-full rounded-2xl object-contain" />
+                )}
+              </div>
+              <div className="p-4">
+                 <button 
+                  onClick={() => setPreviewUrl(null)}
+                  className="w-full bg-gray-100 text-[#3e2723] font-black py-3 rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
