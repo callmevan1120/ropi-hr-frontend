@@ -320,6 +320,8 @@ const Absen = () => {
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
             setGpsStatus({ tipe: 'ok', pesan: `Lokasi: ${cek.nama} ✓` });
+            // 🔥 REVISI: Ubah teks setelah GPS ketemu sebelum kamera nyala
+            setJepretState({ aktif: false, teks: 'Menyiapkan Kamera...' }); 
             await nyalakanKamera();
           }
         }
@@ -341,6 +343,8 @@ const Absen = () => {
         video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 640 } },
       });
       if (videoRef.current) { videoRef.current.srcObject = streamRef.current; await videoRef.current.play(); }
+      // 🔥 REVISI: Ubah teks saat kamera sudah nyala & menunggu AI Wajah
+      setJepretState({ aktif: false, teks: 'Memuat Sensor Wajah...' });
       muatFaceAPI();
     } catch { setJepretState({ aktif: false, teks: 'Kamera Gagal' }); }
   };
@@ -703,7 +707,7 @@ const Absen = () => {
                 {modeAbsen}
               </div>
               
-              {/* 🔥 REVISI: Kotak GPS Flex Center & FontAwesome Spinner 🔥 */}
+              {/* REVISI: Kotak GPS Flex Center & FontAwesome Spinner */}
               <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${
                 gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : 
                 gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 
