@@ -33,24 +33,16 @@ interface LeaveRecord {
   status: string;
 }
 
-// ── HELPER: KONVERSI UTC KE WIB (VERSI DIPAKSA) ──
+// ── HELPER: KONVERSI UTC KE WIB ──
 const formatJamLokal = (utcString?: string): string => {
   if (!utcString) return '-';
-  
   let safeString = utcString.replace(' ', 'T');
-  if (!safeString.endsWith('Z') && !safeString.includes('+')) {
-    safeString += 'Z';
-  }
-
+  if (!safeString.endsWith('Z') && !safeString.includes('+')) safeString += 'Z';
   const date = new Date(safeString);
-  return date.toLocaleTimeString('id-ID', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    hour12: false 
-  }).replace('.', ':');
+  return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
 };
 
-// ── HELPER: FORMAT DURASI (MENIT JADI JAM & MENIT) ──
+// ── HELPER: FORMAT DURASI ──
 const formatDurasi = (totalMenit: number): string => {
   if (totalMenit < 60) return `${totalMenit}m`;
   const jam = Math.floor(totalMenit / 60);
@@ -94,9 +86,7 @@ const getJamShift = (
   branchUser: string | undefined,
   masterShifts: Record<string, { in: string; out: string }>
 ): { in: string; out: string } => {
-  if (shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
-    return masterShifts[shiftNameFromRecord];
-  }
+  if (shiftNameFromRecord && masterShifts[shiftNameFromRecord]) return masterShifts[shiftNameFromRecord];
   const tglDate = new Date(tanggal);
   const namaShift = getShiftKantor(tglDate, masterShifts, branchUser);
   if (namaShift && masterShifts[namaShift]) return masterShifts[namaShift];
@@ -126,6 +116,31 @@ const hitungHariKerjaDalamBulan = (
     }
     return acc + hari;
   }, 0);
+};
+
+// ── HELPER: CEK APAKAH BRANCH USER SESUAI LOKASI GPS ──
+// Mengembalikan null jika OK, atau string pesan error jika ditolak
+const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): string | null => {
+  const branch = (branchUser || '').toLowerCase().trim();
+  const lokasi = namaLokasi.toLowerCase().trim();
+
+  // Kalau branch kosong/null → izinkan, biar backend yang validasi
+  if (!branch) return null;
+
+  const isLokasiKlaten = lokasi.includes('klaten') || lokasi.includes('ph');
+  const isLokasiJakarta = lokasi.includes('jakarta');
+
+  const isBranchKlaten = branch.includes('klaten') || branch.includes('ph');
+  const isBranchJakarta = branch.includes('jakarta');
+
+  if (isLokasiKlaten && !isBranchKlaten) {
+    return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
+  }
+  if (isLokasiJakarta && !isBranchJakarta) {
+    return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
+  }
+
+  return null; // OK
 };
 
 const Absen = () => {
@@ -305,34 +320,34 @@ const Absen = () => {
     setGpsStatus({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
     setJepretState({ aktif: false, teks: 'Cek GPS...' });
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
-    
+
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setKoordinatGPS(coords);
         const cek = cekRadius(coords.lat, coords.lng);
-        
+
         if (!cek.valid) {
-          setGpsStatus({ tipe: 'error', pesan: `Di luar radius! ${cek.jarak}m` });
+          // GPS di luar radius semua lokasi kantor
+          setGpsStatus({ tipe: 'error', pesan: `Di luar radius! ${cek.jarak}m dari ${cek.nama}` });
           setJepretState({ aktif: false, teks: 'Lokasi Jauh' });
         } else {
-          const lokasiTerdeteksi = cek.nama.toLowerCase();
-          const cabangUser = (user?.branch || '').toLowerCase();
-          
-          const isLokasiPusat = lokasiTerdeteksi.includes('klaten') || lokasiTerdeteksi.includes('ph');
-          const isUserPusat = cabangUser.includes('klaten') || cabangUser.includes('ph');
-
-          if (isLokasiPusat && !isUserPusat) {
-            setGpsStatus({ tipe: 'error', pesan: `Ditolak! Anda terdaftar di Cabang: ${user?.branch || 'Lain'}` });
+          // GPS valid — cek apakah branch user sesuai lokasi
+          const errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
+          if (errorBranch) {
+            setGpsStatus({ tipe: 'error', pesan: errorBranch });
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
             setGpsStatus({ tipe: 'ok', pesan: `Lokasi: ${cek.nama} ✓` });
-            setJepretState({ aktif: false, teks: 'Buka Kamera...' }); 
+            setJepretState({ aktif: false, teks: 'Buka Kamera...' });
             await nyalakanKamera();
           }
         }
       },
-      () => { setGpsStatus({ tipe: 'error', pesan: 'GPS Mati / Ditolak' }); setJepretState({ aktif: false, teks: 'Izinkan GPS' }); },
+      () => {
+        setGpsStatus({ tipe: 'error', pesan: 'GPS Mati / Ditolak' });
+        setJepretState({ aktif: false, teks: 'Izinkan GPS' });
+      },
       { enableHighAccuracy: true }
     );
   };
@@ -415,14 +430,22 @@ const Absen = () => {
           shift: getShiftKantor(new Date(), masterShifts, user?.branch),
         }),
       });
-      if (res.ok) { alert(`Absen ${modeAbsen} berhasil!`); tutupModal(); ambilRiwayatAbsen(); }
-      else alert('Absen gagal dikirim ke sistem.');
+
+      if (res.ok) {
+        alert(`Absen ${modeAbsen} berhasil!`);
+        tutupModal();
+        ambilRiwayatAbsen();
+      } else {
+        // Tampilkan pesan error dari backend (termasuk penolakan branch/radius)
+        const errData = await res.json().catch(() => null);
+        alert(errData?.message || 'Absen gagal dikirim ke sistem.');
+      }
     } catch { alert('Gagal konek ke server.'); }
     setIsKirimLoading(false);
   };
 
   // ════════════════════════════
-  // GROUPING & REKAP (SUDAH WIB)
+  // GROUPING & REKAP
   // ════════════════════════════
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
@@ -442,7 +465,7 @@ const Absen = () => {
   let rekapTelat = 0;
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
     if (d.in?.time) {
-      const jamAbsen = formatJamLokal(d.in.time); 
+      const jamAbsen = formatJamLokal(d.in.time);
       const shiftInfo = getJamShift(d.in.shift || '', tgl, user?.branch, masterShifts);
       if (toMenit(jamAbsen) > toMenit(shiftInfo.in)) rekapTelat++;
     }
@@ -464,7 +487,7 @@ const Absen = () => {
   const tampilKeys = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
 
   // ════════════════════════════
-  // RENDER KALENDER (SUDAH WIB)
+  // RENDER KALENDER
   // ════════════════════════════
   const renderKalender = () => {
     const hariPertama = new Date(tahunAktif, bulanAktif, 1).getDay();
@@ -488,7 +511,7 @@ const Absen = () => {
         dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />;
       } else if (checkin) {
         const shiftInfo = getJamShift(dataIn?.shift || '', strTgl, user?.branch, masterShifts);
-        const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in); 
+        const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in);
         kelas += isTelat ? 'bg-red-100 text-red-600 font-bold' : 'bg-green-100 text-green-700 font-bold';
         dot = <span className={`absolute -bottom-0.5 w-1 h-1 rounded-full ${isTelat ? 'bg-red-400' : 'bg-green-400'}`} />;
       } else {
@@ -621,8 +644,8 @@ const Absen = () => {
                 <>
                   {tampilKeys.map(tgl => {
                     const d = groupedRiwayat[tgl];
-                    const jamIn = formatJamLokal(d.in?.time); 
-                    const jamOut = formatJamLokal(d.out?.time); 
+                    const jamIn = formatJamLokal(d.in?.time);
+                    const jamOut = formatJamLokal(d.out?.time);
                     const dateLabel = new Date(tgl).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
                     const shiftName = d.in?.shift || d.out?.shift || '';
                     const shiftInfo = getJamShift(shiftName, tgl, user?.branch, masterShifts);
@@ -632,7 +655,6 @@ const Absen = () => {
                     if (jamIn !== '-') {
                       const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
                       badgeEl = selisih > 0
-                        // 🔥 REVISI: Menggunakan formatDurasi 🔥
                         ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {formatDurasi(selisih)}</span>
                         : <span className="text-green-600 text-[9px] font-black">✓ Tepat</span>;
                     }
@@ -644,7 +666,6 @@ const Absen = () => {
                     if (jamOut !== '-') {
                       const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
                       if (selisih > 0) {
-                        // REVISI: Menggunakan formatDurasi 
                         badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cepat {formatDurasi(selisih)}</span>;
                       }
                     }
@@ -713,10 +734,10 @@ const Absen = () => {
               <div className={`text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full mb-3 ${modeAbsen === 'MASUK' ? 'bg-[#3e2723] text-[#fbc02d]' : 'bg-[#fbc02d] text-[#3e2723]'}`}>
                 {modeAbsen}
               </div>
-              
+
               <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${
-                gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : 
-                gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 
+                gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' :
+                gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' :
                 'bg-blue-50 text-blue-700 border-blue-100'
               }`}>
                 {gpsStatus.tipe === 'loading' ? (
@@ -737,12 +758,12 @@ const Absen = () => {
               {!fotoBase64 ? (
                 <div className="w-full grid grid-cols-2 gap-3">
                   <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
-                  <button 
-                    disabled={!jepretState.aktif} 
-                    onClick={jepretFoto} 
+                  <button
+                    disabled={!jepretState.aktif}
+                    onClick={jepretFoto}
                     className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? 'bg-[#3e2723] text-[#fbc02d] shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                   >
-                    <i className="fa-solid fa-camera shrink-0 text-lg" /> 
+                    <i className="fa-solid fa-camera shrink-0 text-lg" />
                     <span className="leading-tight text-left">{jepretState.teks}</span>
                   </button>
                 </div>
@@ -788,11 +809,9 @@ const Absen = () => {
                 ].map(({ label, color, data }) => (
                   <div key={label} className={`bg-${color}-50 p-4 rounded-3xl border border-${color}-100 flex flex-col`}>
                     <div className={`self-start bg-${color}-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2`}>{label}</div>
-                    
                     <p className={`font-bold text-lg mb-2 text-${color}-800`}>
                       {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
                     </p>
-                    
                     <div className="w-full h-40 bg-gray-200 rounded-2xl overflow-hidden relative">
                       {data?.custom_foto_absen
                         ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-cover" alt={label} />
