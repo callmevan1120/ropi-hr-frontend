@@ -50,6 +50,14 @@ const formatJamLokal = (utcString?: string): string => {
   }).replace('.', ':');
 };
 
+// ── HELPER: FORMAT DURASI (MENIT JADI JAM & MENIT) ──
+const formatDurasi = (totalMenit: number): string => {
+  if (totalMenit < 60) return `${totalMenit}m`;
+  const jam = Math.floor(totalMenit / 60);
+  const sisaMenit = totalMenit % 60;
+  return sisaMenit > 0 ? `${jam}j ${sisaMenit}m` : `${jam}j`;
+};
+
 const toMenit = (jam: string): number => {
   const [h, m] = jam.split(':').map(Number);
   return h * 60 + m;
@@ -624,7 +632,8 @@ const Absen = () => {
                     if (jamIn !== '-') {
                       const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
                       badgeEl = selisih > 0
-                        ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {selisih}m</span>
+                        // 🔥 REVISI: Menggunakan formatDurasi 🔥
+                        ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {formatDurasi(selisih)}</span>
                         : <span className="text-green-600 text-[9px] font-black">✓ Tepat</span>;
                     }
                     if (adaIzinHariIni && !badgeEl) {
@@ -635,7 +644,8 @@ const Absen = () => {
                     if (jamOut !== '-') {
                       const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
                       if (selisih > 0) {
-                        badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cepat {selisih}m</span>;
+                        // REVISI: Menggunakan formatDurasi 
+                        badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cepat {formatDurasi(selisih)}</span>;
                       }
                     }
 
@@ -694,7 +704,7 @@ const Absen = () => {
           </Link>
         </nav>
 
-        {/* ── MODAL KAMERA (DENGAN REVISI KOTAK KAMERA LEBIH LUAS) ── */}
+        {/* ── MODAL KAMERA ── */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
@@ -717,7 +727,6 @@ const Absen = () => {
                 <span className="leading-tight">{gpsStatus.pesan}</span>
               </div>
 
-              {/* REVISI: Mengubah h-[340px] menjadi aspect-[3/4] w-full agar jauh lebih tinggi dan luas */}
               <div className={`w-full aspect-[3/4] max-h-[65vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
                 {!fotoBase64
                   ? <video ref={videoRef} className="w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline muted />
