@@ -33,6 +33,18 @@ interface LeaveRecord {
   status: string;
 }
 
+// ── HELPER: KONVERSI UTC KE WIB ──
+const formatJamLokal = (utcString?: string): string => {
+  if (!utcString) return '-';
+  const date = new Date(utcString);
+  // Mengonversi ke format HH:mm sesuai zona waktu lokal (WIB)
+  return date.toLocaleTimeString('id-ID', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    hour12: false 
+  }).replace('.', ':');
+};
+
 const toMenit = (jam: string): number => {
   const [h, m] = jam.split(':').map(Number);
   return h * 60 + m;
@@ -157,7 +169,6 @@ const Absen = () => {
       ambilRiwayatAbsen();
       ambilRiwayatIzin(user.employee_id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, bulanAktif, tahunAktif]);
 
   useEffect(() => {
@@ -305,7 +316,6 @@ const Absen = () => {
     if (searchParams.has('auto')) setSearchParams({});
   };
 
-  // ✨ PORTRAIT: width ideal 480, height ideal 640
   const nyalakanKamera = async () => {
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
@@ -344,7 +354,6 @@ const Absen = () => {
     }, 600);
   };
 
-  // ✨ PORTRAIT: scale by height bukan width
   const jepretFoto = () => {
     if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
     const video = videoRef.current;
@@ -385,7 +394,7 @@ const Absen = () => {
   };
 
   // ════════════════════════════
-  // GROUPING & REKAP
+  // GROUPING & REKAP (SUDAH WIB)
   // ════════════════════════════
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
@@ -405,7 +414,7 @@ const Absen = () => {
   let rekapTelat = 0;
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
     if (d.in?.time) {
-      const jamAbsen = d.in.time.substring(11, 16);
+      const jamAbsen = formatJamLokal(d.in.time); // Perbaikan: Gunakan helper
       const shiftInfo = getJamShift(d.in.shift || '', tgl, user?.branch, masterShifts);
       if (toMenit(jamAbsen) > toMenit(shiftInfo.in)) rekapTelat++;
     }
@@ -427,7 +436,7 @@ const Absen = () => {
   const tampilKeys = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
 
   // ════════════════════════════
-  // RENDER KALENDER
+  // RENDER KALENDER (SUDAH WIB)
   // ════════════════════════════
   const renderKalender = () => {
     const hariPertama = new Date(tahunAktif, bulanAktif, 1).getDay();
@@ -451,7 +460,7 @@ const Absen = () => {
         dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />;
       } else if (checkin) {
         const shiftInfo = getJamShift(dataIn?.shift || '', strTgl, user?.branch, masterShifts);
-        const isTelat = toMenit(checkin.substring(11, 16)) > toMenit(shiftInfo.in);
+        const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in); // Perbaikan: Gunakan helper
         kelas += isTelat ? 'bg-red-100 text-red-600 font-bold' : 'bg-green-100 text-green-700 font-bold';
         dot = <span className={`absolute -bottom-0.5 w-1 h-1 rounded-full ${isTelat ? 'bg-red-400' : 'bg-green-400'}`} />;
       } else {
@@ -506,7 +515,6 @@ const Absen = () => {
             </div>
           </div>
 
-          {/* REKAP 4 KOTAK */}
           <div className="mt-4 grid grid-cols-4 gap-2">
             {[
               { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
@@ -525,7 +533,6 @@ const Absen = () => {
         {/* ── CONTENT ── */}
         <div className="flex-1 overflow-y-auto pb-32 pt-4">
 
-          {/* CHIP IZIN */}
           {leaveRecords.length > 0 && (
             <div className="px-4 mb-3 flex flex-wrap gap-1.5">
               {leaveRecords.map(r => {
@@ -545,7 +552,6 @@ const Absen = () => {
             </div>
           )}
 
-          {/* KALENDER COMPACT */}
           <div className="px-4 mb-4">
             <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
               <div className="grid grid-cols-7 text-center text-[9px] font-black text-gray-400 mb-1.5">
@@ -569,7 +575,6 @@ const Absen = () => {
             </div>
           </div>
 
-          {/* RIWAYAT KEHADIRAN */}
           <div className="px-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-black text-[#3e2723] text-sm">Riwayat Kehadiran</h3>
@@ -588,8 +593,8 @@ const Absen = () => {
                 <>
                   {tampilKeys.map(tgl => {
                     const d = groupedRiwayat[tgl];
-                    const jamIn = d.in?.time?.substring(11, 16) || '-';
-                    const jamOut = d.out?.time?.substring(11, 16) || '-';
+                    const jamIn = formatJamLokal(d.in?.time); // Perbaikan: Gunakan helper
+                    const jamOut = formatJamLokal(d.out?.time); // Perbaikan: Gunakan helper
                     const dateLabel = new Date(tgl).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
                     const shiftName = d.in?.shift || d.out?.shift || '';
                     const shiftInfo = getJamShift(shiftName, tgl, user?.branch, masterShifts);
@@ -682,14 +687,6 @@ const Absen = () => {
                 {gpsStatus.tipe === 'loading' && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
                 {gpsStatus.pesan}
               </div>
-              {wajahStatus.show && !fotoBase64 && (
-                <div className={`w-full mb-3 px-4 py-2.5 rounded-2xl text-sm font-bold text-center ${wajahStatus.ok ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>
-                  <i className={`fa-solid ${wajahStatus.ok ? 'fa-face-smile' : 'fa-face-meh'} mr-1`} />
-                  {wajahStatus.ok ? 'Wajah Terdeteksi ✓' : 'Arahkan wajah ke kamera...'}
-                </div>
-              )}
-
-              {/* ✨ PORTRAIT: h-[340px] */}
               <div className={`w-full h-[340px] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
                 {!fotoBase64
                   ? <video ref={videoRef} className="w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline muted />
@@ -719,7 +716,7 @@ const Absen = () => {
           </div>
         )}
 
-        {/* ── MODAL DETAIL ── */}
+        {/* ── MODAL DETAIL (SUDAH WIB) ── */}
         {detailModal.show && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 h-[85vh]">
@@ -746,7 +743,7 @@ const Absen = () => {
                   <div key={label} className={`bg-${color}-50 p-4 rounded-3xl border border-${color}-100 flex flex-col`}>
                     <div className={`self-start bg-${color}-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2`}>{label}</div>
                     <p className={`font-bold text-lg mb-2 text-${color}-800`}>
-                      {data?.time ? `Pukul: ${data.time.substring(11, 16)}` : 'Belum Absen'}
+                      {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
                     </p>
                     <div className="w-full h-40 bg-gray-200 rounded-2xl overflow-hidden relative">
                       {data?.custom_foto_absen
