@@ -107,7 +107,7 @@ const Absen = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const BACKEND = 'http://localhost:3333';
+  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const ERPNEXT_URL = 'http://103.187.147.240';
   const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.615, lng: 110.687, radius: 100 }];
 

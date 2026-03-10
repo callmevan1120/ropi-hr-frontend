@@ -17,7 +17,7 @@ interface BtnConfig {
 
 const Home = () => {
   const navigate = useNavigate();
-  const BACKEND = 'http://localhost:3333'; 
+  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app'; 
 
   const [user, setUser] = useState<User>({ name: 'Karyawan', role: 'Staff Roti Ropi', employee_id: '' });
   const [statusAbsen, setStatusAbsen] = useState<string>('Mengecek status...');

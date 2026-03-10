@@ -9,7 +9,7 @@ const Login = () => {
   const navigate = useNavigate();
 
   // URL Backend Express.js kamu
-  const BACKEND = 'http://localhost:3333';
+  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
 
   // 1. Cek sesi saat halaman dimuat
   useEffect(() => {

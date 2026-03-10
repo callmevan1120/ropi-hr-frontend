@@ -18,7 +18,7 @@ interface LeaveHistory {
 
 const Cuti = () => {
   const navigate = useNavigate();
-  const BACKEND = 'http://localhost:3333';
+  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
 
   const [user, setUser] = useState<User | null>(null);
   const [leaveBalance, setLeaveBalance] = useState<string>('-');
