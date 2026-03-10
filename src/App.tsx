@@ -1,27 +1,11 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-// Pastikan meng-import komponen dari folder pages
-import Login from './pages/Login';
-import Home from './pages/Home';
-import Absen from './pages/Absen';
-import Cuti from './pages/Cuti';
-import Profil from './pages/Profil';
-import Shift from './pages/Shift';
-import Izin from './pages/Izin';
-
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/absen" element={<Absen />} />
-        <Route path="/cuti" element={<Cuti />} />
-        <Route path="/profil" element={<Profil />} />
-        <Route path="/shift" element={<Shift />} />
-        <Route path="/izin" element={<Izin />} />
-      </Routes>
-    </BrowserRouter>
+    <div style={{ padding: '50px', textAlign: 'center', fontFamily: 'sans-serif' }}>
+      <h1 style={{ color: '#fbc02d', fontSize: '30px' }}>Safe Mode Aktif! 🚀</h1>
+      <p style={{ color: '#3e2723', fontWeight: 'bold' }}>
+        Kalau teks ini muncul, berarti React kamu sehat dan masalahnya ada di kodingan halaman!
+      </p>
+    </div>
   );
 }
 
