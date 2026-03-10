@@ -14,7 +14,14 @@ interface LeaveRecord {
   description: string;
   status: string;
   total_leave_days: number;
+  // Cover semua kemungkinan nama field attachment dari ERPNext
   custom_attachment?: string;
+  attachment?: string;
+  leave_attachment?: string;
+  custom_foto_bukti?: string;
+  custom_bukti?: string;
+  custom_file?: string;
+  [key: string]: any;
 }
 
 const Izin = () => {
@@ -79,6 +86,11 @@ const Izin = () => {
       const res = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}`);
       const data = await res.json();
       if (data.success) {
+        // DEBUG: log semua field dari record pertama untuk cek nama field attachment
+        if (data.data.length > 0) {
+          console.log('📋 Fields riwayat izin:', Object.keys(data.data[0]));
+          console.log('📋 Sample data record:', JSON.stringify(data.data[0], null, 2));
+        }
         setLeaveHistory(data.data);
       }
     } catch (err) {
@@ -183,6 +195,25 @@ const Izin = () => {
     if (url.startsWith('data:image')) return url;
     if (url.startsWith('/files')) return ERPNEXT_URL + url;
     return url;
+  };
+
+  // Otomatis cari field attachment dari semua kemungkinan nama field ERPNext
+  const getAttachment = (item: LeaveRecord): string | undefined => {
+    const possibleFields = [
+      'custom_attachment',
+      'attachment', 
+      'leave_attachment',
+      'custom_foto_bukti',
+      'custom_bukti',
+      'custom_file',
+    ];
+    for (const field of possibleFields) {
+      if (item[field]) return item[field];
+    }
+    // Fallback: cari field apapun yang valuenya berupa path file
+    return Object.values(item).find(
+      (v) => typeof v === 'string' && (v.startsWith('/files/') || v.startsWith('data:image'))
+    );
   };
 
   const isPdf = (url: string) => url.toLowerCase().endsWith('.pdf');
@@ -441,7 +472,7 @@ const Izin = () => {
                     )}
 
                     {/* Indikator ada lampiran */}
-                    {item.custom_attachment && (
+                    {getAttachment(item) && (
                       <div className="pl-10 mt-2">
                         <span className="flex items-center gap-1 text-[10px] text-blue-500 font-bold">
                           <i className="fa-regular fa-image text-[10px]"></i> Ada bukti terlampir
@@ -577,17 +608,17 @@ const Izin = () => {
                 </div>
 
                 {/* Bukti Foto */}
-                {selectedRecord.custom_attachment && (
+                {getAttachment(selectedRecord) && (
                   <div>
                     <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider mb-2">
                       <i className="fa-regular fa-image mr-1.5 text-[#fbc02d]"></i>Bukti Lampiran
                     </p>
-                    {isPdf(selectedRecord.custom_attachment) ? (
+                    {isPdf(getAttachment(selectedRecord) || '') ? (
                       <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col items-center gap-2">
                         <i className="fa-solid fa-file-pdf text-3xl text-red-500"></i>
                         <p className="text-xs text-gray-500 font-medium text-center">File PDF</p>
                         <a
-                          href={prosesUrlFoto(selectedRecord.custom_attachment)}
+                          href={prosesUrlFoto(getAttachment(selectedRecord))}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-[11px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors"
@@ -597,11 +628,11 @@ const Izin = () => {
                       </div>
                     ) : (
                       <button
-                        onClick={() => setPreviewUrl(prosesUrlFoto(selectedRecord.custom_attachment))}
+                        onClick={() => setPreviewUrl(prosesUrlFoto(getAttachment(selectedRecord)))}
                         className="w-full relative h-40 rounded-2xl overflow-hidden border border-[#fbc02d]/30 group"
                       >
                         <img
-                          src={prosesUrlFoto(selectedRecord.custom_attachment)}
+                          src={prosesUrlFoto(getAttachment(selectedRecord))}
                           alt="Bukti Izin"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
