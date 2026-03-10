@@ -1,24 +1,24 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  // TypeScript: Mendefinisikan tipe state sebagai string dan boolean
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const navigate = useNavigate();
 
-  // URL Backend Express.js kamu
-  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
+  // 🚀 KITA HARDCODE LINK-NYA BIAR 1000% AMAN DARI ERROR VITE
+  const BACKEND = 'https://ropi-hr-backend.vercel.app';
 
-  // 1. Cek sesi saat halaman dimuat
+  // 🛑 KITA MATIKAN AUTO-LOGIN SEMENTARA BIAR NGGAK INFINITE LOOP!
+  /*
   useEffect(() => {
     if (localStorage.getItem('ropi_user')) {
       navigate('/home');
     }
   }, [navigate]);
+  */
 
-  // 2. Proses Login
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -32,16 +32,15 @@ const Login = () => {
 
       const responsData = await res.json();
 
-      // Menyesuaikan dengan response backend Express.js
       if (res.ok || responsData.statusCode === 200) {
         localStorage.setItem('ropi_user', JSON.stringify(responsData.data));
-        navigate('/home'); // Pindah ke Home tanpa loading
+        navigate('/home'); 
       } else {
         alert('❌ Login gagal! Email tidak terdaftar atau password salah.');
       }
     } catch (err) {
       console.error(err);
-      alert('❌ Gagal terhubung ke Server HR. Pastikan Backend Express.js berjalan.');
+      alert('❌ Gagal terhubung ke Server HR. Pastikan koneksi internet stabil atau server sedang aktif.');
     } finally {
       setIsLoading(false);
     }
@@ -104,6 +103,14 @@ const Login = () => {
             </button>
           </form>
           
+          {/* Tombol Darurat untuk Hapus Cache */}
+          <button 
+            onClick={() => { localStorage.clear(); alert('Cache dibersihkan! Silakan reload page.'); window.location.reload(); }}
+            className="mt-8 text-xs font-bold text-red-500 underline z-10"
+          >
+            Hapus Cache (Jika Error)
+          </button>
+
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-[#fbc02d] rounded-t-[100%] opacity-20 -mb-10 pointer-events-none"></div>
         </div>
       </div>
