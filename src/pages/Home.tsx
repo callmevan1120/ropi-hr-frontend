@@ -15,19 +15,14 @@ interface BtnConfig {
   mode: string;
 }
 
-// ── HELPER: KONVERSI UTC KE WIB ──
-const formatJamLokal = (utcString?: string): string => {
-  if (!utcString) return '-';
-  let safeString = utcString.replace(' ', 'T');
-  if (!safeString.endsWith('Z') && !safeString.includes('+')) {
-    safeString += 'Z';
-  }
-  const date = new Date(safeString);
-  return date.toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).replace('.', ':');
+// ── HELPER: AMBIL JAM DARI STRING WIB ──
+// API sudah return waktu WIB, JANGAN tambah 'Z' karena akan
+// dianggap UTC dan dikonversi +7 jam lagi oleh JavaScript
+const formatJamLokal = (wibString?: string): string => {
+  if (!wibString) return '-';
+  // Ambil langsung bagian HH:MM dari string "YYYY-MM-DD HH:MM:SS"
+  const match = wibString.match(/\d{2}:\d{2}/);
+  return match ? match[0] : '-';
 };
 
 const Home = () => {
