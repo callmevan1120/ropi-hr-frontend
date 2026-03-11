@@ -15,14 +15,19 @@ interface BtnConfig {
   mode: string;
 }
 
-// ── HELPER: AMBIL JAM DARI STRING WIB ──
-// API sudah return waktu WIB, JANGAN tambah 'Z' karena akan
-// dianggap UTC dan dikonversi +7 jam lagi oleh JavaScript
-const formatJamLokal = (wibString?: string): string => {
-  if (!wibString) return '-';
-  // Ambil langsung bagian HH:MM dari string "YYYY-MM-DD HH:MM:SS"
-  const match = wibString.match(/\d{2}:\d{2}/);
-  return match ? match[0] : '-';
+// ── HELPER: AMBIL JAM LANGSUNG DARI ERPNEXT (Tanpa konversi zona waktu) ──
+const formatJamLokal = (timeString?: string): string => {
+  if (!timeString) return '-';
+  
+  // Data dari ERPNext biasanya: "2026-03-11 07:48:43"
+  // Kita pisahkan berdasarkan spasi, lalu ambil jamnya saja
+  const parts = timeString.split(' ');
+  if (parts.length > 1) {
+    return parts[1].substring(0, 5); // Mengambil format HH:mm (07:48)
+  }
+  
+  // Fallback jika formatnya berbeda
+  return timeString.substring(0, 5); 
 };
 
 const Home = () => {
@@ -53,46 +58,18 @@ const Home = () => {
 
   const ambilStatusHariIni = async (employeeId: string) => {
     try {
-      const tglHariIni = new Date().toISOString().substring(0, 10);
+      // 🔥 REVISI: Gunakan waktu lokal HP, bukan toISOString() yang berbasis UTC (London)
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const tglHariIni = `${yyyy}-${mm}-${dd}`; // Menghasilkan YYYY-MM-DD sesuai jam lokal
+
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(employeeId)}&from=${tglHariIni}&to=${tglHariIni}`);
       const data = await res.json();
 
-      if (data.success && data.data && data.data.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sorted = data.data.sort((a: any, b: any) => b.time.localeCompare(a.time));
-
-        // Cek keberadaan IN dan OUT khusus hari ini
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sudahMasuk = sorted.some((d: any) => d.log_type === 'IN');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sudahKeluar = sorted.some((d: any) => d.log_type === 'OUT');
-
-        const terakhir = sorted[0];
-        const jam = formatJamLokal(terakhir.time);
-        const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
-
-        const statusText = `✓ Absen ${tipe} terakhir pukul ${jam}`;
-        setStatusAbsen(statusText);
-        localStorage.setItem('ropi_status_absen', statusText);
-
-        // Sudah MASUK tapi belum KELUAR → tombol KELUAR
-        // Belum MASUK, atau sudah MASUK & KELUAR → tombol MASUK
-        if (sudahMasuk && !sudahKeluar) {
-          setBtnConfig({
-            text: 'Absen Keluar Sekarang',
-            icon: 'fa-right-from-bracket',
-            className: 'bg-red-500 text-white shadow-red-500/30',
-            mode: 'KELUAR',
-          });
-        } else {
-          setBtnConfig({
-            text: 'Absen Masuk Sekarang',
-            icon: 'fa-right-to-bracket',
-            className: 'bg-green-500 text-white shadow-green-500/30',
-            mode: 'MASUK',
-          });
-        }
-      } else {
+      // Helper untuk reset tombol ke state awal (MASUK)
+      const setTombolMasukAwal = () => {
         setStatusAbsen('Belum ada catatan absen hari ini');
         localStorage.removeItem('ropi_status_absen');
         setBtnConfig({
@@ -101,6 +78,57 @@ const Home = () => {
           className: 'bg-green-500 text-white shadow-green-500/30',
           mode: 'MASUK',
         });
+      };
+
+      if (data.success && data.data && data.data.length > 0) {
+        // Filter khusus untuk memastikan data benar-benar hari ini
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const absenHariIni = data.data.filter((item: any) => {
+          const tglAbsen = item.time ? item.time.substring(0, 10) : item.attendance_date;
+          return tglAbsen === tglHariIni;
+        });
+
+        if (absenHariIni.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sorted = absenHariIni.sort((a: any, b: any) => b.time.localeCompare(a.time));
+          
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sudahMasuk = sorted.some((d: any) => d.log_type === 'IN');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sudahKeluar = sorted.some((d: any) => d.log_type === 'OUT');
+
+          const terakhir = sorted[0];
+          const jam = formatJamLokal(terakhir.time);
+          const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
+
+          const statusText = `✓ Absen ${tipe} terakhir pukul ${jam}`;
+          setStatusAbsen(statusText);
+          localStorage.setItem('ropi_status_absen', statusText);
+
+          // Sudah MASUK tapi belum KELUAR → tombol KELUAR
+          if (sudahMasuk && !sudahKeluar) {
+            setBtnConfig({
+              text: 'Absen Keluar Sekarang',
+              icon: 'fa-right-from-bracket',
+              className: 'bg-red-500 text-white shadow-red-500/30',
+              mode: 'KELUAR',
+            });
+          } else {
+            // Belum MASUK, atau sudah MASUK & KELUAR → tombol MASUK
+            setBtnConfig({
+              text: 'Absen Masuk Sekarang',
+              icon: 'fa-right-to-bracket',
+              className: 'bg-green-500 text-white shadow-green-500/30',
+              mode: 'MASUK',
+            });
+          }
+        } else {
+          // Jika array ada tapi bukan tanggal hari ini
+          setTombolMasukAwal();
+        }
+      } else {
+        // Jika belum ada absen sama sekali hari ini
+        setTombolMasukAwal();
       }
     } catch (e) {
       console.error('Gagal sinkronisasi status:', e);
