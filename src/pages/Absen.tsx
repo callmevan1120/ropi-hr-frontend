@@ -881,16 +881,18 @@ const Absen = () => {
                       </div>
                     )}
 
-                    {/* Viewfinder */}
-                    <div className={`w-full rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-gray-900 relative transition-colors`} style={{ aspectRatio: '9/16', maxHeight: '55vh' }}>
-                      {cameraStep === 2 && (
-                        <div className="absolute top-3 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
-                          <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg animate-pulse">
-                            <i className="fa-solid fa-camera mr-1" /> Arahkan ke Mesin Fingerprint!
-                          </span>
-                        </div>
-                      )}
-                      <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
+                    {/* Viewfinder — 9:16 pakai padding-bottom trick */}
+                    <div className={`w-full rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-gray-900 transition-colors`} style={{ position: 'relative', paddingBottom: '177.78%' }}>
+                      <div style={{ position: 'absolute', inset: 0 }}>
+                        {cameraStep === 2 && (
+                          <div className="absolute top-3 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
+                            <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg animate-pulse">
+                              <i className="fa-solid fa-camera mr-1" /> Arahkan ke Mesin Fingerprint!
+                            </span>
+                          </div>
+                        )}
+                        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
+                      </div>
                     </div>
                   </>
                 )}
