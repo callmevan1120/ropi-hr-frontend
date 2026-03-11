@@ -59,37 +59,18 @@ const Home = () => {
 
   const ambilStatusHariIni = async (employeeId: string) => {
     try {
-      const tglHariIni = new Date().toISOString().substring(0, 10);
+      // Gunakan waktu lokal (WIB/Perangkat), JANGAN pakai toISOString() karena zona waktunya UTC
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const tglHariIni = `${yyyy}-${mm}-${dd}`; // Menghasilkan YYYY-MM-DD sesuai jam HP karyawan
+
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(employeeId)}&from=${tglHariIni}&to=${tglHariIni}`);
       const data = await res.json();
 
-      if (data.success && data.data && data.data.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const terakhir = data.data.sort((a: any, b: any) => b.time.localeCompare(a.time))[0];
-        
-        const jam = formatJamLokal(terakhir.time);
-        const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
-
-        const statusText = `✓ Absen ${tipe} pukul ${jam}`;
-        setStatusAbsen(statusText);
-        localStorage.setItem('ropi_status_absen', statusText);
-
-        if (terakhir.log_type === 'IN') {
-          setBtnConfig({
-            text: 'Absen Keluar Sekarang',
-            icon: 'fa-right-from-bracket',
-            className: 'bg-red-500 text-white shadow-red-500/30',
-            mode: 'KELUAR',
-          });
-        } else {
-          setBtnConfig({
-            text: 'Absen Masuk Sekarang',
-            icon: 'fa-right-to-bracket',
-            className: 'bg-green-500 text-white shadow-green-500/30',
-            mode: 'MASUK',
-          });
-        }
-      } else {
+      // Fungsi Helper untuk reset tombol jadi MASUK
+      const setTombolMasukAwal = () => {
         setStatusAbsen('Belum ada catatan absen hari ini');
         localStorage.removeItem('ropi_status_absen');
         setBtnConfig({
@@ -98,6 +79,50 @@ const Home = () => {
           className: 'bg-green-500 text-white shadow-green-500/30',
           mode: 'MASUK',
         });
+      };
+
+      if (data.success && data.data && data.data.length > 0) {
+        // memfilter secara tegas khusus hari ini saja
+        const absenHariIni = data.data.filter((item: any) => {
+          const tglAbsen = item.time ? item.time.substring(0, 10) : item.attendance_date;
+          return tglAbsen === tglHariIni;
+        });
+
+        // Jika hari ini sudah ada absen (Entah IN atau OUT)
+        if (absenHariIni.length > 0) {
+          const terakhir = absenHariIni.sort((a: any, b: any) => b.time.localeCompare(a.time))[0];
+          
+          const jam = formatJamLokal(terakhir.time);
+          const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
+
+          const statusText = `✓ Absen ${tipe} pukul ${jam}`;
+          setStatusAbsen(statusText);
+          localStorage.setItem('ropi_status_absen', statusText);
+
+          if (terakhir.log_type === 'IN') {
+            // Jika terakhir absen masuk, maka suruh keluar
+            setBtnConfig({
+              text: 'Absen Keluar Sekarang',
+              icon: 'fa-right-from-bracket',
+              className: 'bg-red-500 text-white shadow-red-500/30',
+              mode: 'KELUAR',
+            });
+          } else {
+            // Jika hari ini sudah absen keluar, (opsional bisa diset selesai, tapi kita kembalikan ke masuk untuk fleksibilitas)
+            setBtnConfig({
+              text: 'Absen Masuk Sekarang',
+              icon: 'fa-right-to-bracket',
+              className: 'bg-green-500 text-white shadow-green-500/30',
+              mode: 'MASUK',
+            });
+          }
+        } else {
+          // Jika tidak ada data absen di hari ini (misal lupa absen keluar kemarin)
+          setTombolMasukAwal();
+        }
+      } else {
+        // Jika API membalas kosong (Belum absen sama sekali hari ini)
+        setTombolMasukAwal();
       }
     } catch (e) {
       console.error('Gagal sinkronisasi status:', e);
@@ -194,7 +219,7 @@ const Home = () => {
             </Link>
           </div>
 
-          {/* 🔥 SECTION BARU: BUKU PANDUAN 🔥 */}
+          {/*  SECTION BARU: BUKU PANDUAN  */}
           <h3 className="font-black text-[#3e2723] text-base mb-3 flex items-center gap-2">
             <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
           </h3>
