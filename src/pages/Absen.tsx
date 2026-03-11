@@ -144,7 +144,7 @@ const Absen = () => {
   const ERPNEXT_URL = 'http://103.187.147.240';
   
   // TITIK KOORDINAT KANTOR & RADIUS 30 METER
-  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 30 }];
+  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 50 }];
   
   // DAFTAR IP PUBLIC KANTOR 
   const DAFTAR_IP_KANTOR = [
@@ -336,8 +336,8 @@ const Absen = () => {
         setKoordinatGPS(coords);
         
         const cek = cekRadius(coords.lat, coords.lng);
-        // GPS Valid HANYA JIKA dalam radius DAN akurasi bagus (< 30 meter)
-        const isGpsValid = cek.valid && akurasi <= 30;
+        // GPS Valid HANYA JIKA dalam radius DAN akurasi bagus (< 50 meter)
+        const isGpsValid = cek.valid && akurasi <= 50;
 
         if (isGpsValid || isIpValid) {
           // Lolos pengecekan!
@@ -361,8 +361,8 @@ const Absen = () => {
           let pesanError = 'Lokasi Ditolak.';
           if (!cek.valid) {
             pesanError = `Jarak ${cek.jarak}m dari kantor (Max: ${cek.radius}m).`;
-          } else if (akurasi > 30) {
-            pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < 30m.`;
+          } else if (akurasi > 50) {
+            pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < 50m.`;
           }
           setGpsStatus({ tipe: 'error', pesan: `${pesanError} (Bukan Wi-Fi)` });
           setJepretState({ aktif: false, teks: 'Ditolak' });
