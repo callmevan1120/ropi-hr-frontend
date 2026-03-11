@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import SignatureCanvas from 'react-signature-canvas'; // 🔥 IMPORT LIBRARY TTD
 
 declare global { interface Window { faceapi: any; } }
 
@@ -23,8 +22,8 @@ interface RiwayatAbsen {
   attendance_date?: string;
   log_type: string;
   custom_foto_absen?: string;
-  custom_verification_image?: string; 
-  custom_signature?: string; // 🔥 Field Tanda Tangan (sesuaikan nama di ERPNext)
+  custom_verification_image?: string;
+  custom_signature?: string;
   shift?: string;
 }
 
@@ -122,17 +121,13 @@ const hitungHariKerjaDalamBulan = (
 const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): string | null => {
   const branch = (branchUser || '').toLowerCase().trim();
   const lokasi = namaLokasi.toLowerCase().trim();
-
   if (!branch) return null;
-
   const isLokasiKlaten = lokasi.includes('klaten') || lokasi.includes('ph');
   const isLokasiJakarta = lokasi.includes('jakarta');
   const isBranchKlaten = branch.includes('klaten') || branch.includes('ph');
   const isBranchJakarta = branch.includes('jakarta');
-
   if (isLokasiKlaten && !isBranchKlaten) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
   if (isLokasiJakarta && !isBranchJakarta) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
-
   return null;
 };
 
@@ -142,7 +137,7 @@ const Absen = () => {
 
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const ERPNEXT_URL = 'http://103.187.147.240';
-  
+
   const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
   const DAFTAR_IP_KANTOR = ['103.144.170.15'];
 
@@ -155,18 +150,19 @@ const Absen = () => {
   const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>([]);
   const [lihatSemua, setLihatSemua] = useState(false);
 
-  // 🔥 STATE KAMERA 4 LANGKAH (TERMASUK TTD) 🔥
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
   const [modeAbsen, setModeAbsen] = useState('MASUK');
   const [jamModal, setJamModal] = useState('--:--');
   const [gpsStatus, setGpsStatus] = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
-  
-  const [cameraStep, setCameraStep] = useState(1); // 1 = Selfie, 2 = Mesin, 3 = TTD, 4 = Review
-  const [fotoBase64, setFotoBase64] = useState<string | null>(null); 
-  const [fotoMesinBase64, setFotoMesinBase64] = useState<string | null>(null); 
-  const [ttdBase64, setTtdBase64] = useState<string | null>(null); // State Tanda Tangan
+
+  // Step: 1=selfie wajah, 2=foto fingerprint, 3=TTD canvas, 4=preview & kirim
+  const [cameraStep, setCameraStep] = useState(1);
+  const [fotoBase64, setFotoBase64] = useState<string | null>(null);
+  const [fotoMesinBase64, setFotoMesinBase64] = useState<string | null>(null);
+  const [ttdBase64, setTtdBase64] = useState<string | null>(null);
+  const [isTtdEmpty, setIsTtdEmpty] = useState(true);
 
   const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Cek Sistem...' });
   const [isKirimLoading, setIsKirimLoading] = useState(false);
@@ -183,7 +179,9 @@ const Absen = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const intervalDeteksiRef = useRef<number | null>(null);
   const intervalJamRef = useRef<number | null>(null);
-  const sigCanvas = useRef<SignatureCanvas>(null); // Ref untuk kanvas TTD
+  const ttdCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
@@ -201,9 +199,7 @@ const Absen = () => {
     }
   }, [user, bulanAktif, tahunAktif]);
 
-  useEffect(() => {
-    setLihatSemua(false);
-  }, [bulanAktif, tahunAktif]);
+  useEffect(() => { setLihatSemua(false); }, [bulanAktif, tahunAktif]);
 
   useEffect(() => {
     const modeAuto = searchParams.get('mode');
@@ -213,9 +209,106 @@ const Absen = () => {
     }
   }, [searchParams, user, navigate]);
 
+  useEffect(() => { return () => matikanKamera(); }, []);
+
+  // ── TTD CANVAS: setup event saat step 3 aktif ──
   useEffect(() => {
-    return () => matikanKamera();
-  }, []);
+    if (cameraStep !== 3) return;
+
+    // Tunggu sebentar agar canvas sudah render
+    const timer = setTimeout(() => {
+      const canvas = ttdCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width || 300;
+      canvas.height = 200;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      const getPos = (e: MouseEvent | TouchEvent) => {
+        const r = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / r.width;
+        const scaleY = canvas.height / r.height;
+        if (e instanceof TouchEvent && e.touches.length > 0) {
+          return {
+            x: (e.touches[0].clientX - r.left) * scaleX,
+            y: (e.touches[0].clientY - r.top) * scaleY,
+          };
+        }
+        return {
+          x: ((e as MouseEvent).clientX - r.left) * scaleX,
+          y: ((e as MouseEvent).clientY - r.top) * scaleY,
+        };
+      };
+
+      const onStart = (e: MouseEvent | TouchEvent) => {
+        e.preventDefault();
+        isDrawingRef.current = true;
+        lastPosRef.current = getPos(e);
+      };
+      const onMove = (e: MouseEvent | TouchEvent) => {
+        e.preventDefault();
+        if (!isDrawingRef.current || !lastPosRef.current) return;
+        const pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        lastPosRef.current = pos;
+        setIsTtdEmpty(false);
+      };
+      const onEnd = () => { isDrawingRef.current = false; lastPosRef.current = null; };
+
+      canvas.addEventListener('mousedown', onStart);
+      canvas.addEventListener('mousemove', onMove);
+      canvas.addEventListener('mouseup', onEnd);
+      canvas.addEventListener('mouseleave', onEnd);
+      canvas.addEventListener('touchstart', onStart, { passive: false });
+      canvas.addEventListener('touchmove', onMove, { passive: false });
+      canvas.addEventListener('touchend', onEnd);
+
+      // simpan cleanup ke ref agar bisa dipanggil saat unmount
+      (canvas as any)._cleanup = () => {
+        canvas.removeEventListener('mousedown', onStart);
+        canvas.removeEventListener('mousemove', onMove);
+        canvas.removeEventListener('mouseup', onEnd);
+        canvas.removeEventListener('mouseleave', onEnd);
+        canvas.removeEventListener('touchstart', onStart);
+        canvas.removeEventListener('touchmove', onMove);
+        canvas.removeEventListener('touchend', onEnd);
+      };
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      const canvas = ttdCanvasRef.current;
+      if (canvas && (canvas as any)._cleanup) (canvas as any)._cleanup();
+    };
+  }, [cameraStep]);
+
+  const bersihkanTTD = () => {
+    const canvas = ttdCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setIsTtdEmpty(true);
+  };
+
+  const simpanTTD = () => {
+    const canvas = ttdCanvasRef.current;
+    if (!canvas) return;
+    setTtdBase64(canvas.toDataURL('image/png'));
+    setCameraStep(4);
+  };
 
   const ambilMasterShift = async () => {
     try {
@@ -248,7 +341,7 @@ const Absen = () => {
     try {
       const dari = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
       const akhir = new Date(tahunAktif, bulanAktif + 1, 0);
-      const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
+      const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '00')}-${String(akhir.getDate()).padStart(2, '0')}`;
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}`);
       const data = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
@@ -314,7 +407,8 @@ const Absen = () => {
     setFotoBase64(null);
     setFotoMesinBase64(null);
     setTtdBase64(null);
-    setCameraStep(1); 
+    setIsTtdEmpty(true);
+    setCameraStep(1);
     setIsModalAbsenOpen(true);
     setKameraBorder('border-[#fbc02d]');
     setWajahStatus({ show: false, ok: false });
@@ -327,7 +421,7 @@ const Absen = () => {
       const resIp = await fetch('https://api.ipify.org?format=json');
       const dataIp = await resIp.json();
       currentIP = dataIp.ip;
-    } catch (e) { console.warn('Gagal cek IP'); }
+    } catch { console.warn('Gagal cek IP'); }
 
     const isIpValid = DAFTAR_IP_KANTOR.includes(currentIP);
 
@@ -336,34 +430,28 @@ const Absen = () => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         const akurasi = pos.coords.accuracy;
         setKoordinatGPS(coords);
-        
         const cek = cekRadius(coords.lat, coords.lng);
         const isGpsValid = cek.valid && akurasi <= 70;
 
         if (isGpsValid || isIpValid) {
           let errorBranch = null;
           if (!isIpValid) errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
-
           if (errorBranch) {
             setGpsStatus({ tipe: 'error', pesan: errorBranch });
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
             const namaLokasiTampil = cek.nama !== '?' ? cek.nama : LOKASI_FALLBACK[0].nama;
-            const pesanValid = isIpValid 
-              ? `Valid: ${namaLokasiTampil} (via Wi-Fi) ✓` 
+            const pesanValid = isIpValid
+              ? `Valid: ${namaLokasiTampil} (via Wi-Fi) ✓`
               : `Valid: ${cek.nama} (Akurasi: ${Math.round(akurasi)}m) ✓`;
-              
             setGpsStatus({ tipe: 'ok', pesan: pesanValid });
             setJepretState({ aktif: false, teks: 'Buka Kamera...' });
             await nyalakanKamera('user');
           }
         } else {
           let pesanError = 'Lokasi Ditolak.';
-          if (!cek.valid) {
-            pesanError = `Jarak ${cek.jarak}m dari kantor (Max: ${cek.radius}m).`;
-          } else if (akurasi > 70) {
-            pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < 70m.`;
-          }
+          if (!cek.valid) pesanError = `Jarak ${cek.jarak}m dari kantor (Max: ${cek.radius}m).`;
+          else if (akurasi > 70) pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < 70m.`;
           setGpsStatus({ tipe: 'error', pesan: `${pesanError} (Bukan Wi-Fi)` });
           setJepretState({ aktif: false, teks: 'Ditolak' });
         }
@@ -391,16 +479,15 @@ const Absen = () => {
   };
 
   const nyalakanKamera = async (mode: 'user' | 'environment') => {
-    matikanKamera(); 
+    matikanKamera();
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: mode, width: { ideal: 480 }, height: { ideal: 640 } },
       });
-      if (videoRef.current) { 
-        videoRef.current.srcObject = streamRef.current; 
-        await videoRef.current.play(); 
+      if (videoRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+        await videoRef.current.play();
       }
-      
       if (mode === 'user') {
         setJepretState({ aktif: false, teks: 'Muat AI...' });
         muatFaceAPI();
@@ -409,8 +496,8 @@ const Absen = () => {
         setKameraBorder('border-blue-400');
         setWajahStatus({ show: false, ok: false });
       }
-    } catch { 
-      setJepretState({ aktif: false, teks: 'Kamera Error' }); 
+    } catch {
+      setJepretState({ aktif: false, teks: 'Kamera Error' });
     }
   };
 
@@ -442,38 +529,19 @@ const Absen = () => {
     }, 600);
   };
 
-  // 🔥 JEPRET FOTO / SIMPAN TTD 🔥
   const jepretFoto = () => {
-    // KONDISI 3: SIMPAN TANDA TANGAN
-    if (cameraStep === 3) {
-      if (sigCanvas.current?.isEmpty()) {
-        alert('Tanda tangan dulu ya!');
-        return;
-      }
-      setTtdBase64(sigCanvas.current?.getTrimmedCanvas().toDataURL('image/png') || null);
-      setCameraStep(4); // Lanjut ke Review
-      return;
-    }
-
-    // KONDISI 1 & 2: AMBIL DARI KAMERA
     const video = videoRef.current;
     if (!video) return;
-
     const canvas = document.createElement('canvas');
     const MAX_HEIGHT = 640;
     const scaleSize = video.videoHeight > MAX_HEIGHT ? MAX_HEIGHT / video.videoHeight : 1;
     canvas.width = video.videoWidth * scaleSize;
     canvas.height = video.videoHeight * scaleSize;
     const ctx = canvas.getContext('2d');
-    
     if (ctx) {
-      if (cameraStep === 1) {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-      }
+      if (cameraStep === 1) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     }
-    
     const base64Data = canvas.toDataURL('image/jpeg', 0.6);
 
     if (cameraStep === 1) {
@@ -484,13 +552,11 @@ const Absen = () => {
       nyalakanKamera('environment');
     } else if (cameraStep === 2) {
       setFotoMesinBase64(base64Data);
-      setCameraStep(3); // Lanjut ke Canvas Tanda Tangan
       matikanKamera();
+      setIsTtdEmpty(true);
+      setCameraStep(3); // → TTD
+      setKameraBorder('border-purple-400');
     }
-  };
-
-  const hapusTtd = () => {
-    sigCanvas.current?.clear();
   };
 
   const kirimAbsen = async () => {
@@ -507,12 +573,11 @@ const Absen = () => {
           longitude: koordinatGPS?.lng || LOKASI_FALLBACK[0].lng,
           branch: user.branch || '',
           image_verification: fotoBase64,
-          custom_verification_image: fotoMesinBase64, 
-          custom_signature: ttdBase64, // 🔥 KIRIM TTD KE BACKEND
+          custom_verification_image: fotoMesinBase64,
+          custom_signature: ttdBase64,        // ← field TTD ke ERPNext
           shift: getShiftKantor(new Date(), masterShifts, user?.branch),
         }),
       });
-
       if (res.ok) {
         alert(`Absen ${modeAbsen} berhasil dikirim!`);
         tutupModal();
@@ -524,6 +589,8 @@ const Absen = () => {
     } catch { alert('Gagal konek ke server.'); }
     setIsKirimLoading(false);
   };
+
+  // ── GROUP RIWAYAT per tanggal ──
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
     const tgl = item.time?.substring(0, 10) || item.attendance_date || '';
@@ -548,16 +615,8 @@ const Absen = () => {
     }
   });
 
-  const rekapIzin = hitungHariKerjaDalamBulan(
-    leaveRecords,
-    r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() !== 'rejected',
-    tahunAktif, bulanAktif
-  );
-  const rekapCuti = hitungHariKerjaDalamBulan(
-    leaveRecords,
-    r => r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() !== 'rejected',
-    tahunAktif, bulanAktif
-  );
+  const rekapIzin = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() !== 'rejected', tahunAktif, bulanAktif);
+  const rekapCuti = hitungHariKerjaDalamBulan(leaveRecords, r => r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() !== 'rejected', tahunAktif, bulanAktif);
 
   const tanggalIzinSet = getTanggalIzin();
   const sortedTglKeys = Object.keys(groupedRiwayat).sort((a, b) => b.localeCompare(a));
@@ -574,10 +633,8 @@ const Absen = () => {
       const dataIn = groupedRiwayat[strTgl]?.in;
       const checkin = dataIn?.time;
       const adaIzin = tanggalIzinSet.has(strTgl);
-
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
       let dot = null;
-
       if (isHariIni) {
         kelas += 'bg-[#3e2723] text-[#fbc02d] font-black';
       } else if (adaIzin && !checkin) {
@@ -591,12 +648,7 @@ const Absen = () => {
       } else {
         kelas += 'text-gray-400';
       }
-
-      return (
-        <div key={d}>
-          <div className={kelas}>{d}{dot}</div>
-        </div>
-      );
+      return <div key={d}><div className={kelas}>{d}{dot}</div></div>;
     });
     return [...blanks, ...days];
   };
@@ -612,9 +664,13 @@ const Absen = () => {
     return url;
   };
 
+  const stepLabel = cameraStep === 1 ? 'Langkah 1/3' : cameraStep === 2 ? 'Langkah 2/3' : cameraStep === 3 ? 'Langkah 3/3' : 'Konfirmasi';
+
   return (
     <div className="bg-gray-100 flex justify-center min-h-screen font-sans">
       <div className="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl relative">
+
+        {/* HEADER */}
         <div className="bg-[#3e2723] pt-12 pb-5 px-6 shrink-0 shadow-md z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -639,6 +695,7 @@ const Absen = () => {
           </div>
         </div>
 
+        {/* CONTENT */}
         <div className="flex-1 overflow-y-auto pb-32 pt-4">
           {leaveRecords.length > 0 && (
             <div className="px-4 mb-3 flex flex-wrap gap-1.5">
@@ -659,11 +716,9 @@ const Absen = () => {
           <div className="px-4 mb-4">
             <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
               <div className="grid grid-cols-7 text-center text-[9px] font-black text-gray-400 mb-1.5">
-                {['Min','Sen','Sel','Rab','Kam','Jum','Sab'].map(h => <div key={h}>{h}</div>)}
+                {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(h => <div key={h}>{h}</div>)}
               </div>
-              <div className="grid grid-cols-7 gap-y-0.5 text-center">
-                {renderKalender()}
-              </div>
+              <div className="grid grid-cols-7 gap-y-0.5 text-center">{renderKalender()}</div>
               <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
                 {[{ color: 'bg-green-400', label: 'Tepat' }, { color: 'bg-red-400', label: 'Telat' }, { color: 'bg-blue-400', label: 'Izin' }].map(l => (
                   <div key={l.label} className="flex items-center gap-1">
@@ -696,25 +751,21 @@ const Absen = () => {
                     const shiftName = d.in?.shift || d.out?.shift || '';
                     const shiftInfo = getJamShift(shiftName, tgl, user?.branch, masterShifts);
                     const adaIzinHariIni = tanggalIzinSet.has(tgl);
-
                     let badgeEl = null;
                     if (jamIn !== '-') {
                       const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
                       badgeEl = selisih > 0 ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {formatDurasi(selisih)}</span> : <span className="text-green-600 text-[9px] font-black">✓ Tepat</span>;
                     }
-                    if (adaIzinHariIni && !badgeEl) { badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>; }
-
+                    if (adaIzinHariIni && !badgeEl) badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>;
                     let badgeCepat = null;
                     if (jamOut !== '-') {
                       const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
                       if (selisih > 0) badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cepat {formatDurasi(selisih)}</span>;
                     }
-
                     let badgeBelumKeluar = null;
                     if (jamIn !== '-' && jamOut === '-') {
                       badgeBelumKeluar = <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">Belum Keluar</span>;
                     }
-
                     return (
                       <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-3 rounded-2xl border border-gray-100 flex items-center gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
@@ -740,6 +791,7 @@ const Absen = () => {
           </div>
         </div>
 
+        {/* BOTTOM NAV */}
         <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
           <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-house text-xl mb-1" /><span className="text-[10px] font-black uppercase">Home</span></Link>
           <div className="flex flex-col items-center text-[#3e2723] w-1/4"><i className="fa-solid fa-clipboard-user text-xl mb-1 drop-shadow-md" /><span className="text-[10px] font-black uppercase">Absen</span></div>
@@ -747,91 +799,140 @@ const Absen = () => {
           <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-calendar-minus text-xl mb-1" /><span className="text-[10px] font-black uppercase">Cuti</span></Link>
         </nav>
 
-        {/* MODAL KAMERA 4 LANGKAH */}
+        {/* ══════════════════════════════════════════════════
+            MODAL ABSEN — 3 LANGKAH + KONFIRMASI
+            Step 1: Selfie wajah (face detection)
+            Step 2: Foto mesin fingerprint (kamera belakang)
+            Step 3: Tanda tangan canvas
+            Step 4: Preview semua + kirim
+            ══════════════════════════════════════════════════ */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
               <div className="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0" />
               <p className="text-4xl font-black text-[#3e2723] tracking-tight mb-1">{jamModal}</p>
               <div className={`text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full mb-3 ${modeAbsen === 'MASUK' ? 'bg-[#3e2723] text-[#fbc02d]' : 'bg-[#fbc02d] text-[#3e2723]'}`}>
-                {modeAbsen} - {cameraStep === 1 ? 'Langkah 1/3 (Muka)' : cameraStep === 2 ? 'Langkah 2/3 (Mesin)' : cameraStep === 3 ? 'Langkah 3/3 (TTD)' : 'Selesai'}
+                {modeAbsen} — {stepLabel}
               </div>
-              <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin text-sm shrink-0" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm shrink-0`} />}
-                <span className="leading-tight">{gpsStatus.pesan}</span>
-              </div>
-              <div className={`w-full aspect-[3/4] max-h-[60vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
-                
-                {cameraStep === 2 && (
-                  <div className="absolute top-4 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
-                    <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-lg text-center animate-pulse border border-blue-400">
-                      <i className="fa-solid fa-camera mr-1" /> Arahkan ke Mesin Fingerprint!
-                    </span>
-                  </div>
-                )}
 
-                {cameraStep < 3 ? (
-                   <video ref={videoRef} className="w-full h-full object-cover z-10" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
-                ) : cameraStep === 3 ? (
-                   <div className="w-full h-full flex flex-col items-center justify-center bg-white relative">
-                      <p className="absolute top-4 font-black text-gray-400 text-xs">Tanda Tangan di Bawah</p>
-                      <SignatureCanvas 
-                        ref={sigCanvas} 
-                        penColor="black"
-                        canvasProps={{ className: 'w-full h-full border-2 border-dashed border-gray-300 rounded-2xl' }} 
+              {/* GPS STATUS (hanya step kamera) */}
+              {(cameraStep === 1 || cameraStep === 2) && (
+                <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                  {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin text-sm shrink-0" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm shrink-0`} />}
+                  <span className="leading-tight">{gpsStatus.pesan}</span>
+                </div>
+              )}
+
+              {/* ── STEP 1 & 2: KAMERA ── */}
+              {(cameraStep === 1 || cameraStep === 2) && (
+                <>
+                  <div className={`w-full aspect-[3/4] max-h-[52vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
+                    {cameraStep === 2 && (
+                      <div className="absolute top-4 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
+                        <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-lg animate-pulse border border-blue-400">
+                          <i className="fa-solid fa-camera mr-1" /> Arahkan ke Mesin Fingerprint!
+                        </span>
+                      </div>
+                    )}
+                    <video ref={videoRef} className="w-full h-full object-cover z-10" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
+                  </div>
+                  <div className="w-full grid grid-cols-2 gap-3">
+                    <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
+                    <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                      <i className="fa-solid fa-camera shrink-0 text-lg" />
+                      <span className="leading-tight">{jepretState.teks}</span>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* ── STEP 3: TTD CANVAS ── */}
+              {cameraStep === 3 && (
+                <>
+                  <div className="w-full mb-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-black text-[#3e2723] flex items-center gap-1.5">
+                        <i className="fa-solid fa-pen-nib text-purple-500" /> Tanda Tangan di sini
+                      </p>
+                      <button onClick={bersihkanTTD} className="text-[10px] font-black text-gray-400 hover:text-red-500 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-red-50">
+                        <i className="fa-solid fa-eraser" /> Hapus
+                      </button>
+                    </div>
+                    {/* Area canvas TTD */}
+                    <div
+                      className="w-full rounded-2xl overflow-hidden border-4 border-purple-400 bg-white shadow-inner relative"
+                      style={{ touchAction: 'none' }}
+                    >
+                      <canvas
+                        ref={ttdCanvasRef}
+                        className="w-full block"
+                        style={{ height: '200px', cursor: 'crosshair' }}
                       />
-                   </div>
-                ) : (
-                   <div className="w-full h-full flex flex-col p-2 gap-1 bg-gray-100 z-20 overflow-y-auto">
-                      <div className="h-32 shrink-0 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
-                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">Selfie</p>
+                      {/* Watermark "TTD" saat kosong */}
+                      {isTtdEmpty && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <p className="text-gray-200 text-4xl font-black select-none">TTD</p>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-400 text-center mt-2 font-bold">
+                      {isTtdEmpty ? '✏️ Gambar tanda tangan kamu di kotak atas' : '✅ Tanda tangan siap, klik Lanjut'}
+                    </p>
+                  </div>
+                  <div className="w-full grid grid-cols-2 gap-3 mt-3">
+                    <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
+                    <button
+                      onClick={simpanTTD}
+                      disabled={isTtdEmpty}
+                      className={`font-black py-3 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${!isTtdEmpty ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                    >
+                      <i className="fa-solid fa-check shrink-0" /> Lanjut
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* ── STEP 4: PREVIEW & KONFIRMASI ── */}
+              {cameraStep === 4 && (
+                <>
+                  <div className="w-full flex flex-col gap-2 mb-4">
+                    {/* Selfie + Fingerprint berdampingan */}
+                    <div className="flex gap-2 h-36">
+                      <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm">
+                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">📸 Selfie</p>
                         <img src={fotoBase64!} className="w-full h-full object-cover" alt="Selfie" />
                       </div>
-                      <div className="h-32 shrink-0 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
-                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">Mesin Finger</p>
-                        <img src={fotoMesinBase64!} className="w-full h-full object-cover" alt="Mesin Finger" />
+                      <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm">
+                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">📠 Mesin</p>
+                        <img src={fotoMesinBase64!} className="w-full h-full object-cover" alt="Mesin" />
                       </div>
-                      <div className="h-32 shrink-0 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-white">
-                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">TTD</p>
-                        <img src={ttdBase64!} className="w-full h-full object-contain" alt="TTD" />
-                      </div>
-                   </div>
-                )}
-              </div>
-
-              {cameraStep === 3 ? (
-                <div className="w-full grid grid-cols-2 gap-3">
-                  <button onClick={hapusTtd} className="bg-red-100 text-red-500 font-black py-3 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2">
-                    <i className="fa-solid fa-eraser" /> Hapus
-                  </button>
-                  <button onClick={jepretFoto} className="bg-blue-500 text-white font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm shadow-lg">
-                    <i className="fa-solid fa-check" /> Simpan TTD
-                  </button>
-                </div>
-              ) : cameraStep < 4 ? (
-                <div className="w-full grid grid-cols-2 gap-3">
-                  <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
-                  <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-                    <i className="fa-solid fa-camera shrink-0 text-lg" />
-                    <span className="leading-tight text-left">{jepretState.teks}</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="w-full grid grid-cols-2 gap-3">
-                  <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm">
-                    <i className="fa-solid fa-rotate-right shrink-0 text-lg" /><span className="leading-none">Ulangi</span>
-                  </button>
-                  <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-green-500 text-white font-black py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 text-sm">
-                    {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin shrink-0 text-lg" /> : <i className="fa-solid fa-paper-plane shrink-0 text-lg" />}
-                    <span className="leading-none">{isKirimLoading ? 'Mengirim...' : 'Kirim Laporan'}</span>
-                  </button>
-                </div>
+                    </div>
+                    {/* Preview TTD */}
+                    <div className="w-full rounded-2xl overflow-hidden border-2 border-purple-200 bg-white shadow-sm px-3 pt-2 pb-3">
+                      <p className="text-[9px] font-black text-purple-500 mb-1.5 flex items-center gap-1">
+                        <i className="fa-solid fa-pen-nib" /> Tanda Tangan
+                      </p>
+                      <img src={ttdBase64!} className="w-full object-contain" style={{ maxHeight: '70px' }} alt="TTD" />
+                    </div>
+                  </div>
+                  <div className="w-full grid grid-cols-2 gap-3">
+                    <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm">
+                      <i className="fa-solid fa-rotate-right shrink-0" /> Ulangi
+                    </button>
+                    <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-green-500 text-white font-black py-3 rounded-2xl shadow-lg shadow-green-500/30 flex items-center justify-center gap-2 active:scale-95 text-sm">
+                      {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin shrink-0" /> : <i className="fa-solid fa-paper-plane shrink-0" />}
+                      {isKirimLoading ? 'Mengirim...' : 'Kirim Laporan'}
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
         )}
 
-        {/* MODAL DETAIL RIWAYAT */}
+        {/* ══════════════════════════════
+            MODAL DETAIL RIWAYAT
+            ══════════════════════════════ */}
         {detailModal.show && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10 h-[85vh]">
@@ -860,30 +961,31 @@ const Absen = () => {
                     <p className={`font-bold text-lg mb-2 text-${color}-800`}>
                       {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
                     </p>
-                    
-                    <div className="w-full flex flex-col gap-3 mt-2">
+                    <div className="w-full flex flex-col gap-3 mt-1">
+                      {/* Selfie */}
                       <div className="w-full h-48 bg-gray-200 rounded-2xl overflow-hidden relative shadow-inner border border-gray-300">
                         <p className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold backdrop-blur-sm">📸 Selfie Wajah</p>
                         {data?.custom_foto_absen
                           ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-cover" alt="Selfie" />
-                          : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>
-                        }
+                          : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>}
                       </div>
+                      {/* Mesin fingerprint */}
                       <div className="w-full h-48 bg-gray-200 rounded-2xl overflow-hidden relative shadow-inner border border-gray-300">
                         <p className="absolute top-2 left-2 bg-blue-600/80 text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold backdrop-blur-sm">📠 Mesin Fingerprint</p>
                         {data?.custom_verification_image
                           ? <img src={prosesUrlFoto(data.custom_verification_image)} className="w-full h-full object-cover" alt="Mesin" />
-                          : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>
-                        }
+                          : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>}
                       </div>
-                      {data?.custom_signature && (
-                        <div className="w-full h-32 bg-white rounded-2xl overflow-hidden relative shadow-inner border border-gray-300">
-                          <p className="absolute top-2 left-2 bg-gray-600/80 text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold backdrop-blur-sm">✍️ Tanda Tangan</p>
-                          <img src={prosesUrlFoto(data.custom_signature)} className="w-full h-full object-contain" alt="Signature" />
-                        </div>
-                      )}
+                      {/* Tanda tangan */}
+                      <div className="w-full bg-white rounded-2xl overflow-hidden border-2 border-purple-200 px-3 pt-2 pb-3 shadow-sm">
+                        <p className="text-[10px] font-black text-purple-600 mb-2 flex items-center gap-1">
+                          <i className="fa-solid fa-pen-nib" /> Tanda Tangan
+                        </p>
+                        {data?.custom_signature
+                          ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full object-contain" style={{ maxHeight: '100px' }} alt="TTD" />
+                          : <p className="text-xs text-gray-400 font-bold text-center py-4">Tidak ada tanda tangan</p>}
+                      </div>
                     </div>
-
                   </div>
                 ))}
               </div>
@@ -893,6 +995,7 @@ const Absen = () => {
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
