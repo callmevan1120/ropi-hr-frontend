@@ -33,13 +33,19 @@ interface LeaveRecord {
   status: string;
 }
 
-// ── HELPER: KONVERSI UTC KE WIB ──
-const formatJamLokal = (utcString?: string): string => {
-  if (!utcString) return '-';
-  let safeString = utcString.replace(' ', 'T');
-  if (!safeString.endsWith('Z') && !safeString.includes('+')) safeString += 'Z';
-  const date = new Date(safeString);
-  return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
+// ── HELPER: AMBIL JAM LANGSUNG DARI ERPNEXT (Tanpa konversi zona waktu) ──
+const formatJamLokal = (timeString?: string): string => {
+  if (!timeString) return '-';
+  
+  // Data dari ERPNext biasanya: "2026-03-11 07:48:43"
+  // Kita pisahkan berdasarkan spasi, lalu ambil jamnya saja
+  const parts = timeString.split(' ');
+  if (parts.length > 1) {
+    return parts[1].substring(0, 5); // Mengambil format HH:mm (07:48)
+  }
+  
+  // Fallback jika formatnya berbeda (misal cuma ngirim "07:48:00")
+  return timeString.substring(0, 5);
 };
 
 // ── HELPER: FORMAT DURASI ──
@@ -51,8 +57,9 @@ const formatDurasi = (totalMenit: number): string => {
 };
 
 const toMenit = (jam: string): number => {
+  if (!jam || jam === '-') return 0;
   const [h, m] = jam.split(':').map(Number);
-  return h * 60 + m;
+  return (h || 0) * 60 + (m || 0);
 };
 
 const isRamadhan = (): boolean => {
@@ -119,12 +126,10 @@ const hitungHariKerjaDalamBulan = (
 };
 
 // ── HELPER: CEK APAKAH BRANCH USER SESUAI LOKASI GPS ──
-// Mengembalikan null jika OK, atau string pesan error jika ditolak
 const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): string | null => {
   const branch = (branchUser || '').toLowerCase().trim();
   const lokasi = namaLokasi.toLowerCase().trim();
 
-  // Kalau branch kosong/null → izinkan, biar backend yang validasi
   if (!branch) return null;
 
   const isLokasiKlaten = lokasi.includes('klaten') || lokasi.includes('ph');
@@ -140,7 +145,7 @@ const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): 
     return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
   }
 
-  return null; // OK
+  return null;
 };
 
 const Absen = () => {
@@ -328,11 +333,9 @@ const Absen = () => {
         const cek = cekRadius(coords.lat, coords.lng);
 
         if (!cek.valid) {
-          // GPS di luar radius semua lokasi kantor
           setGpsStatus({ tipe: 'error', pesan: `Di luar radius! ${cek.jarak}m dari ${cek.nama}` });
           setJepretState({ aktif: false, teks: 'Lokasi Jauh' });
         } else {
-          // GPS valid — cek apakah branch user sesuai lokasi
           const errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
           if (errorBranch) {
             setGpsStatus({ tipe: 'error', pesan: errorBranch });
@@ -436,7 +439,6 @@ const Absen = () => {
         tutupModal();
         ambilRiwayatAbsen();
       } else {
-        // Tampilkan pesan error dari backend (termasuk penolakan branch/radius)
         const errData = await res.json().catch(() => null);
         alert(errData?.message || 'Absen gagal dikirim ke sistem.');
       }
