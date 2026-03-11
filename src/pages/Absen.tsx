@@ -22,6 +22,7 @@ interface RiwayatAbsen {
   attendance_date?: string;
   log_type: string;
   custom_foto_absen?: string;
+  custom_validasi_foto?: string; // 🔥 Field foto mesin fingerprint
   shift?: string;
 }
 
@@ -33,7 +34,7 @@ interface LeaveRecord {
   status: string;
 }
 
-// ── HELPER: AMBIL JAM LANGSUNG DARI ERPNEXT (Tanpa konversi zona waktu) ──
+// ── HELPER: AMBIL JAM LANGSUNG DARI ERPNEXT ──
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
@@ -118,7 +119,6 @@ const hitungHariKerjaDalamBulan = (
   }, 0);
 };
 
-// ── HELPER: CEK APAKAH BRANCH USER SESUAI LOKASI GPS ──
 const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): string | null => {
   const branch = (branchUser || '').toLowerCase().trim();
   const lokasi = namaLokasi.toLowerCase().trim();
@@ -143,13 +143,8 @@ const Absen = () => {
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const ERPNEXT_URL = 'http://103.187.147.240';
   
-  // TITIK KOORDINAT KANTOR & RADIUS 30 METER
-  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 50 }];
-  
-  // DAFTAR IP PUBLIC KANTOR 
-  const DAFTAR_IP_KANTOR = [
-    '103.144.170.15' // IP Router Wi-Fi Kantor Roti Ropi
-  ];
+  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
+  const DAFTAR_IP_KANTOR = ['103.144.170.15'];
 
   const [user, setUser] = useState<User | null>(null);
   const [lokasiKantor, setLokasiKantor] = useState<Lokasi[]>(LOKASI_FALLBACK);
@@ -160,13 +155,18 @@ const Absen = () => {
   const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>([]);
   const [lihatSemua, setLihatSemua] = useState(false);
 
+  // 🔥 STATE KAMERA 3 LANGKAH 🔥
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
   const [modeAbsen, setModeAbsen] = useState('MASUK');
   const [jamModal, setJamModal] = useState('--:--');
   const [gpsStatus, setGpsStatus] = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
-  const [fotoBase64, setFotoBase64] = useState<string | null>(null);
+  
+  const [cameraStep, setCameraStep] = useState(1); // 1 = Selfie, 2 = Mesin Finger, 3 = Review
+  const [fotoBase64, setFotoBase64] = useState<string | null>(null); // Foto Selfie
+  const [fotoMesinBase64, setFotoMesinBase64] = useState<string | null>(null); // Foto Mesin Finger
+
   const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Cek Sistem...' });
   const [isKirimLoading, setIsKirimLoading] = useState(false);
   const [koordinatGPS, setKoordinatGPS] = useState<{ lat: number; lng: number } | null>(null);
@@ -198,10 +198,6 @@ const Absen = () => {
       ambilRiwayatIzin(user.employee_id);
     }
   }, [user, bulanAktif, tahunAktif]);
-
-  useEffect(() => {
-    setLihatSemua(false);
-  }, [bulanAktif, tahunAktif]);
 
   useEffect(() => {
     const modeAuto = searchParams.get('mode');
@@ -307,10 +303,11 @@ const Absen = () => {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
   };
 
-  // FUNGSI UTAMA ABSEN (LOGIKA GPS + IP + AKURASI)
   const bukaModalAbsen = async (mode: string) => {
     setModeAbsen(mode);
     setFotoBase64(null);
+    setFotoMesinBase64(null);
+    setCameraStep(1); // Set ke step 1 (Selfie)
     setIsModalAbsenOpen(true);
     setKameraBorder('border-[#fbc02d]');
     setWajahStatus({ show: false, ok: false });
@@ -318,7 +315,6 @@ const Absen = () => {
     setJepretState({ aktif: false, teks: 'Loading...' });
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
 
-    // Langkah 1: Cek IP Public Karyawan (secara diam-diam)
     let currentIP = '';
     try {
       const resIp = await fetch('https://api.ipify.org?format=json');
@@ -328,7 +324,6 @@ const Absen = () => {
 
     const isIpValid = DAFTAR_IP_KANTOR.includes(currentIP);
 
-    // Langkah 2: Cek GPS (Termasuk Distance & Akurasi)
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -336,46 +331,42 @@ const Absen = () => {
         setKoordinatGPS(coords);
         
         const cek = cekRadius(coords.lat, coords.lng);
-        // GPS Valid HANYA JIKA dalam radius DAN akurasi bagus (< 50 meter)
-        const isGpsValid = cek.valid && akurasi <= 50;
+        const isGpsValid = cek.valid && akurasi <= 70;
 
         if (isGpsValid || isIpValid) {
-          // Lolos pengecekan!
           let errorBranch = null;
-          // Kalau lolosnya murni karena GPS (bukan IP), pastikan branch-nya bener
           if (!isIpValid) errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
 
           if (errorBranch) {
             setGpsStatus({ tipe: 'error', pesan: errorBranch });
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
+            const namaLokasiTampil = cek.nama !== '?' ? cek.nama : LOKASI_FALLBACK[0].nama;
             const pesanValid = isIpValid 
-              ? 'Valid via Wi-Fi Kantor ✓' 
+              ? `Valid: ${namaLokasiTampil} (via Wi-Fi) ✓` 
               : `Valid: ${cek.nama} (Akurasi: ${Math.round(akurasi)}m) ✓`;
+              
             setGpsStatus({ tipe: 'ok', pesan: pesanValid });
             setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-            await nyalakanKamera();
+            await nyalakanKamera('user'); // Mulai dengan kamera depan
           }
         } else {
-          // Gagal dua-duanya (Bukan IP Kantor & GPS Jelek/Jauh)
           let pesanError = 'Lokasi Ditolak.';
           if (!cek.valid) {
             pesanError = `Jarak ${cek.jarak}m dari kantor (Max: ${cek.radius}m).`;
-          } else if (akurasi > 50) {
-            pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < 50m.`;
+          } else if (akurasi > 70) {
+            pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < 70m.`;
           }
           setGpsStatus({ tipe: 'error', pesan: `${pesanError} (Bukan Wi-Fi)` });
           setJepretState({ aktif: false, teks: 'Ditolak' });
         }
       },
       async () => {
-        // Langkah 3: Jika User Menolak Izin GPS (Atau GPS HP Rusak)
         if (isIpValid) {
-          // Tetap lolos karena IP Valid
-          setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng }); // Fallback ke koordinat kantor
-          setGpsStatus({ tipe: 'ok', pesan: 'GPS Mati tapi Valid via Wi-Fi ✓' });
+          setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng });
+          setGpsStatus({ tipe: 'ok', pesan: `Valid: ${LOKASI_FALLBACK[0].nama} (via Wi-Fi) ✓` });
           setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-          await nyalakanKamera();
+          await nyalakanKamera('user');
         } else {
           setGpsStatus({ tipe: 'error', pesan: 'GPS Ditolak & Bukan Wi-Fi Kantor' });
           setJepretState({ aktif: false, teks: 'Akses Ditolak' });
@@ -388,18 +379,34 @@ const Absen = () => {
   const tutupModal = () => {
     matikanKamera();
     setIsModalAbsenOpen(false);
+    setCameraStep(1);
     if (searchParams.has('auto')) setSearchParams({});
   };
 
-  const nyalakanKamera = async () => {
+  // 🔥 UPDATE: Nyalakan kamera bisa pilih mode (Depan / Belakang)
+  const nyalakanKamera = async (mode: 'user' | 'environment') => {
+    matikanKamera(); // Matikan stream sebelumnya jika ada
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 640 } },
+        video: { facingMode: mode, width: { ideal: 480 }, height: { ideal: 640 } },
       });
-      if (videoRef.current) { videoRef.current.srcObject = streamRef.current; await videoRef.current.play(); }
-      setJepretState({ aktif: false, teks: 'Muat AI...' });
-      muatFaceAPI();
-    } catch { setJepretState({ aktif: false, teks: 'Kamera Error' }); }
+      if (videoRef.current) { 
+        videoRef.current.srcObject = streamRef.current; 
+        await videoRef.current.play(); 
+      }
+      
+      if (mode === 'user') {
+        setJepretState({ aktif: false, teks: 'Muat AI...' });
+        muatFaceAPI();
+      } else {
+        // Kamera belakang (Mesin Finger) tidak pakai FaceAPI
+        setJepretState({ aktif: true, teks: 'Jepret Fingerprint!' });
+        setKameraBorder('border-blue-400');
+        setWajahStatus({ show: false, ok: false });
+      }
+    } catch { 
+      setJepretState({ aktif: false, teks: 'Kamera Error' }); 
+    }
   };
 
   const muatFaceAPI = () => {
@@ -416,11 +423,11 @@ const Absen = () => {
 
   const mulaiDeteksi = () => {
     intervalDeteksiRef.current = window.setInterval(async () => {
-      if (!window.faceapi || !videoRef.current || videoRef.current.paused) return;
+      if (!window.faceapi || !videoRef.current || videoRef.current.paused || cameraStep !== 1) return;
       const hasil = await window.faceapi.detectAllFaces(videoRef.current, new window.faceapi.TinyFaceDetectorOptions());
       if (hasil.length > 0) {
         setWajahStatus({ show: true, ok: true });
-        setJepretState({ aktif: true, teks: 'Jepret!' });
+        setJepretState({ aktif: true, teks: 'Jepret Wajah!' });
         setKameraBorder('border-green-400');
       } else {
         setWajahStatus({ show: true, ok: false });
@@ -430,24 +437,47 @@ const Absen = () => {
     }, 600);
   };
 
+  // 🔥 UPDATE: JepretFoto dibagi 2 Step 🔥
   const jepretFoto = () => {
-    if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
     const video = videoRef.current;
     if (!video) return;
+
     const canvas = document.createElement('canvas');
     const MAX_HEIGHT = 640;
     const scaleSize = video.videoHeight > MAX_HEIGHT ? MAX_HEIGHT / video.videoHeight : 1;
     canvas.width = video.videoWidth * scaleSize;
     canvas.height = video.videoHeight * scaleSize;
     const ctx = canvas.getContext('2d');
-    if (ctx) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setFotoBase64(canvas.toDataURL('image/jpeg', 0.6));
-    setWajahStatus({ show: false, ok: false });
-    setKameraBorder('border-[#3e2723]');
+    
+    if (ctx) {
+      if (cameraStep === 1) {
+        // Balik gambar untuk kamera depan (Selfie)
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+    
+    const base64Data = canvas.toDataURL('image/jpeg', 0.6);
+
+    if (cameraStep === 1) {
+      // Selesai Selfie -> Lanjut Kamera Belakang
+      if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
+      setFotoBase64(base64Data);
+      setCameraStep(2);
+      setKameraBorder('border-blue-400');
+      nyalakanKamera('environment');
+    } else if (cameraStep === 2) {
+      // Selesai Foto Mesin -> Lanjut Review
+      setFotoMesinBase64(base64Data);
+      setCameraStep(3);
+      setKameraBorder('border-[#3e2723]');
+      matikanKamera();
+    }
   };
 
   const kirimAbsen = async () => {
-    if (!fotoBase64 || !user) return;
+    if (!fotoBase64 || !fotoMesinBase64 || !user) return;
     setIsKirimLoading(true);
     try {
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
@@ -459,13 +489,14 @@ const Absen = () => {
           latitude: koordinatGPS?.lat || LOKASI_FALLBACK[0].lat,
           longitude: koordinatGPS?.lng || LOKASI_FALLBACK[0].lng,
           branch: user.branch || '',
-          image_verification: fotoBase64,
+          image_verification: fotoBase64,          // Foto Selfie
+          validasi_foto: fotoMesinBase64,          // 🔥 Foto Mesin Finger
           shift: getShiftKantor(new Date(), masterShifts, user?.branch),
         }),
       });
 
       if (res.ok) {
-        alert(`Absen ${modeAbsen} berhasil!`);
+        alert(`Absen ${modeAbsen} berhasil dikirim!`);
         tutupModal();
         ambilRiwayatAbsen();
       } else {
@@ -518,9 +549,6 @@ const Absen = () => {
   const sortedTglKeys = Object.keys(groupedRiwayat).sort((a, b) => b.localeCompare(a));
   const tampilKeys = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
 
-  // ════════════════════════════
-  // RENDER KALENDER
-  // ════════════════════════════
   const renderKalender = () => {
     const hariPertama = new Date(tahunAktif, bulanAktif, 1).getDay();
     const totalHari = new Date(tahunAktif, bulanAktif + 1, 0).getDate();
@@ -702,6 +730,11 @@ const Absen = () => {
                       }
                     }
 
+                    let badgeBelumKeluar = null;
+                    if (jamIn !== '-' && jamOut === '-') {
+                      badgeBelumKeluar = <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">Belum Keluar</span>;
+                    }
+
                     return (
                       <div
                         key={tgl}
@@ -714,13 +747,14 @@ const Absen = () => {
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
                           <p className="text-[10px] text-gray-400">
-                            {jamIn} → {jamOut}
+                            {jamIn} → {jamOut === '-' && badgeBelumKeluar ? <span className="text-red-400 italic mx-1">?</span> : jamOut}
                             <span className="ml-1 text-[#fbc02d]">· {shiftInfo.in}–{shiftInfo.out}</span>
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
                           {badgeEl}
                           {badgeCepat}
+                          {badgeBelumKeluar}
                         </div>
                       </div>
                     );
@@ -763,8 +797,9 @@ const Absen = () => {
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
               <div className="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0" />
               <p className="text-4xl font-black text-[#3e2723] tracking-tight mb-1">{jamModal}</p>
+              
               <div className={`text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full mb-3 ${modeAbsen === 'MASUK' ? 'bg-[#3e2723] text-[#fbc02d]' : 'bg-[#fbc02d] text-[#3e2723]'}`}>
-                {modeAbsen}
+                {modeAbsen} - {cameraStep === 1 ? 'Langkah 1/2' : cameraStep === 2 ? 'Langkah 2/2' : 'Selesai'}
               </div>
 
               <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${
@@ -780,20 +815,44 @@ const Absen = () => {
                 <span className="leading-tight">{gpsStatus.pesan}</span>
               </div>
 
-              <div className={`w-full aspect-[3/4] max-h-[65vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
-                {!fotoBase64
-                  ? <video ref={videoRef} className="w-full h-full object-cover z-10" style={{ transform: 'scaleX(-1)' }} playsInline muted />
-                  : <img src={fotoBase64} className="w-full h-full object-cover z-20" style={{ transform: 'scaleX(-1)' }} alt="Preview" />
-                }
+              <div className={`w-full aspect-[3/4] max-h-[60vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
+                
+                {/* Overlay Instruksi Khusus Kamera 2 */}
+                {cameraStep === 2 && (
+                  <div className="absolute top-4 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
+                    <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-lg text-center animate-pulse border border-blue-400">
+                      <i className="fa-solid fa-camera mr-1" /> Arahkan ke Mesin Fingerprint!
+                    </span>
+                  </div>
+                )}
+
+                {/* Tampilan 3 Step (Video/Review) */}
+                {cameraStep < 3 ? (
+                   <video ref={videoRef} className="w-full h-full object-cover z-10" playsInline muted 
+                     style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} 
+                   />
+                ) : (
+                   <div className="w-full h-full flex flex-col p-2 gap-2 bg-gray-100 z-20">
+                      <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
+                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">Selfie</p>
+                        <img src={fotoBase64!} className="w-full h-full object-cover" alt="Selfie" />
+                      </div>
+                      <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
+                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">Mesin Finger</p>
+                        <img src={fotoMesinBase64!} className="w-full h-full object-cover" alt="Mesin Finger" />
+                      </div>
+                   </div>
+                )}
               </div>
 
-              {!fotoBase64 ? (
+              {/* Tombol Bawah Tergantung Step */}
+              {cameraStep < 3 ? (
                 <div className="w-full grid grid-cols-2 gap-3">
                   <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
                   <button
                     disabled={!jepretState.aktif}
                     onClick={jepretFoto}
-                    className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? 'bg-[#3e2723] text-[#fbc02d] shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                    className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                   >
                     <i className="fa-solid fa-camera shrink-0 text-lg" />
                     <span className="leading-tight text-left">{jepretState.teks}</span>
@@ -801,13 +860,13 @@ const Absen = () => {
                 </div>
               ) : (
                 <div className="w-full grid grid-cols-2 gap-3">
-                  <button onClick={() => { setFotoBase64(null); nyalakanKamera(); }} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm">
+                  <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm">
                     <i className="fa-solid fa-rotate-right shrink-0 text-lg" />
                     <span className="leading-none">Ulangi</span>
                   </button>
                   <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-green-500 text-white font-black py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 text-sm">
                     {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin shrink-0 text-lg" /> : <i className="fa-solid fa-paper-plane shrink-0 text-lg" />}
-                    <span className="leading-none">{isKirimLoading ? 'Mengirim...' : 'Kirim'}</span>
+                    <span className="leading-none">{isKirimLoading ? 'Mengirim...' : 'Kirim Laporan'}</span>
                   </button>
                 </div>
               )}
@@ -815,7 +874,7 @@ const Absen = () => {
           </div>
         )}
 
-        {/* ── MODAL DETAIL ── */}
+        {/* ── MODAL DETAIL (Revisi 2 Foto) ── */}
         {detailModal.show && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10 h-[85vh]">
@@ -844,12 +903,23 @@ const Absen = () => {
                     <p className={`font-bold text-lg mb-2 text-${color}-800`}>
                       {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
                     </p>
-                    <div className="w-full h-40 bg-gray-200 rounded-2xl overflow-hidden relative">
-                      {data?.custom_foto_absen
-                        ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-cover" alt={label} />
-                        : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>
-                      }
+                    
+                    {/* Tampilkan 2 Foto di Detail Modal jika ada */}
+                    <div className="w-full flex gap-2 h-32">
+                      <div className="flex-1 bg-gray-200 rounded-xl overflow-hidden relative">
+                        {data?.custom_foto_absen
+                          ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-cover" alt="Selfie" />
+                          : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold">No Selfie</p>
+                        }
+                      </div>
+                      <div className="flex-1 bg-gray-200 rounded-xl overflow-hidden relative">
+                        {data?.custom_validasi_foto
+                          ? <img src={prosesUrlFoto(data.custom_validasi_foto)} className="w-full h-full object-cover" alt="Mesin" />
+                          : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold text-center px-2">No Fingerprint Photo</p>
+                        }
+                      </div>
                     </div>
+
                   </div>
                 ))}
               </div>
