@@ -36,15 +36,8 @@ interface LeaveRecord {
 // ── HELPER: AMBIL JAM LANGSUNG DARI ERPNEXT (Tanpa konversi zona waktu) ──
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
-  
-  // Data dari ERPNext biasanya: "2026-03-11 07:48:43"
-  // Kita pisahkan berdasarkan spasi, lalu ambil jamnya saja
   const parts = timeString.split(' ');
-  if (parts.length > 1) {
-    return parts[1].substring(0, 5); // Mengambil format HH:mm (07:48)
-  }
-  
-  // Fallback jika formatnya berbeda (misal cuma ngirim "07:48:00")
+  if (parts.length > 1) return parts[1].substring(0, 5);
   return timeString.substring(0, 5);
 };
 
@@ -134,16 +127,11 @@ const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): 
 
   const isLokasiKlaten = lokasi.includes('klaten') || lokasi.includes('ph');
   const isLokasiJakarta = lokasi.includes('jakarta');
-
   const isBranchKlaten = branch.includes('klaten') || branch.includes('ph');
   const isBranchJakarta = branch.includes('jakarta');
 
-  if (isLokasiKlaten && !isBranchKlaten) {
-    return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
-  }
-  if (isLokasiJakarta && !isBranchJakarta) {
-    return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
-  }
+  if (isLokasiKlaten && !isBranchKlaten) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
+  if (isLokasiJakarta && !isBranchJakarta) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
 
   return null;
 };
@@ -154,7 +142,14 @@ const Absen = () => {
 
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const ERPNEXT_URL = 'http://103.187.147.240';
-  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.615, lng: 110.687, radius: 100 }];
+  
+  // 🔥 TITIK KOORDINAT KANTOR & RADIUS 30 METER 🔥
+  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6149279, lng: 110.6867345, radius: 30 }];
+  
+  // 🔥 DAFTAR IP PUBLIC KANTOR 🔥
+  const DAFTAR_IP_KANTOR = [
+    '103.144.170.15' // IP Router Wi-Fi Kantor Roti Ropi
+  ];
 
   const [user, setUser] = useState<User | null>(null);
   const [lokasiKantor, setLokasiKantor] = useState<Lokasi[]>(LOKASI_FALLBACK);
@@ -172,7 +167,7 @@ const Absen = () => {
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
-  const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Cek GPS...' });
+  const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Cek Sistem...' });
   const [isKirimLoading, setIsKirimLoading] = useState(false);
   const [koordinatGPS, setKoordinatGPS] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -234,14 +229,12 @@ const Absen = () => {
         });
         setMasterShifts(tempMap);
       }
-    } catch { console.error('Gagal menarik daftar shift'); }
+    } catch { console.error('Gagal menarik shift'); }
   };
 
   const ambilLokasiKantor = async (branch?: string) => {
     try {
-      const url = branch
-        ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}`
-        : `${BACKEND}/api/locations`;
+      const url = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}` : `${BACKEND}/api/locations`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.success && data.locations?.length > 0) setLokasiKantor(data.locations);
@@ -254,9 +247,7 @@ const Absen = () => {
       const dari = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
       const akhir = new Date(tahunAktif, bulanAktif + 1, 0);
       const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
-      const res = await fetch(
-        `${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}`
-      );
+      const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}`);
       const data = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
       else setDataRiwayat([]);
@@ -316,42 +307,81 @@ const Absen = () => {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
   };
 
-  const bukaModalAbsen = (mode: string) => {
+  // FUNGSI UTAMA ABSEN (LOGIKA GPS + IP + AKURASI)
+  const bukaModalAbsen = async (mode: string) => {
     setModeAbsen(mode);
     setFotoBase64(null);
     setIsModalAbsenOpen(true);
     setKameraBorder('border-[#fbc02d]');
     setWajahStatus({ show: false, ok: false });
-    setGpsStatus({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
-    setJepretState({ aktif: false, teks: 'Cek GPS...' });
+    setGpsStatus({ tipe: 'loading', pesan: 'Cek Wi-Fi & GPS...' });
+    setJepretState({ aktif: false, teks: 'Loading...' });
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
 
+    // Langkah 1: Cek IP Public Karyawan (secara diam-diam)
+    let currentIP = '';
+    try {
+      const resIp = await fetch('https://api.ipify.org?format=json');
+      const dataIp = await resIp.json();
+      currentIP = dataIp.ip;
+    } catch (e) { console.warn('Gagal cek IP'); }
+
+    const isIpValid = DAFTAR_IP_KANTOR.includes(currentIP);
+
+    // Langkah 2: Cek GPS (Termasuk Distance & Akurasi)
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const akurasi = pos.coords.accuracy;
         setKoordinatGPS(coords);
+        
         const cek = cekRadius(coords.lat, coords.lng);
+        // GPS Valid HANYA JIKA dalam radius DAN akurasi bagus (< 30 meter)
+        const isGpsValid = cek.valid && akurasi <= 30;
 
-        if (!cek.valid) {
-          setGpsStatus({ tipe: 'error', pesan: `Di luar radius! ${cek.jarak}m dari ${cek.nama}` });
-          setJepretState({ aktif: false, teks: 'Lokasi Jauh' });
-        } else {
-          const errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
+        if (isGpsValid || isIpValid) {
+          // Lolos pengecekan!
+          let errorBranch = null;
+          // Kalau lolosnya murni karena GPS (bukan IP), pastikan branch-nya bener
+          if (!isIpValid) errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
+
           if (errorBranch) {
             setGpsStatus({ tipe: 'error', pesan: errorBranch });
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
-            setGpsStatus({ tipe: 'ok', pesan: `Lokasi: ${cek.nama} ✓` });
+            const pesanValid = isIpValid 
+              ? 'Valid via Wi-Fi Kantor ✓' 
+              : `Valid: ${cek.nama} (Akurasi: ${Math.round(akurasi)}m) ✓`;
+            setGpsStatus({ tipe: 'ok', pesan: pesanValid });
             setJepretState({ aktif: false, teks: 'Buka Kamera...' });
             await nyalakanKamera();
           }
+        } else {
+          // Gagal dua-duanya (Bukan IP Kantor & GPS Jelek/Jauh)
+          let pesanError = 'Lokasi Ditolak.';
+          if (!cek.valid) {
+            pesanError = `Jarak ${cek.jarak}m dari kantor (Max: ${cek.radius}m).`;
+          } else if (akurasi > 30) {
+            pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < 30m.`;
+          }
+          setGpsStatus({ tipe: 'error', pesan: `${pesanError} (Bukan Wi-Fi)` });
+          setJepretState({ aktif: false, teks: 'Ditolak' });
         }
       },
-      () => {
-        setGpsStatus({ tipe: 'error', pesan: 'GPS Mati / Ditolak' });
-        setJepretState({ aktif: false, teks: 'Izinkan GPS' });
+      async () => {
+        // Langkah 3: Jika User Menolak Izin GPS (Atau GPS HP Rusak)
+        if (isIpValid) {
+          // Tetap lolos karena IP Valid
+          setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng }); // Fallback ke koordinat kantor
+          setGpsStatus({ tipe: 'ok', pesan: 'GPS Mati tapi Valid via Wi-Fi ✓' });
+          setJepretState({ aktif: false, teks: 'Buka Kamera...' });
+          await nyalakanKamera();
+        } else {
+          setGpsStatus({ tipe: 'error', pesan: 'GPS Ditolak & Bukan Wi-Fi Kantor' });
+          setJepretState({ aktif: false, teks: 'Akses Ditolak' });
+        }
       },
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
   };
 
@@ -417,7 +447,7 @@ const Absen = () => {
   };
 
   const kirimAbsen = async () => {
-    if (!koordinatGPS || !fotoBase64 || !user) return;
+    if (!fotoBase64 || !user) return;
     setIsKirimLoading(true);
     try {
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
@@ -426,8 +456,8 @@ const Absen = () => {
         body: JSON.stringify({
           employee_id: user.employee_id,
           tipe: modeAbsen === 'MASUK' ? 'IN' : 'OUT',
-          latitude: koordinatGPS.lat,
-          longitude: koordinatGPS.lng,
+          latitude: koordinatGPS?.lat || LOKASI_FALLBACK[0].lat,
+          longitude: koordinatGPS?.lng || LOKASI_FALLBACK[0].lng,
           branch: user.branch || '',
           image_verification: fotoBase64,
           shift: getShiftKantor(new Date(), masterShifts, user?.branch),
