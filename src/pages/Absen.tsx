@@ -22,7 +22,7 @@ interface RiwayatAbsen {
   attendance_date?: string;
   log_type: string;
   custom_foto_absen?: string;
-  custom_validasi_foto?: string; // 🔥 Field foto mesin fingerprint
+  custome_verification_image?: string; // 🔥 UPDATE NAMA FIELD ERPNEXT
   shift?: string;
 }
 
@@ -155,7 +155,6 @@ const Absen = () => {
   const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>([]);
   const [lihatSemua, setLihatSemua] = useState(false);
 
-  // 🔥 STATE KAMERA 3 LANGKAH 🔥
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
   const [modeAbsen, setModeAbsen] = useState('MASUK');
   const [jamModal, setJamModal] = useState('--:--');
@@ -163,9 +162,9 @@ const Absen = () => {
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
   
-  const [cameraStep, setCameraStep] = useState(1); // 1 = Selfie, 2 = Mesin Finger, 3 = Review
-  const [fotoBase64, setFotoBase64] = useState<string | null>(null); // Foto Selfie
-  const [fotoMesinBase64, setFotoMesinBase64] = useState<string | null>(null); // Foto Mesin Finger
+  const [cameraStep, setCameraStep] = useState(1);
+  const [fotoBase64, setFotoBase64] = useState<string | null>(null);
+  const [fotoMesinBase64, setFotoMesinBase64] = useState<string | null>(null);
 
   const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Cek Sistem...' });
   const [isKirimLoading, setIsKirimLoading] = useState(false);
@@ -198,6 +197,10 @@ const Absen = () => {
       ambilRiwayatIzin(user.employee_id);
     }
   }, [user, bulanAktif, tahunAktif]);
+
+  useEffect(() => {
+    setLihatSemua(false);
+  }, [bulanAktif, tahunAktif]);
 
   useEffect(() => {
     const modeAuto = searchParams.get('mode');
@@ -307,7 +310,7 @@ const Absen = () => {
     setModeAbsen(mode);
     setFotoBase64(null);
     setFotoMesinBase64(null);
-    setCameraStep(1); // Set ke step 1 (Selfie)
+    setCameraStep(1);
     setIsModalAbsenOpen(true);
     setKameraBorder('border-[#fbc02d]');
     setWajahStatus({ show: false, ok: false });
@@ -348,7 +351,7 @@ const Absen = () => {
               
             setGpsStatus({ tipe: 'ok', pesan: pesanValid });
             setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-            await nyalakanKamera('user'); // Mulai dengan kamera depan
+            await nyalakanKamera('user');
           }
         } else {
           let pesanError = 'Lokasi Ditolak.';
@@ -383,9 +386,8 @@ const Absen = () => {
     if (searchParams.has('auto')) setSearchParams({});
   };
 
-  // 🔥 UPDATE: Nyalakan kamera bisa pilih mode (Depan / Belakang)
   const nyalakanKamera = async (mode: 'user' | 'environment') => {
-    matikanKamera(); // Matikan stream sebelumnya jika ada
+    matikanKamera();
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: mode, width: { ideal: 480 }, height: { ideal: 640 } },
@@ -399,7 +401,6 @@ const Absen = () => {
         setJepretState({ aktif: false, teks: 'Muat AI...' });
         muatFaceAPI();
       } else {
-        // Kamera belakang (Mesin Finger) tidak pakai FaceAPI
         setJepretState({ aktif: true, teks: 'Jepret Fingerprint!' });
         setKameraBorder('border-blue-400');
         setWajahStatus({ show: false, ok: false });
@@ -437,7 +438,6 @@ const Absen = () => {
     }, 600);
   };
 
-  // 🔥 UPDATE: JepretFoto dibagi 2 Step 🔥
   const jepretFoto = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -451,7 +451,6 @@ const Absen = () => {
     
     if (ctx) {
       if (cameraStep === 1) {
-        // Balik gambar untuk kamera depan (Selfie)
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
       }
@@ -461,14 +460,12 @@ const Absen = () => {
     const base64Data = canvas.toDataURL('image/jpeg', 0.6);
 
     if (cameraStep === 1) {
-      // Selesai Selfie -> Lanjut Kamera Belakang
       if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
       setFotoBase64(base64Data);
       setCameraStep(2);
       setKameraBorder('border-blue-400');
       nyalakanKamera('environment');
     } else if (cameraStep === 2) {
-      // Selesai Foto Mesin -> Lanjut Review
       setFotoMesinBase64(base64Data);
       setCameraStep(3);
       setKameraBorder('border-[#3e2723]');
@@ -489,8 +486,8 @@ const Absen = () => {
           latitude: koordinatGPS?.lat || LOKASI_FALLBACK[0].lat,
           longitude: koordinatGPS?.lng || LOKASI_FALLBACK[0].lng,
           branch: user.branch || '',
-          image_verification: fotoBase64,          // Foto Selfie
-          validasi_foto: fotoMesinBase64,          // 🔥 Foto Mesin Finger
+          image_verification: fotoBase64,
+          custome_verification_image: fotoMesinBase64, // 🔥 UPDATE FIELD KIRIM
           shift: getShiftKantor(new Date(), masterShifts, user?.branch),
         }),
       });
@@ -507,9 +504,6 @@ const Absen = () => {
     setIsKirimLoading(false);
   };
 
-  // ════════════════════════════
-  // GROUPING & REKAP
-  // ════════════════════════════
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
     const tgl = item.time?.substring(0, 10) || item.attendance_date || '';
@@ -601,8 +595,6 @@ const Absen = () => {
   return (
     <div className="bg-gray-100 flex justify-center min-h-screen font-sans">
       <div className="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl relative">
-
-        {/* ── HEADER ── */}
         <div className="bg-[#3e2723] pt-12 pb-5 px-6 shrink-0 shadow-md z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -612,27 +604,13 @@ const Absen = () => {
               <h1 className="text-xl font-black text-[#fbc02d]">Laporan Absen</h1>
             </div>
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => { if (bulanAktif === 0) { setBulanAktif(11); setTahunAktif(tahunAktif - 1); } else setBulanAktif(bulanAktif - 1); }}
-                className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30"
-              ><i className="fa-solid fa-chevron-left" /></button>
-              <span className="text-white text-xs font-bold min-w-[80px] text-center">
-                {new Date(tahunAktif, bulanAktif, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
-              </span>
-              <button
-                onClick={() => { if (bulanAktif === 11) { setBulanAktif(0); setTahunAktif(tahunAktif + 1); } else setBulanAktif(bulanAktif + 1); }}
-                className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30"
-              ><i className="fa-solid fa-chevron-right" /></button>
+              <button onClick={() => { if (bulanAktif === 0) { setBulanAktif(11); setTahunAktif(tahunAktif - 1); } else setBulanAktif(bulanAktif - 1); }} className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30"><i className="fa-solid fa-chevron-left" /></button>
+              <span className="text-white text-xs font-bold min-w-[80px] text-center">{new Date(tahunAktif, bulanAktif, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</span>
+              <button onClick={() => { if (bulanAktif === 11) { setBulanAktif(0); setTahunAktif(tahunAktif + 1); } else setBulanAktif(bulanAktif + 1); }} className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30"><i className="fa-solid fa-chevron-right" /></button>
             </div>
           </div>
-
           <div className="mt-4 grid grid-cols-4 gap-2">
-            {[
-              { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
-              { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
-              { label: 'Izin', value: rekapIzin, color: 'text-blue-300' },
-              { label: 'Cuti', value: rekapCuti, color: 'text-purple-300' },
-            ].map(item => (
+            {[{ label: 'Hadir', value: rekapHadir, color: 'text-green-400' }, { label: 'Telat', value: rekapTelat, color: 'text-red-400' }, { label: 'Izin', value: rekapIzin, color: 'text-blue-300' }, { label: 'Cuti', value: rekapCuti, color: 'text-purple-300' }].map(item => (
               <div key={item.label} className="bg-white/10 rounded-xl py-2 text-center">
                 <p className={`text-xl font-black ${item.color}`}>{item.value}</p>
                 <p className="text-[9px] font-black text-white/60 uppercase tracking-wide">{item.label}</p>
@@ -641,16 +619,11 @@ const Absen = () => {
           </div>
         </div>
 
-        {/* ── CONTENT ── */}
         <div className="flex-1 overflow-y-auto pb-32 pt-4">
-
           {leaveRecords.length > 0 && (
             <div className="px-4 mb-3 flex flex-wrap gap-1.5">
               {leaveRecords.map(r => {
-                const statusColor =
-                  r.status?.toLowerCase() === 'approved' ? 'bg-blue-100 text-blue-700 border-blue-200'
-                  : r.status?.toLowerCase() === 'rejected' ? 'bg-red-100 text-red-600 border-red-200'
-                  : 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                const statusColor = r.status?.toLowerCase() === 'approved' ? 'bg-blue-100 text-blue-700 border-blue-200' : r.status?.toLowerCase() === 'rejected' ? 'bg-red-100 text-red-600 border-red-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200';
                 const fromLabel = new Date(r.from_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
                 const toLabel = new Date(r.to_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
                 return (
@@ -672,11 +645,7 @@ const Absen = () => {
                 {renderKalender()}
               </div>
               <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
-                {[
-                  { color: 'bg-green-400', label: 'Tepat' },
-                  { color: 'bg-red-400', label: 'Telat' },
-                  { color: 'bg-blue-400', label: 'Izin' },
-                ].map(l => (
+                {[{ color: 'bg-green-400', label: 'Tepat' }, { color: 'bg-red-400', label: 'Telat' }, { color: 'bg-blue-400', label: 'Izin' }].map(l => (
                   <div key={l.label} className="flex items-center gap-1">
                     <span className={`w-2 h-2 rounded-full ${l.color} inline-block`} />
                     <span className="text-[9px] text-gray-400 font-bold">{l.label}</span>
@@ -689,11 +658,8 @@ const Absen = () => {
           <div className="px-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-black text-[#3e2723] text-sm">Riwayat Kehadiran</h3>
-              <p className="text-[10px] text-gray-400">
-                <i className="fa-solid fa-hand-pointer mr-1" />Klik untuk detail
-              </p>
+              <p className="text-[10px] text-gray-400"><i className="fa-solid fa-hand-pointer mr-1" />Klik untuk detail</p>
             </div>
-
             <div className="flex flex-col gap-2">
               {sortedTglKeys.length === 0 && leaveRecords.length === 0 ? (
                 <div className="bg-gray-50 rounded-2xl p-6 text-center">
@@ -714,20 +680,14 @@ const Absen = () => {
                     let badgeEl = null;
                     if (jamIn !== '-') {
                       const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
-                      badgeEl = selisih > 0
-                        ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {formatDurasi(selisih)}</span>
-                        : <span className="text-green-600 text-[9px] font-black">✓ Tepat</span>;
+                      badgeEl = selisih > 0 ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {formatDurasi(selisih)}</span> : <span className="text-green-600 text-[9px] font-black">✓ Tepat</span>;
                     }
-                    if (adaIzinHariIni && !badgeEl) {
-                      badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>;
-                    }
+                    if (adaIzinHariIni && !badgeEl) { badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>; }
 
                     let badgeCepat = null;
                     if (jamOut !== '-') {
                       const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
-                      if (selisih > 0) {
-                        badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cepat {formatDurasi(selisih)}</span>;
-                      }
+                      if (selisih > 0) badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cepat {formatDurasi(selisih)}</span>;
                     }
 
                     let badgeBelumKeluar = null;
@@ -736,35 +696,20 @@ const Absen = () => {
                     }
 
                     return (
-                      <div
-                        key={tgl}
-                        onClick={() => bukaDetail(tgl)}
-                        className="cursor-pointer bg-white px-4 py-3 rounded-2xl border border-gray-100 flex items-center gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40"
-                      >
+                      <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-3 rounded-2xl border border-gray-100 flex items-center gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
                           <i className={`fa-solid ${d.in ? 'fa-check' : adaIzinHariIni ? 'fa-envelope-open-text' : 'fa-minus'}`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
-                          <p className="text-[10px] text-gray-400">
-                            {jamIn} → {jamOut === '-' && badgeBelumKeluar ? <span className="text-red-400 italic mx-1">?</span> : jamOut}
-                            <span className="ml-1 text-[#fbc02d]">· {shiftInfo.in}–{shiftInfo.out}</span>
-                          </p>
+                          <p className="text-[10px] text-gray-400">{jamIn} → {jamOut === '-' && badgeBelumKeluar ? <span className="text-red-400 italic mx-1">?</span> : jamOut} <span className="ml-1 text-[#fbc02d]">· {shiftInfo.in}–{shiftInfo.out}</span></p>
                         </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          {badgeEl}
-                          {badgeCepat}
-                          {badgeBelumKeluar}
-                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">{badgeEl}{badgeCepat}{badgeBelumKeluar}</div>
                       </div>
                     );
                   })}
-
                   {sortedTglKeys.length > 5 && (
-                    <button
-                      onClick={() => setLihatSemua(!lihatSemua)}
-                      className="w-full mt-1 py-3 rounded-2xl border border-dashed border-gray-300 text-xs font-black text-gray-400 hover:border-[#fbc02d] hover:text-[#3e2723] transition-colors flex items-center justify-center gap-2"
-                    >
+                    <button onClick={() => setLihatSemua(!lihatSemua)} className="w-full mt-1 py-3 rounded-2xl border border-dashed border-gray-300 text-xs font-black text-gray-400 hover:border-[#fbc02d] hover:text-[#3e2723] transition-colors flex items-center justify-center gap-2">
                       <i className={`fa-solid ${lihatSemua ? 'fa-chevron-up' : 'fa-chevron-down'}`} />
                       {lihatSemua ? 'Lebih Sedikit' : `Lihat Semua (${sortedTglKeys.length} hari)`}
                     </button>
@@ -775,49 +720,26 @@ const Absen = () => {
           </div>
         </div>
 
-        {/* ── NAVIGATION BOTTOM ── */}
         <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
-          <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-house text-xl mb-1" /><span className="text-[10px] font-black uppercase">Home</span>
-          </Link>
-          <div className="flex flex-col items-center text-[#3e2723] w-1/4">
-            <i className="fa-solid fa-clipboard-user text-xl mb-1 drop-shadow-md" /><span className="text-[10px] font-black uppercase">Absen</span>
-          </div>
-          <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-envelope-open-text text-xl mb-1" /><span className="text-[10px] font-black uppercase">Izin</span>
-          </Link>
-          <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-calendar-minus text-xl mb-1" /><span className="text-[10px] font-black uppercase">Cuti</span>
-          </Link>
+          <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-house text-xl mb-1" /><span className="text-[10px] font-black uppercase">Home</span></Link>
+          <div className="flex flex-col items-center text-[#3e2723] w-1/4"><i className="fa-solid fa-clipboard-user text-xl mb-1 drop-shadow-md" /><span className="text-[10px] font-black uppercase">Absen</span></div>
+          <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-envelope-open-text text-xl mb-1" /><span className="text-[10px] font-black uppercase">Izin</span></Link>
+          <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-calendar-minus text-xl mb-1" /><span className="text-[10px] font-black uppercase">Cuti</span></Link>
         </nav>
 
-        {/* ── MODAL KAMERA ── */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
               <div className="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0" />
               <p className="text-4xl font-black text-[#3e2723] tracking-tight mb-1">{jamModal}</p>
-              
               <div className={`text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full mb-3 ${modeAbsen === 'MASUK' ? 'bg-[#3e2723] text-[#fbc02d]' : 'bg-[#fbc02d] text-[#3e2723]'}`}>
                 {modeAbsen} - {cameraStep === 1 ? 'Langkah 1/2' : cameraStep === 2 ? 'Langkah 2/2' : 'Selesai'}
               </div>
-
-              <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${
-                gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' :
-                gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' :
-                'bg-blue-50 text-blue-700 border-blue-100'
-              }`}>
-                {gpsStatus.tipe === 'loading' ? (
-                  <i className="fa-solid fa-spinner fa-spin text-sm shrink-0" />
-                ) : (
-                  <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm shrink-0`} />
-                )}
+              <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin text-sm shrink-0" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm shrink-0`} />}
                 <span className="leading-tight">{gpsStatus.pesan}</span>
               </div>
-
               <div className={`w-full aspect-[3/4] max-h-[60vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
-                
-                {/* Overlay Instruksi Khusus Kamera 2 */}
                 {cameraStep === 2 && (
                   <div className="absolute top-4 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
                     <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-lg text-center animate-pulse border border-blue-400">
@@ -825,12 +747,8 @@ const Absen = () => {
                     </span>
                   </div>
                 )}
-
-                {/* Tampilan 3 Step (Video/Review) */}
                 {cameraStep < 3 ? (
-                   <video ref={videoRef} className="w-full h-full object-cover z-10" playsInline muted 
-                     style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} 
-                   />
+                   <video ref={videoRef} className="w-full h-full object-cover z-10" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
                 ) : (
                    <div className="w-full h-full flex flex-col p-2 gap-2 bg-gray-100 z-20">
                       <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
@@ -844,16 +762,10 @@ const Absen = () => {
                    </div>
                 )}
               </div>
-
-              {/* Tombol Bawah Tergantung Step */}
               {cameraStep < 3 ? (
                 <div className="w-full grid grid-cols-2 gap-3">
                   <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
-                  <button
-                    disabled={!jepretState.aktif}
-                    onClick={jepretFoto}
-                    className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                  >
+                  <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                     <i className="fa-solid fa-camera shrink-0 text-lg" />
                     <span className="leading-tight text-left">{jepretState.teks}</span>
                   </button>
@@ -861,8 +773,7 @@ const Absen = () => {
               ) : (
                 <div className="w-full grid grid-cols-2 gap-3">
                   <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm">
-                    <i className="fa-solid fa-rotate-right shrink-0 text-lg" />
-                    <span className="leading-none">Ulangi</span>
+                    <i className="fa-solid fa-rotate-right shrink-0 text-lg" /><span className="leading-none">Ulangi</span>
                   </button>
                   <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-green-500 text-white font-black py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 text-sm">
                     {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin shrink-0 text-lg" /> : <i className="fa-solid fa-paper-plane shrink-0 text-lg" />}
@@ -874,7 +785,6 @@ const Absen = () => {
           </div>
         )}
 
-        {/* ── MODAL DETAIL (Revisi 2 Foto) ── */}
         {detailModal.show && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10 h-[85vh]">
@@ -904,7 +814,7 @@ const Absen = () => {
                       {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
                     </p>
                     
-                    {/* Tampilkan 2 Foto di Detail Modal jika ada */}
+                    {/* 🔥 UPDATE: MENAMPILKAN KEDUA FOTO BERDASARKAN NAMA FIELD BARU */}
                     <div className="w-full flex gap-2 h-32">
                       <div className="flex-1 bg-gray-200 rounded-xl overflow-hidden relative">
                         {data?.custom_foto_absen
@@ -913,8 +823,8 @@ const Absen = () => {
                         }
                       </div>
                       <div className="flex-1 bg-gray-200 rounded-xl overflow-hidden relative">
-                        {data?.custom_validasi_foto
-                          ? <img src={prosesUrlFoto(data.custom_validasi_foto)} className="w-full h-full object-cover" alt="Mesin" />
+                        {data?.custome_verification_image
+                          ? <img src={prosesUrlFoto(data.custome_verification_image)} className="w-full h-full object-cover" alt="Mesin" />
                           : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold text-center px-2">No Fingerprint Photo</p>
                         }
                       </div>
