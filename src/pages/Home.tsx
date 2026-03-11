@@ -23,16 +23,16 @@ const formatJamLokal = (utcString?: string): string => {
     safeString += 'Z';
   }
   const date = new Date(safeString);
-  return date.toLocaleTimeString('id-ID', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    hour12: false 
+  return date.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   }).replace('.', ':');
 };
 
 const Home = () => {
   const navigate = useNavigate();
-  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app'; 
+  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
 
   const [user, setUser] = useState<User>({ name: 'Karyawan', role: 'Staff Roti Ropi', employee_id: '' });
   const [statusAbsen, setStatusAbsen] = useState<string>('Mengecek status...');
@@ -43,7 +43,6 @@ const Home = () => {
     mode: '',
   });
 
-  // State untuk mengontrol Accordion Panduan
   const [bukaPanduan, setBukaPanduan] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,18 +58,46 @@ const Home = () => {
 
   const ambilStatusHariIni = async (employeeId: string) => {
     try {
-      // Gunakan waktu lokal (WIB/Perangkat), JANGAN pakai toISOString() karena zona waktunya UTC
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const tglHariIni = `${yyyy}-${mm}-${dd}`; // Menghasilkan YYYY-MM-DD sesuai jam HP karyawan
-
+      const tglHariIni = new Date().toISOString().substring(0, 10);
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(employeeId)}&from=${tglHariIni}&to=${tglHariIni}`);
       const data = await res.json();
 
-      // Fungsi Helper untuk reset tombol jadi MASUK
-      const setTombolMasukAwal = () => {
+      if (data.success && data.data && data.data.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sorted = data.data.sort((a: any, b: any) => b.time.localeCompare(a.time));
+
+        // Cek keberadaan IN dan OUT khusus hari ini
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sudahMasuk = sorted.some((d: any) => d.log_type === 'IN');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sudahKeluar = sorted.some((d: any) => d.log_type === 'OUT');
+
+        const terakhir = sorted[0];
+        const jam = formatJamLokal(terakhir.time);
+        const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
+
+        const statusText = `✓ Absen ${tipe} terakhir pukul ${jam}`;
+        setStatusAbsen(statusText);
+        localStorage.setItem('ropi_status_absen', statusText);
+
+        // Sudah MASUK tapi belum KELUAR → tombol KELUAR
+        // Belum MASUK, atau sudah MASUK & KELUAR → tombol MASUK
+        if (sudahMasuk && !sudahKeluar) {
+          setBtnConfig({
+            text: 'Absen Keluar Sekarang',
+            icon: 'fa-right-from-bracket',
+            className: 'bg-red-500 text-white shadow-red-500/30',
+            mode: 'KELUAR',
+          });
+        } else {
+          setBtnConfig({
+            text: 'Absen Masuk Sekarang',
+            icon: 'fa-right-to-bracket',
+            className: 'bg-green-500 text-white shadow-green-500/30',
+            mode: 'MASUK',
+          });
+        }
+      } else {
         setStatusAbsen('Belum ada catatan absen hari ini');
         localStorage.removeItem('ropi_status_absen');
         setBtnConfig({
@@ -79,50 +106,6 @@ const Home = () => {
           className: 'bg-green-500 text-white shadow-green-500/30',
           mode: 'MASUK',
         });
-      };
-
-      if (data.success && data.data && data.data.length > 0) {
-        // memfilter secara tegas khusus hari ini saja
-        const absenHariIni = data.data.filter((item: any) => {
-          const tglAbsen = item.time ? item.time.substring(0, 10) : item.attendance_date;
-          return tglAbsen === tglHariIni;
-        });
-
-        // Jika hari ini sudah ada absen (Entah IN atau OUT)
-        if (absenHariIni.length > 0) {
-          const terakhir = absenHariIni.sort((a: any, b: any) => b.time.localeCompare(a.time))[0];
-          
-          const jam = formatJamLokal(terakhir.time);
-          const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
-
-          const statusText = `✓ Absen ${tipe} pukul ${jam}`;
-          setStatusAbsen(statusText);
-          localStorage.setItem('ropi_status_absen', statusText);
-
-          if (terakhir.log_type === 'IN') {
-            // Jika terakhir absen masuk, maka suruh keluar
-            setBtnConfig({
-              text: 'Absen Keluar Sekarang',
-              icon: 'fa-right-from-bracket',
-              className: 'bg-red-500 text-white shadow-red-500/30',
-              mode: 'KELUAR',
-            });
-          } else {
-            // Jika hari ini sudah absen keluar, (opsional bisa diset selesai, tapi kita kembalikan ke masuk untuk fleksibilitas)
-            setBtnConfig({
-              text: 'Absen Masuk Sekarang',
-              icon: 'fa-right-to-bracket',
-              className: 'bg-green-500 text-white shadow-green-500/30',
-              mode: 'MASUK',
-            });
-          }
-        } else {
-          // Jika tidak ada data absen di hari ini (misal lupa absen keluar kemarin)
-          setTombolMasukAwal();
-        }
-      } else {
-        // Jika API membalas kosong (Belum absen sama sekali hari ini)
-        setTombolMasukAwal();
       }
     } catch (e) {
       console.error('Gagal sinkronisasi status:', e);
@@ -143,7 +126,7 @@ const Home = () => {
   return (
     <div className="bg-gray-100 flex justify-center min-h-screen font-sans">
       <div className="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl relative">
-        
+
         {/* Header */}
         <div className="bg-[#3e2723] pt-12 pb-20 px-6 rounded-b-[2.5rem] shrink-0">
           <div className="flex justify-between items-center">
@@ -165,7 +148,7 @@ const Home = () => {
             <div className="absolute top-0 left-0 w-full h-1.5 bg-[#fbc02d]"></div>
             <p className="text-gray-400 text-xs font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
             <p className="text-[#3e2723] font-bold text-sm mb-4">{statusAbsen}</p>
-            
+
             <button
               onClick={() => navigate(`/absen?mode=${btnConfig.mode}&auto=true`)}
               className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg shadow-lg ${btnConfig.className}`}
@@ -219,15 +202,15 @@ const Home = () => {
             </Link>
           </div>
 
-          {/*  SECTION BARU: BUKU PANDUAN  */}
+          {/* SECTION BUKU PANDUAN */}
           <h3 className="font-black text-[#3e2723] text-base mb-3 flex items-center gap-2">
             <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
           </h3>
           <div className="flex flex-col gap-2">
-            
+
             {/* Panduan 1: Cara Absen */}
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              <button 
+              <button
                 onClick={() => togglePanduan('absen')}
                 className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
               >
@@ -250,7 +233,7 @@ const Home = () => {
 
             {/* Panduan 2: Izin & Cuti */}
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              <button 
+              <button
                 onClick={() => togglePanduan('izin')}
                 className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
               >
@@ -271,7 +254,7 @@ const Home = () => {
 
             {/* Panduan 3: Solusi Error */}
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              <button 
+              <button
                 onClick={() => togglePanduan('error')}
                 className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
               >
