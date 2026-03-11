@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import SignatureCanvas from 'react-signature-canvas'; // 🔥 IMPORT LIBRARY TTD
 
 declare global { interface Window { faceapi: any; } }
 
@@ -22,7 +23,8 @@ interface RiwayatAbsen {
   attendance_date?: string;
   log_type: string;
   custom_foto_absen?: string;
-  custom_verification_image?: string; // 🔥 Field foto mesin fingerprint yang BENAR
+  custom_verification_image?: string; 
+  custom_signature?: string; // 🔥 Field Tanda Tangan (sesuaikan nama di ERPNext)
   shift?: string;
 }
 
@@ -34,7 +36,6 @@ interface LeaveRecord {
   status: string;
 }
 
-// ── HELPER: AMBIL JAM LANGSUNG DARI ERPNEXT ──
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
@@ -42,7 +43,6 @@ const formatJamLokal = (timeString?: string): string => {
   return timeString.substring(0, 5);
 };
 
-// ── HELPER: FORMAT DURASI ──
 const formatDurasi = (totalMenit: number): string => {
   if (totalMenit < 60) return `${totalMenit}m`;
   const jam = Math.floor(totalMenit / 60);
@@ -155,7 +155,7 @@ const Absen = () => {
   const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>([]);
   const [lihatSemua, setLihatSemua] = useState(false);
 
-  // 🔥 STATE KAMERA 3 LANGKAH 🔥
+  // 🔥 STATE KAMERA 4 LANGKAH (TERMASUK TTD) 🔥
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
   const [modeAbsen, setModeAbsen] = useState('MASUK');
   const [jamModal, setJamModal] = useState('--:--');
@@ -163,9 +163,10 @@ const Absen = () => {
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
   
-  const [cameraStep, setCameraStep] = useState(1); 
+  const [cameraStep, setCameraStep] = useState(1); // 1 = Selfie, 2 = Mesin, 3 = TTD, 4 = Review
   const [fotoBase64, setFotoBase64] = useState<string | null>(null); 
   const [fotoMesinBase64, setFotoMesinBase64] = useState<string | null>(null); 
+  const [ttdBase64, setTtdBase64] = useState<string | null>(null); // State Tanda Tangan
 
   const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Cek Sistem...' });
   const [isKirimLoading, setIsKirimLoading] = useState(false);
@@ -182,6 +183,7 @@ const Absen = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const intervalDeteksiRef = useRef<number | null>(null);
   const intervalJamRef = useRef<number | null>(null);
+  const sigCanvas = useRef<SignatureCanvas>(null); // Ref untuk kanvas TTD
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
@@ -311,6 +313,7 @@ const Absen = () => {
     setModeAbsen(mode);
     setFotoBase64(null);
     setFotoMesinBase64(null);
+    setTtdBase64(null);
     setCameraStep(1); 
     setIsModalAbsenOpen(true);
     setKameraBorder('border-[#fbc02d]');
@@ -439,7 +442,20 @@ const Absen = () => {
     }, 600);
   };
 
+  // 🔥 JEPRET FOTO / SIMPAN TTD 🔥
   const jepretFoto = () => {
+    // KONDISI 3: SIMPAN TANDA TANGAN
+    if (cameraStep === 3) {
+      if (sigCanvas.current?.isEmpty()) {
+        alert('Tanda tangan dulu ya!');
+        return;
+      }
+      setTtdBase64(sigCanvas.current?.getTrimmedCanvas().toDataURL('image/png') || null);
+      setCameraStep(4); // Lanjut ke Review
+      return;
+    }
+
+    // KONDISI 1 & 2: AMBIL DARI KAMERA
     const video = videoRef.current;
     if (!video) return;
 
@@ -468,14 +484,17 @@ const Absen = () => {
       nyalakanKamera('environment');
     } else if (cameraStep === 2) {
       setFotoMesinBase64(base64Data);
-      setCameraStep(3);
-      setKameraBorder('border-[#3e2723]');
+      setCameraStep(3); // Lanjut ke Canvas Tanda Tangan
       matikanKamera();
     }
   };
 
+  const hapusTtd = () => {
+    sigCanvas.current?.clear();
+  };
+
   const kirimAbsen = async () => {
-    if (!fotoBase64 || !fotoMesinBase64 || !user) return;
+    if (!fotoBase64 || !fotoMesinBase64 || !ttdBase64 || !user) return;
     setIsKirimLoading(true);
     try {
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
@@ -488,7 +507,8 @@ const Absen = () => {
           longitude: koordinatGPS?.lng || LOKASI_FALLBACK[0].lng,
           branch: user.branch || '',
           image_verification: fotoBase64,
-          custom_verification_image: fotoMesinBase64, // 🔥 FIELD YANG BENAR
+          custom_verification_image: fotoMesinBase64, 
+          custom_signature: ttdBase64, // 🔥 KIRIM TTD KE BACKEND
           shift: getShiftKantor(new Date(), masterShifts, user?.branch),
         }),
       });
@@ -504,7 +524,6 @@ const Absen = () => {
     } catch { alert('Gagal konek ke server.'); }
     setIsKirimLoading(false);
   };
-
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
     const tgl = item.time?.substring(0, 10) || item.attendance_date || '';
@@ -728,19 +747,21 @@ const Absen = () => {
           <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-calendar-minus text-xl mb-1" /><span className="text-[10px] font-black uppercase">Cuti</span></Link>
         </nav>
 
+        {/* MODAL KAMERA 4 LANGKAH */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
               <div className="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0" />
               <p className="text-4xl font-black text-[#3e2723] tracking-tight mb-1">{jamModal}</p>
               <div className={`text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full mb-3 ${modeAbsen === 'MASUK' ? 'bg-[#3e2723] text-[#fbc02d]' : 'bg-[#fbc02d] text-[#3e2723]'}`}>
-                {modeAbsen} - {cameraStep === 1 ? 'Langkah 1/2' : cameraStep === 2 ? 'Langkah 2/2' : 'Selesai'}
+                {modeAbsen} - {cameraStep === 1 ? 'Langkah 1/3 (Muka)' : cameraStep === 2 ? 'Langkah 2/3 (Mesin)' : cameraStep === 3 ? 'Langkah 3/3 (TTD)' : 'Selesai'}
               </div>
               <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
                 {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin text-sm shrink-0" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm shrink-0`} />}
                 <span className="leading-tight">{gpsStatus.pesan}</span>
               </div>
               <div className={`w-full aspect-[3/4] max-h-[60vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
+                
                 {cameraStep === 2 && (
                   <div className="absolute top-4 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
                     <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-lg text-center animate-pulse border border-blue-400">
@@ -748,22 +769,46 @@ const Absen = () => {
                     </span>
                   </div>
                 )}
+
                 {cameraStep < 3 ? (
                    <video ref={videoRef} className="w-full h-full object-cover z-10" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
+                ) : cameraStep === 3 ? (
+                   <div className="w-full h-full flex flex-col items-center justify-center bg-white relative">
+                      <p className="absolute top-4 font-black text-gray-400 text-xs">Tanda Tangan di Bawah</p>
+                      <SignatureCanvas 
+                        ref={sigCanvas} 
+                        penColor="black"
+                        canvasProps={{ className: 'w-full h-full border-2 border-dashed border-gray-300 rounded-2xl' }} 
+                      />
+                   </div>
                 ) : (
-                   <div className="w-full h-full flex flex-col p-2 gap-2 bg-gray-100 z-20">
-                      <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
+                   <div className="w-full h-full flex flex-col p-2 gap-1 bg-gray-100 z-20 overflow-y-auto">
+                      <div className="h-32 shrink-0 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
                         <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">Selfie</p>
                         <img src={fotoBase64!} className="w-full h-full object-cover" alt="Selfie" />
                       </div>
-                      <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
+                      <div className="h-32 shrink-0 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm">
                         <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">Mesin Finger</p>
                         <img src={fotoMesinBase64!} className="w-full h-full object-cover" alt="Mesin Finger" />
+                      </div>
+                      <div className="h-32 shrink-0 relative rounded-2xl overflow-hidden border-2 border-white shadow-sm bg-white">
+                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">TTD</p>
+                        <img src={ttdBase64!} className="w-full h-full object-contain" alt="TTD" />
                       </div>
                    </div>
                 )}
               </div>
-              {cameraStep < 3 ? (
+
+              {cameraStep === 3 ? (
+                <div className="w-full grid grid-cols-2 gap-3">
+                  <button onClick={hapusTtd} className="bg-red-100 text-red-500 font-black py-3 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2">
+                    <i className="fa-solid fa-eraser" /> Hapus
+                  </button>
+                  <button onClick={jepretFoto} className="bg-blue-500 text-white font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm shadow-lg">
+                    <i className="fa-solid fa-check" /> Simpan TTD
+                  </button>
+                </div>
+              ) : cameraStep < 4 ? (
                 <div className="w-full grid grid-cols-2 gap-3">
                   <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
                   <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
@@ -786,6 +831,7 @@ const Absen = () => {
           </div>
         )}
 
+        {/* MODAL DETAIL RIWAYAT */}
         {detailModal.show && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10 h-[85vh]">
@@ -815,20 +861,27 @@ const Absen = () => {
                       {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
                     </p>
                     
-                    {/* 🔥 TAMPILKAN 2 FOTO DENGAN VARIABEL YANG BENAR 🔥 */}
-                    <div className="w-full flex gap-2 h-32">
-                      <div className="flex-1 bg-gray-200 rounded-xl overflow-hidden relative">
+                    <div className="w-full flex flex-col gap-3 mt-2">
+                      <div className="w-full h-48 bg-gray-200 rounded-2xl overflow-hidden relative shadow-inner border border-gray-300">
+                        <p className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold backdrop-blur-sm">📸 Selfie Wajah</p>
                         {data?.custom_foto_absen
                           ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-cover" alt="Selfie" />
-                          : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold">No Selfie</p>
+                          : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>
                         }
                       </div>
-                      <div className="flex-1 bg-gray-200 rounded-xl overflow-hidden relative">
+                      <div className="w-full h-48 bg-gray-200 rounded-2xl overflow-hidden relative shadow-inner border border-gray-300">
+                        <p className="absolute top-2 left-2 bg-blue-600/80 text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold backdrop-blur-sm">📠 Mesin Fingerprint</p>
                         {data?.custom_verification_image
                           ? <img src={prosesUrlFoto(data.custom_verification_image)} className="w-full h-full object-cover" alt="Mesin" />
-                          : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold text-center px-2">No Fingerprint Photo</p>
+                          : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>
                         }
                       </div>
+                      {data?.custom_signature && (
+                        <div className="w-full h-32 bg-white rounded-2xl overflow-hidden relative shadow-inner border border-gray-300">
+                          <p className="absolute top-2 left-2 bg-gray-600/80 text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold backdrop-blur-sm">✍️ Tanda Tangan</p>
+                          <img src={prosesUrlFoto(data.custom_signature)} className="w-full h-full object-contain" alt="Signature" />
+                        </div>
+                      )}
                     </div>
 
                   </div>
