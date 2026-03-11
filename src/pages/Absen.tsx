@@ -951,43 +951,59 @@ const Absen = () => {
                   </div>
                 );
               })()}
-              <div className="w-full flex-1 overflow-y-auto pb-6 pt-2 flex flex-col gap-4">
-                {[
-                  { label: 'Absen Masuk', color: 'green', data: detailModal.inData },
-                  { label: 'Absen Keluar', color: 'orange', data: detailModal.outData },
-                ].map(({ label, color, data }) => (
-                  <div key={label} className={`bg-${color}-50 p-4 rounded-3xl border border-${color}-100 flex flex-col`}>
-                    <div className={`self-start bg-${color}-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2`}>{label}</div>
-                    <p className={`font-bold text-lg mb-2 text-${color}-800`}>
-                      {data?.time ? `Pukul: ${formatJamLokal(data.time)}` : 'Belum Absen'}
-                    </p>
-                    <div className="w-full flex flex-col gap-3 mt-1">
-                      {/* Selfie */}
-                      <div className="w-full h-48 bg-gray-200 rounded-2xl overflow-hidden relative shadow-inner border border-gray-300">
-                        <p className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold backdrop-blur-sm">📸 Selfie Wajah</p>
+              <div className="w-full flex-1 overflow-y-auto pb-6 pt-2 flex flex-col gap-3">
+
+                {/* ── GRID FOTO: Masuk & Keluar berdampingan ── */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: 'Absen Masuk', color: 'green', colorHex: '#16a34a', data: detailModal.inData },
+                    { label: 'Absen Keluar', color: 'orange', colorHex: '#ea580c', data: detailModal.outData },
+                  ].map(({ label, color, colorHex, data }) => (
+                    <div key={label} className={`bg-${color}-50 rounded-2xl border border-${color}-100 overflow-hidden flex flex-col`}>
+                      {/* Badge + jam */}
+                      <div className="px-2 pt-2 pb-1.5">
+                        <div className={`bg-${color}-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase inline-block mb-1`}>{label}</div>
+                        <p className={`font-black text-sm text-${color}-800 leading-none`}>
+                          {data?.time ? formatJamLokal(data.time) : <span className="text-gray-400 text-xs font-bold">Belum Absen</span>}
+                        </p>
+                      </div>
+
+                      {/* Selfie wajah */}
+                      <div className="relative bg-gray-200 border-t border-white/60" style={{ aspectRatio: '1/1' }}>
+                        <p className="absolute top-1 left-1 bg-black/50 text-white text-[8px] px-1.5 py-0.5 rounded-md z-10 font-bold">📸 Selfie</p>
                         {data?.custom_foto_absen
                           ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-cover" alt="Selfie" />
-                          : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>}
+                          : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold">–</p>}
                       </div>
+
                       {/* Mesin fingerprint */}
-                      <div className="w-full h-48 bg-gray-200 rounded-2xl overflow-hidden relative shadow-inner border border-gray-300">
-                        <p className="absolute top-2 left-2 bg-blue-600/80 text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold backdrop-blur-sm">📠 Mesin Fingerprint</p>
+                      <div className="relative bg-gray-200 border-t border-white/60" style={{ aspectRatio: '1/1' }}>
+                        <p className="absolute top-1 left-1 bg-blue-600/70 text-white text-[8px] px-1.5 py-0.5 rounded-md z-10 font-bold">📠 Mesin</p>
                         {data?.custom_verification_image
                           ? <img src={prosesUrlFoto(data.custom_verification_image)} className="w-full h-full object-cover" alt="Mesin" />
-                          : <p className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-bold">Tidak ada foto</p>}
-                      </div>
-                      {/* Tanda tangan */}
-                      <div className="w-full bg-white rounded-2xl overflow-hidden border-2 border-purple-200 px-3 pt-2 pb-3 shadow-sm">
-                        <p className="text-[10px] font-black text-purple-600 mb-2 flex items-center gap-1">
-                          <i className="fa-solid fa-pen-nib" /> Tanda Tangan
-                        </p>
-                        {data?.custom_signature
-                          ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full object-contain" style={{ maxHeight: '100px' }} alt="TTD" />
-                          : <p className="text-xs text-gray-400 font-bold text-center py-4">Tidak ada tanda tangan</p>}
+                          : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold">–</p>}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                {/* ── TTD: Masuk & Keluar berdampingan, full width ── */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: 'TTD Masuk', data: detailModal.inData },
+                    { label: 'TTD Keluar', data: detailModal.outData },
+                  ].map(({ label, data }) => (
+                    <div key={label} className="bg-white rounded-2xl border-2 border-purple-100 px-2 pt-2 pb-2 shadow-sm">
+                      <p className="text-[9px] font-black text-purple-500 mb-1 flex items-center gap-0.5">
+                        <i className="fa-solid fa-pen-nib text-[8px]" /> {label}
+                      </p>
+                      {data?.custom_signature
+                        ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full object-contain" style={{ maxHeight: '64px' }} alt="TTD" />
+                        : <p className="text-[10px] text-gray-300 font-bold text-center py-3">–</p>}
+                    </div>
+                  ))}
+                </div>
+
               </div>
               <button onClick={() => setDetailModal({ show: false, tgl: '' })} className="w-full mt-2 bg-gray-100 text-gray-500 font-black py-4 rounded-2xl active:scale-95">
                 Tutup Detail
