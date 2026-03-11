@@ -826,7 +826,33 @@ const Absen = () => {
               {/* ── STEP 1 & 2: KAMERA ── */}
               {(cameraStep === 1 || cameraStep === 2) && (
                 <>
-                  <div className={`w-full aspect-[3/4] max-h-[52vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
+                  {/* ⚠️ PERINGATAN STEP 1: selfie di dekat mesin */}
+                  {cameraStep === 1 && (
+                    <div className="w-full mb-3 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2.5 flex gap-2.5 items-start">
+                      <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i className="fa-solid fa-triangle-exclamation text-white text-xs" />
+                      </div>
+                      <div>
+                        <p className="text-amber-800 text-xs font-black mb-0.5">Selfie di depan mesin fingerprint!</p>
+                        <p className="text-amber-600 text-[10px] font-bold leading-snug">Pastikan kamu berdiri tepat di depan mesin finger & mesin terlihat di belakangmu saat foto.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ⚠️ PERINGATAN STEP 2: foto mesin harus jelas */}
+                  {cameraStep === 2 && (
+                    <div className="w-full mb-3 bg-blue-50 border border-blue-200 rounded-2xl px-3 py-2.5 flex gap-2.5 items-start">
+                      <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center shrink-0 mt-0.5">
+                        <i className="fa-solid fa-circle-info text-white text-xs" />
+                      </div>
+                      <div>
+                        <p className="text-blue-800 text-xs font-black mb-0.5">Foto mesin harus jelas & terbaca!</p>
+                        <p className="text-blue-600 text-[10px] font-bold leading-snug">Pastikan layar mesin menampilkan <span className="text-blue-800">hari, tanggal, jam,</span> dan <span className="text-blue-800">nama karyawan</span> terlihat dengan jelas. Hindari buram atau gelap.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={`w-full aspect-[3/4] max-h-[46vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
                     {cameraStep === 2 && (
                       <div className="absolute top-4 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
                         <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-lg animate-pulse border border-blue-400">
