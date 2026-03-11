@@ -807,147 +807,183 @@ const Absen = () => {
             Step 4: Preview semua + kirim
             ══════════════════════════════════════════════════ */}
         {isModalAbsenOpen && (
-          <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10">
-              <div className="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0" />
-              <p className="text-4xl font-black text-[#3e2723] tracking-tight mb-1">{jamModal}</p>
-              <div className={`text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full mb-3 ${modeAbsen === 'MASUK' ? 'bg-[#3e2723] text-[#fbc02d]' : 'bg-[#fbc02d] text-[#3e2723]'}`}>
-                {modeAbsen} — {stepLabel}
+          <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
+            <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col shadow-2xl overflow-hidden" style={{ maxHeight: '95vh' }}>
+
+              {/* ── HEADER cokelat — sama persis dengan modal detail ── */}
+              <div className="bg-[#3e2723] px-6 pt-5 pb-4 shrink-0">
+                <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-4" />
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[#fbc02d] text-[10px] font-black uppercase tracking-widest">Absen Karyawan</p>
+                    <h2 className="text-white text-xl font-black leading-tight">{jamModal}</h2>
+                  </div>
+                  <div className={`rounded-2xl px-4 py-2 text-center shrink-0 ${modeAbsen === 'MASUK' ? 'bg-green-500/30 border border-green-400/40' : 'bg-orange-500/30 border border-orange-400/40'}`}>
+                    <p className="text-white/60 text-[9px] font-bold uppercase">Mode</p>
+                    <p className={`font-black text-base leading-tight ${modeAbsen === 'MASUK' ? 'text-green-300' : 'text-orange-300'}`}>
+                      {modeAbsen === 'MASUK' ? '🟢 MASUK' : '🔴 KELUAR'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step indicator */}
+                <div className="mt-3 flex items-center gap-2">
+                  {[
+                    { n: 1, label: 'Selfie', icon: 'fa-camera' },
+                    { n: 2, label: 'Mesin', icon: 'fa-fingerprint' },
+                    { n: 3, label: 'TTD', icon: 'fa-pen-nib' },
+                    { n: 4, label: 'Kirim', icon: 'fa-paper-plane' },
+                  ].map((s, i) => (
+                    <div key={s.n} className="flex items-center gap-2 flex-1">
+                      <div className={`flex flex-col items-center flex-1 ${cameraStep === s.n ? 'opacity-100' : cameraStep > s.n ? 'opacity-60' : 'opacity-30'}`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mb-0.5 ${cameraStep > s.n ? 'bg-green-400 text-white' : cameraStep === s.n ? 'bg-[#fbc02d] text-[#3e2723]' : 'bg-white/20 text-white'}`}>
+                          {cameraStep > s.n ? <i className="fa-solid fa-check text-[10px]" /> : <i className={`fa-solid ${s.icon} text-[10px]`} />}
+                        </div>
+                        <p className="text-[8px] text-white/70 font-bold">{s.label}</p>
+                      </div>
+                      {i < 3 && <div className={`w-4 h-0.5 rounded-full mb-3 shrink-0 ${cameraStep > s.n ? 'bg-green-400' : 'bg-white/20'}`} />}
+                    </div>
+                  ))}
+                </div>
+
+                {/* GPS chip — hanya step 1 & 2 */}
+                {(cameraStep === 1 || cameraStep === 2) && (
+                  <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold ${gpsStatus.tipe === 'error' ? 'bg-red-900/50 text-red-300' : gpsStatus.tipe === 'ok' ? 'bg-green-900/40 text-green-300' : 'bg-white/10 text-white/70'}`}>
+                    {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin shrink-0" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} shrink-0`} />}
+                    <span className="leading-tight">{gpsStatus.pesan}</span>
+                  </div>
+                )}
               </div>
 
-              {/* GPS STATUS (hanya step kamera) */}
-              {(cameraStep === 1 || cameraStep === 2) && (
-                <div className={`w-full mb-3 px-4 py-3 rounded-2xl text-xs font-black shadow-sm border flex items-center justify-center gap-2 transition-colors ${gpsStatus.tipe === 'error' ? 'bg-red-50 text-red-600 border-red-100' : gpsStatus.tipe === 'ok' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                  {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin text-sm shrink-0" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-sm shrink-0`} />}
-                  <span className="leading-tight">{gpsStatus.pesan}</span>
-                </div>
-              )}
+              {/* ── KONTEN ── */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
 
-              {/* ── STEP 1 & 2: KAMERA ── */}
-              {(cameraStep === 1 || cameraStep === 2) && (
-                <>
-                  {/* 🔴 PERINGATAN STEP 1 */}
-                  {cameraStep === 1 && (
-                    <div className="w-full mb-3 bg-red-600 rounded-2xl px-4 py-3 flex gap-3 items-center">
-                      <span className="text-3xl shrink-0">🤳</span>
-                      <div>
-                        <p className="text-white text-sm font-black leading-tight">Berdiri di depan mesin finger!</p>
-                        <p className="text-red-200 text-[11px] font-bold mt-0.5 leading-snug">Mesin fingerprint <u>harus kelihatan</u> di belakangmu saat selfie.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 🔴 PERINGATAN STEP 2 */}
-                  {cameraStep === 2 && (
-                    <div className="w-full mb-3 bg-red-600 rounded-2xl px-4 py-3 flex gap-3 items-center">
-                      <span className="text-3xl shrink-0">📋</span>
-                      <div>
-                        <p className="text-white text-sm font-black leading-tight">Layar mesin harus terbaca jelas!</p>
-                        <p className="text-red-200 text-[11px] font-bold mt-0.5 leading-snug">Hari, tanggal, jam & nama <u>wajib terlihat</u>. Jangan buram atau gelap!</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className={`w-full aspect-[3/4] max-h-[46vh] rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-[#fff8e1] flex items-center justify-center relative mb-4 transition-colors`}>
-                    {cameraStep === 2 && (
-                      <div className="absolute top-4 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
-                        <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-lg animate-pulse border border-blue-400">
-                          <i className="fa-solid fa-camera mr-1" /> Arahkan ke Mesin Fingerprint!
-                        </span>
+                {/* STEP 1 & 2: KAMERA */}
+                {(cameraStep === 1 || cameraStep === 2) && (
+                  <>
+                    {/* Peringatan merah */}
+                    {cameraStep === 1 && (
+                      <div className="bg-red-600 rounded-2xl px-4 py-3 flex gap-3 items-center">
+                        <span className="text-3xl shrink-0">🤳</span>
+                        <div>
+                          <p className="text-white text-sm font-black leading-tight">Berdiri di depan mesin finger!</p>
+                          <p className="text-red-200 text-[11px] font-bold mt-0.5 leading-snug">Mesin fingerprint <u>harus kelihatan</u> di belakangmu saat selfie.</p>
+                        </div>
                       </div>
                     )}
-                    <video ref={videoRef} className="w-full h-full object-cover z-10" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
-                  </div>
-                  <div className="w-full grid grid-cols-2 gap-3">
-                    <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
-                    <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3 px-2 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-                      <i className="fa-solid fa-camera shrink-0 text-lg" />
-                      <span className="leading-tight">{jepretState.teks}</span>
-                    </button>
-                  </div>
-                </>
-              )}
+                    {cameraStep === 2 && (
+                      <div className="bg-red-600 rounded-2xl px-4 py-3 flex gap-3 items-center">
+                        <span className="text-3xl shrink-0">📋</span>
+                        <div>
+                          <p className="text-white text-sm font-black leading-tight">Layar mesin harus terbaca jelas!</p>
+                          <p className="text-red-200 text-[11px] font-bold mt-0.5 leading-snug">Hari, tanggal, jam & nama <u>wajib terlihat</u>. Jangan buram atau gelap!</p>
+                        </div>
+                      </div>
+                    )}
 
-              {/* ── STEP 3: TTD CANVAS ── */}
-              {cameraStep === 3 && (
-                <>
-                  <div className="w-full mb-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-black text-[#3e2723] flex items-center gap-1.5">
-                        <i className="fa-solid fa-pen-nib text-purple-500" /> Tanda Tangan di sini
-                      </p>
-                      <button onClick={bersihkanTTD} className="text-[10px] font-black text-gray-400 hover:text-red-500 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-red-50">
-                        <i className="fa-solid fa-eraser" /> Hapus
-                      </button>
+                    {/* Viewfinder */}
+                    <div className={`w-full rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-gray-900 relative transition-colors`} style={{ aspectRatio: '3/4', maxHeight: '44vh' }}>
+                      {cameraStep === 2 && (
+                        <div className="absolute top-3 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
+                          <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg animate-pulse">
+                            <i className="fa-solid fa-camera mr-1" /> Arahkan ke Mesin Fingerprint!
+                          </span>
+                        </div>
+                      )}
+                      <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
                     </div>
-                    {/* Area canvas TTD */}
-                    <div
-                      className="w-full rounded-2xl overflow-hidden border-4 border-purple-400 bg-white shadow-inner relative"
-                      style={{ touchAction: 'none' }}
-                    >
-                      <canvas
-                        ref={ttdCanvasRef}
-                        className="w-full block"
-                        style={{ height: '200px', cursor: 'crosshair' }}
-                      />
-                      {/* Watermark "TTD" saat kosong */}
+                  </>
+                )}
+
+                {/* STEP 3: TTD */}
+                {cameraStep === 3 && (
+                  <>
+                    <div className="bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 flex gap-3 items-center">
+                      <span className="text-3xl shrink-0">✍️</span>
+                      <div>
+                        <p className="text-purple-800 text-sm font-black leading-tight">Tanda tangan di kotak bawah</p>
+                        <p className="text-purple-500 text-[11px] font-bold mt-0.5">Gunakan jari untuk menggambar tanda tangan kamu.</p>
+                      </div>
+                    </div>
+                    <div className="w-full rounded-2xl overflow-hidden border-4 border-purple-400 bg-white shadow-inner relative" style={{ touchAction: 'none' }}>
+                      <canvas ref={ttdCanvasRef} className="w-full block" style={{ height: '200px', cursor: 'crosshair' }} />
                       {isTtdEmpty && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <p className="text-gray-200 text-4xl font-black select-none">TTD</p>
                         </div>
                       )}
                     </div>
-                    <p className="text-[10px] text-gray-400 text-center mt-2 font-bold">
+                    <p className="text-[10px] text-gray-400 text-center font-bold">
                       {isTtdEmpty ? '✏️ Gambar tanda tangan kamu di kotak atas' : '✅ Tanda tangan siap, klik Lanjut'}
                     </p>
-                  </div>
-                  <div className="w-full grid grid-cols-2 gap-3 mt-3">
-                    <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 text-sm">Batal</button>
-                    <button
-                      onClick={simpanTTD}
-                      disabled={isTtdEmpty}
-                      className={`font-black py-3 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${!isTtdEmpty ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                    >
-                      <i className="fa-solid fa-check shrink-0" /> Lanjut
-                    </button>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
 
-              {/* ── STEP 4: PREVIEW & KONFIRMASI ── */}
-              {cameraStep === 4 && (
-                <>
-                  <div className="w-full flex flex-col gap-2 mb-4">
-                    {/* Selfie + Fingerprint berdampingan */}
-                    <div className="flex gap-2 h-36">
-                      <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm">
-                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">📸 Selfie</p>
-                        <img src={fotoBase64!} className="w-full h-full object-cover" alt="Selfie" />
+                {/* STEP 4: PREVIEW */}
+                {cameraStep === 4 && (
+                  <>
+                    <p className="text-xs font-black text-gray-500 uppercase tracking-wider">Cek kembali sebelum kirim</p>
+                    <div className="flex gap-3">
+                      <div className="flex flex-col gap-1 flex-1">
+                        <p className="text-[10px] font-black text-gray-400 uppercase pl-1">📸 Selfie</p>
+                        <div className="rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm" style={{ aspectRatio: '3/4' }}>
+                          <img src={fotoBase64!} className="w-full h-full object-cover" alt="Selfie" />
+                        </div>
                       </div>
-                      <div className="flex-1 relative rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm">
-                        <p className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-2 py-0.5 rounded-full z-10">📠 Mesin</p>
-                        <img src={fotoMesinBase64!} className="w-full h-full object-cover" alt="Mesin" />
+                      <div className="flex flex-col gap-1 flex-1">
+                        <p className="text-[10px] font-black text-gray-400 uppercase pl-1">📠 Mesin</p>
+                        <div className="rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm" style={{ aspectRatio: '3/4' }}>
+                          <img src={fotoMesinBase64!} className="w-full h-full object-cover" alt="Mesin" />
+                        </div>
                       </div>
                     </div>
-                    {/* Preview TTD */}
-                    <div className="w-full rounded-2xl overflow-hidden border-2 border-purple-200 bg-white shadow-sm px-3 pt-2 pb-3">
-                      <p className="text-[9px] font-black text-purple-500 mb-1.5 flex items-center gap-1">
+                    <div className="w-full rounded-2xl border-2 border-purple-200 bg-white px-3 pt-2 pb-3 shadow-sm">
+                      <p className="text-[10px] font-black text-purple-500 mb-1.5 flex items-center gap-1">
                         <i className="fa-solid fa-pen-nib" /> Tanda Tangan
                       </p>
                       <img src={ttdBase64!} className="w-full object-contain" style={{ maxHeight: '70px' }} alt="TTD" />
                     </div>
+                  </>
+                )}
+
+              </div>
+
+              {/* ── FOOTER TOMBOL — sama dengan modal detail ── */}
+              <div className="px-5 pb-8 pt-3 shrink-0 border-t border-gray-100 flex flex-col gap-2">
+                {(cameraStep === 1 || cameraStep === 2) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2">
+                      <i className="fa-solid fa-xmark" /> Batal
+                    </button>
+                    <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white shadow-lg shadow-green-500/30' : 'bg-blue-500 text-white shadow-lg shadow-blue-500/30') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                      <i className="fa-solid fa-camera shrink-0" />
+                      <span>{jepretState.teks}</span>
+                    </button>
                   </div>
-                  <div className="w-full grid grid-cols-2 gap-3">
-                    <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-gray-100 text-gray-500 font-black py-3 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm">
+                )}
+                {cameraStep === 3 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2">
+                      <i className="fa-solid fa-xmark" /> Batal
+                    </button>
+                    <button onClick={simpanTTD} disabled={isTtdEmpty} className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${!isTtdEmpty ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                      <i className="fa-solid fa-check shrink-0" /> Lanjut
+                    </button>
+                  </div>
+                )}
+                {cameraStep === 4 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-gray-100 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm">
                       <i className="fa-solid fa-rotate-right shrink-0" /> Ulangi
                     </button>
-                    <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-green-500 text-white font-black py-3 rounded-2xl shadow-lg shadow-green-500/30 flex items-center justify-center gap-2 active:scale-95 text-sm">
+                    <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-[#3e2723] text-[#fbc02d] font-black py-3.5 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 text-sm">
                       {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin shrink-0" /> : <i className="fa-solid fa-paper-plane shrink-0" />}
-                      {isKirimLoading ? 'Mengirim...' : 'Kirim Laporan'}
+                      {isKirimLoading ? 'Mengirim...' : 'Kirim Absen'}
                     </button>
                   </div>
-                </>
-              )}
+                )}
+              </div>
+
             </div>
           </div>
         )}
