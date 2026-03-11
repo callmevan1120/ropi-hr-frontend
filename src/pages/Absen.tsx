@@ -143,10 +143,10 @@ const Absen = () => {
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const ERPNEXT_URL = 'http://103.187.147.240';
   
-  // 🔥 TITIK KOORDINAT KANTOR & RADIUS 30 METER 🔥
-  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6149279, lng: 110.6867345, radius: 30 }];
+  // TITIK KOORDINAT KANTOR & RADIUS 30 METER
+  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 30 }];
   
-  // 🔥 DAFTAR IP PUBLIC KANTOR 🔥
+  // DAFTAR IP PUBLIC KANTOR 
   const DAFTAR_IP_KANTOR = [
     '103.144.170.15' // IP Router Wi-Fi Kantor Roti Ropi
   ];
