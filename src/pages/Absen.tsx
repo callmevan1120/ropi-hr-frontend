@@ -973,9 +973,10 @@ const Absen = () => {
                       <p className="text-[#fbc02d] text-[10px] font-black uppercase tracking-widest">{hariLabel}</p>
                       <h2 className="text-white text-lg font-black leading-tight">{tglLabel}</h2>
                     </div>
-                    <div className="bg-white/10 rounded-2xl px-3 py-2 text-center shrink-0">
-                      <p className="text-[9px] text-white/60 font-bold uppercase">Jadwal</p>
-                      <p className="text-[#fbc02d] text-sm font-black">{shiftInfo.in} – {shiftInfo.out}</p>
+                    <div className="bg-white/10 rounded-2xl px-3 py-2 text-center shrink-0 max-w-[140px]">
+                      <p className="text-[9px] text-white/60 font-bold uppercase mb-0.5">Jadwal</p>
+                      <p className="text-[#fbc02d] text-sm font-black leading-tight">{shiftInfo.in} – {shiftInfo.out}</p>
+                      <p className="text-white/70 text-[9px] font-bold leading-tight mt-0.5">{getShiftKantor(tglDate, masterShifts, user?.branch)}</p>
                     </div>
                   </div>
 
