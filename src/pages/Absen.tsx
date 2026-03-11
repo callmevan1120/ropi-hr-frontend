@@ -933,84 +933,173 @@ const Absen = () => {
         {/* ══════════════════════════════
             MODAL DETAIL RIWAYAT
             ══════════════════════════════ */}
-        {detailModal.show && (
-          <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.88)', backdropFilter: 'blur(4px)' }}>
-            <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col items-center shadow-2xl p-6 pb-10 h-[85vh]">
-              <div className="w-14 h-1.5 bg-gray-200 rounded-full mb-4 shrink-0" />
-              <h2 className="text-xl font-black text-[#3e2723] mb-1">
-                {new Date(detailModal.tgl).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </h2>
-              {(() => {
-                const shiftName = detailModal.inData?.shift || detailModal.outData?.shift || '';
-                const shiftInfo = getJamShift(shiftName, detailModal.tgl, user?.branch, masterShifts);
-                const shiftLabel = getShiftKantor(new Date(detailModal.tgl), masterShifts, user?.branch) || 'Jadwal Kantor';
-                return (
-                  <div className="bg-[#fff8e1] border border-[#fbc02d]/30 rounded-xl px-4 py-2 mb-3 text-center">
-                    <p className="text-[10px] text-gray-500 font-bold uppercase">{shiftLabel}</p>
-                    <p className="text-sm font-black text-[#3e2723]">{shiftInfo.in} – {shiftInfo.out}</p>
+        {detailModal.show && (() => {
+          const shiftName = detailModal.inData?.shift || detailModal.outData?.shift || '';
+          const shiftInfo = getJamShift(shiftName, detailModal.tgl, user?.branch, masterShifts);
+          const tglDate = new Date(detailModal.tgl);
+          const hariLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'long' });
+          const tglLabel = tglDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+          const inJam = detailModal.inData?.time ? formatJamLokal(detailModal.inData.time) : null;
+          const outJam = detailModal.outData?.time ? formatJamLokal(detailModal.outData.time) : null;
+
+          const FotoSlot = ({ src, label, badge, badgeColor }: { src?: string; label: string; badge: string; badgeColor: string }) => (
+            <div className="flex flex-col gap-1">
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1">{label}</p>
+              <div className="relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm" style={{ aspectRatio: '3/4' }}>
+                {src
+                  ? <img src={prosesUrlFoto(src)} className="w-full h-full object-cover" alt={label} />
+                  : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+                      <i className="fa-solid fa-image-slash text-2xl text-gray-300" />
+                      <p className="text-[10px] text-gray-300 font-bold">Tidak ada foto</p>
+                    </div>
+                  )
+                }
+                <div className={`absolute top-2 left-2 ${badgeColor} text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow`}>{badge}</div>
+              </div>
+            </div>
+          );
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
+              <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col shadow-2xl overflow-hidden" style={{ maxHeight: '92vh' }}>
+
+                {/* ── HEADER MODAL ── */}
+                <div className="bg-[#3e2723] px-6 pt-5 pb-4 shrink-0">
+                  <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-4" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[#fbc02d] text-[10px] font-black uppercase tracking-widest">{hariLabel}</p>
+                      <h2 className="text-white text-lg font-black leading-tight">{tglLabel}</h2>
+                    </div>
+                    <div className="bg-white/10 rounded-2xl px-3 py-2 text-center shrink-0">
+                      <p className="text-[9px] text-white/60 font-bold uppercase">Jadwal</p>
+                      <p className="text-[#fbc02d] text-sm font-black">{shiftInfo.in} – {shiftInfo.out}</p>
+                    </div>
                   </div>
-                );
-              })()}
-              <div className="w-full flex-1 overflow-y-auto pb-6 pt-2 flex flex-col gap-3">
 
-                {/* ── GRID FOTO: Masuk & Keluar berdampingan ── */}
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: 'Absen Masuk', color: 'green', colorHex: '#16a34a', data: detailModal.inData },
-                    { label: 'Absen Keluar', color: 'orange', colorHex: '#ea580c', data: detailModal.outData },
-                  ].map(({ label, color, colorHex, data }) => (
-                    <div key={label} className={`bg-${color}-50 rounded-2xl border border-${color}-100 overflow-hidden flex flex-col`}>
-                      {/* Badge + jam */}
-                      <div className="px-2 pt-2 pb-1.5">
-                        <div className={`bg-${color}-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase inline-block mb-1`}>{label}</div>
-                        <p className={`font-black text-sm text-${color}-800 leading-none`}>
-                          {data?.time ? formatJamLokal(data.time) : <span className="text-gray-400 text-xs font-bold">Belum Absen</span>}
-                        </p>
+                  {/* Ringkasan jam masuk & keluar */}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="bg-green-500/20 border border-green-400/30 rounded-2xl px-3 py-2 flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-green-400/30 flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-right-to-bracket text-green-300 text-sm" />
                       </div>
-
-                      {/* Selfie wajah */}
-                      <div className="relative bg-gray-200 border-t border-white/60" style={{ aspectRatio: '1/1' }}>
-                        <p className="absolute top-1 left-1 bg-black/50 text-white text-[8px] px-1.5 py-0.5 rounded-md z-10 font-bold">📸 Selfie</p>
-                        {data?.custom_foto_absen
-                          ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-cover" alt="Selfie" />
-                          : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold">–</p>}
-                      </div>
-
-                      {/* Mesin fingerprint */}
-                      <div className="relative bg-gray-200 border-t border-white/60" style={{ aspectRatio: '1/1' }}>
-                        <p className="absolute top-1 left-1 bg-blue-600/70 text-white text-[8px] px-1.5 py-0.5 rounded-md z-10 font-bold">📠 Mesin</p>
-                        {data?.custom_verification_image
-                          ? <img src={prosesUrlFoto(data.custom_verification_image)} className="w-full h-full object-cover" alt="Mesin" />
-                          : <p className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 font-bold">–</p>}
+                      <div>
+                        <p className="text-green-300 text-[9px] font-black uppercase">Masuk</p>
+                        <p className="text-white font-black text-base leading-none">{inJam ?? <span className="text-white/30 text-xs">–</span>}</p>
                       </div>
                     </div>
-                  ))}
+                    <div className="bg-orange-500/20 border border-orange-400/30 rounded-2xl px-3 py-2 flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-orange-400/30 flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-right-from-bracket text-orange-300 text-sm" />
+                      </div>
+                      <div>
+                        <p className="text-orange-300 text-[9px] font-black uppercase">Keluar</p>
+                        <p className="text-white font-black text-base leading-none">{outJam ?? <span className="text-white/30 text-xs">–</span>}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* ── TTD: Masuk & Keluar berdampingan, full width ── */}
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: 'TTD Masuk', data: detailModal.inData },
-                    { label: 'TTD Keluar', data: detailModal.outData },
-                  ].map(({ label, data }) => (
-                    <div key={label} className="bg-white rounded-2xl border-2 border-purple-100 px-2 pt-2 pb-2 shadow-sm">
-                      <p className="text-[9px] font-black text-purple-500 mb-1 flex items-center gap-0.5">
-                        <i className="fa-solid fa-pen-nib text-[8px]" /> {label}
-                      </p>
-                      {data?.custom_signature
-                        ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full object-contain" style={{ maxHeight: '64px' }} alt="TTD" />
-                        : <p className="text-[10px] text-gray-300 font-bold text-center py-3">–</p>}
+                {/* ── KONTEN FOTO ── */}
+                <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
+
+                  {/* Selfie: Masuk | Keluar */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-camera text-white text-[9px]" />
+                      </div>
+                      <p className="text-xs font-black text-gray-700 uppercase tracking-wider">Selfie Wajah</p>
                     </div>
-                  ))}
+                    <div className="grid grid-cols-2 gap-3">
+                      <FotoSlot
+                        src={detailModal.inData?.custom_foto_absen}
+                        label="Masuk"
+                        badge="Masuk"
+                        badgeColor="bg-green-500"
+                      />
+                      <FotoSlot
+                        src={detailModal.outData?.custom_foto_absen}
+                        label="Keluar"
+                        badge="Keluar"
+                        badgeColor="bg-orange-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mesin fingerprint: Masuk | Keluar */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-fingerprint text-white text-[9px]" />
+                      </div>
+                      <p className="text-xs font-black text-gray-700 uppercase tracking-wider">Mesin Fingerprint</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <FotoSlot
+                        src={detailModal.inData?.custom_verification_image}
+                        label="Masuk"
+                        badge="Masuk"
+                        badgeColor="bg-green-500"
+                      />
+                      <FotoSlot
+                        src={detailModal.outData?.custom_verification_image}
+                        label="Keluar"
+                        badge="Keluar"
+                        badgeColor="bg-orange-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tanda tangan: Masuk | Keluar */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-pen-nib text-white text-[9px]" />
+                      </div>
+                      <p className="text-xs font-black text-gray-700 uppercase tracking-wider">Tanda Tangan</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Masuk', data: detailModal.inData },
+                        { label: 'Keluar', data: detailModal.outData },
+                      ].map(({ label, data }) => (
+                        <div key={label} className="flex flex-col gap-1">
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1">{label}</p>
+                          <div className="rounded-2xl border-2 border-purple-100 bg-white shadow-sm overflow-hidden flex items-center justify-center" style={{ minHeight: '80px' }}>
+                            {data?.custom_signature
+                              ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full object-contain p-2" style={{ maxHeight: '90px' }} alt={`TTD ${label}`} />
+                              : (
+                                <div className="flex flex-col items-center gap-1 py-4">
+                                  <i className="fa-solid fa-pen-slash text-xl text-purple-200" />
+                                  <p className="text-[10px] text-purple-200 font-bold">Tidak ada TTD</p>
+                                </div>
+                              )
+                            }
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* ── FOOTER ── */}
+                <div className="px-5 pb-8 pt-3 shrink-0 border-t border-gray-100">
+                  <button
+                    onClick={() => setDetailModal({ show: false, tgl: '' })}
+                    className="w-full bg-[#3e2723] text-[#fbc02d] font-black py-4 rounded-2xl active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-xmark" /> Tutup
+                  </button>
                 </div>
 
               </div>
-              <button onClick={() => setDetailModal({ show: false, tgl: '' })} className="w-full mt-2 bg-gray-100 text-gray-500 font-black py-4 rounded-2xl active:scale-95">
-                Tutup Detail
-              </button>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
       </div>
     </div>
