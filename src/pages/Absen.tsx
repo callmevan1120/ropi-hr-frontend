@@ -826,28 +826,24 @@ const Absen = () => {
               {/* ── STEP 1 & 2: KAMERA ── */}
               {(cameraStep === 1 || cameraStep === 2) && (
                 <>
-                  {/* ⚠️ PERINGATAN STEP 1: selfie di dekat mesin */}
+                  {/* 🔴 PERINGATAN STEP 1 */}
                   {cameraStep === 1 && (
-                    <div className="w-full mb-3 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2.5 flex gap-2.5 items-start">
-                      <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-                        <i className="fa-solid fa-triangle-exclamation text-white text-xs" />
-                      </div>
+                    <div className="w-full mb-3 bg-red-600 rounded-2xl px-4 py-3 flex gap-3 items-center">
+                      <span className="text-3xl shrink-0">🤳</span>
                       <div>
-                        <p className="text-amber-800 text-xs font-black mb-0.5">Selfie di depan mesin fingerprint!</p>
-                        <p className="text-amber-600 text-[10px] font-bold leading-snug">Pastikan kamu berdiri tepat di depan mesin finger & mesin terlihat di belakangmu saat foto.</p>
+                        <p className="text-white text-sm font-black leading-tight">Berdiri di depan mesin finger!</p>
+                        <p className="text-red-200 text-[11px] font-bold mt-0.5 leading-snug">Mesin fingerprint <u>harus kelihatan</u> di belakangmu saat selfie.</p>
                       </div>
                     </div>
                   )}
 
-                  {/* ⚠️ PERINGATAN STEP 2: foto mesin harus jelas */}
+                  {/* 🔴 PERINGATAN STEP 2 */}
                   {cameraStep === 2 && (
-                    <div className="w-full mb-3 bg-blue-50 border border-blue-200 rounded-2xl px-3 py-2.5 flex gap-2.5 items-start">
-                      <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center shrink-0 mt-0.5">
-                        <i className="fa-solid fa-circle-info text-white text-xs" />
-                      </div>
+                    <div className="w-full mb-3 bg-red-600 rounded-2xl px-4 py-3 flex gap-3 items-center">
+                      <span className="text-3xl shrink-0">📋</span>
                       <div>
-                        <p className="text-blue-800 text-xs font-black mb-0.5">Foto mesin harus jelas & terbaca!</p>
-                        <p className="text-blue-600 text-[10px] font-bold leading-snug">Pastikan layar mesin menampilkan <span className="text-blue-800">hari, tanggal, jam,</span> dan <span className="text-blue-800">nama karyawan</span> terlihat dengan jelas. Hindari buram atau gelap.</p>
+                        <p className="text-white text-sm font-black leading-tight">Layar mesin harus terbaca jelas!</p>
+                        <p className="text-red-200 text-[11px] font-bold mt-0.5 leading-snug">Hari, tanggal, jam & nama <u>wajib terlihat</u>. Jangan buram atau gelap!</p>
                       </div>
                     </div>
                   )}
