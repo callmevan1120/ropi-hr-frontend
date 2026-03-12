@@ -102,6 +102,7 @@ const DashboardHR = () => {
 
   const [dataAbsen, setDataAbsen] = useState<EmployeeSummary[]>([]);
   const [leaveMap, setLeaveMap] = useState<Record<string, number>>({});
+  const [leaveRawMap, setLeaveRawMap] = useState<Record<string, any[]>>({});
   const [masterShifts, setMasterShifts] = useState<Record<string, { in: string; out: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -212,6 +213,7 @@ const DashboardHR = () => {
             )
           );
           const newLeaveMap: Record<string, number> = {};
+          const newLeaveRawMap: Record<string, any[]> = {};
           leaveResults.forEach(result => {
             if (result.status === 'fulfilled') {
               const { employee, data } = result.value;
@@ -230,9 +232,11 @@ const DashboardHR = () => {
                 }
               });
               newLeaveMap[employee] = totalIzin;
+              newLeaveRawMap[employee] = data as any[];
             }
           });
           setLeaveMap(newLeaveMap);
+          setLeaveRawMap(newLeaveRawMap);
         } else {
           setLeaveMap({});
         }
@@ -254,7 +258,36 @@ const DashboardHR = () => {
     if (dataAbsen.length === 0) { alert('Tidak ada data untuk di-download!'); return; }
     const dataExcel: any[] = [];
     dataAbsen.forEach((emp) => {
-      Object.entries(emp.logsByDate).forEach(([date, log]) => {
+      // Expand izin per hari untuk Excel
+      const empIzinDates: Record<string, string> = {};
+      if (filterMode === 'bulanan') {
+        const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+        const [year, month] = bulanAktif.split('-').map(Number);
+        const bulanMulai = new Date(year, month - 1, 1);
+        const bulanAkhir = new Date(year, month, 0);
+        rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').forEach((r: any) => {
+          const from = new Date(r.from_date);
+          const to = new Date(r.to_date);
+          const start = from < bulanMulai ? bulanMulai : from;
+          const end = to > bulanAkhir ? bulanAkhir : to;
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            if (d.getDay() !== 0 && d.getDay() !== 6) {
+              const key = d.toISOString().substring(0, 10);
+              empIzinDates[key] = r.leave_type;
+            }
+          }
+        });
+      }
+
+      // Semua tanggal: absen + izin
+      const allDates = Array.from(new Set([
+        ...Object.keys(emp.logsByDate),
+        ...Object.keys(empIzinDates),
+      ])).sort();
+
+      allDates.forEach(date => {
+        const log = emp.logsByDate[date] ?? { in: null, out: null };
+        const izinType = empIzinDates[date];
         const inJam = log.in ? formatJamLokal(log.in.time) : '-';
         const outJam = log.out ? formatJamLokal(log.out.time) : '-';
         const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
@@ -263,6 +296,26 @@ const DashboardHR = () => {
         if (log.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) telat = formatDurasi(s); }
         let pulangCepat = '-';
         if (log.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) pulangCepat = formatDurasi(s); }
+
+        // Baris izin tanpa absen
+        if (izinType && !log.in && !log.out) {
+          dataExcel.push({
+            'Tanggal': date,
+            'ID Karyawan': emp.employee,
+            'Nama Karyawan': emp.employee_name,
+            'Shift': '-',
+            'Jam Shift': '-',
+            'Jam Masuk': '-',
+            'Jam Keluar': '-',
+            'Keterlambatan': '-',
+            'Pulang Cepat': '-',
+            'Status': `Izin – ${izinType}`,
+            'Lokasi Masuk': '-',
+            'Lokasi Keluar': '-',
+          });
+          return;
+        }
+
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -273,6 +326,7 @@ const DashboardHR = () => {
           'Jam Keluar': outJam,
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
+          'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
           'Lokasi Masuk': log.in?.latitude ? `https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}` : '-',
           'Lokasi Keluar': log.out?.latitude ? `https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
@@ -616,50 +670,105 @@ const DashboardHR = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-100 text-[#3e2723] font-black border-b border-gray-200">
-                        <tr>
-                          <th className="py-4 px-4">Tanggal</th>
-                          <th className="py-4 px-4">Shift</th>
-                          <th className="py-4 px-4">Masuk</th>
-                          <th className="py-4 px-4">Keluar</th>
-                          <th className="py-4 px-4">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {sortedDates.length === 0 ? (
-                          <tr><td colSpan={5} className="py-8 text-center text-gray-400 font-bold">Tidak ada absen di bulan ini</td></tr>
-                        ) : sortedDates.map(date => {
-                          const log = emp.logsByDate[date];
-                          const inJam = log.in ? formatJamLokal(log.in.time) : '-';
-                          const outJam = log.out ? formatJamLokal(log.out.time) : '-';
-                          const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
-                          const shiftLabel = getShiftLabel(date);
-                          const isTelat = log.in && toMenit(inJam) > toMenit(shiftInfo.in);
-                          return (
-                            <tr key={date} className="hover:bg-gray-50 transition-colors">
-                              <td className="py-3 px-4 font-bold text-gray-700 text-xs">{date}</td>
-                              <td className="py-3 px-4 text-xs">
-                                <p className="font-black text-[#3e2723] leading-tight">{shiftLabel}</p>
-                                <p className="text-gray-400 font-bold text-[10px]">{shiftInfo.in} – {shiftInfo.out}</p>
-                              </td>
-                              <td className="py-3 px-4 font-black text-green-600">{inJam}</td>
-                              <td className="py-3 px-4 font-black text-orange-500">{outJam}</td>
-                              <td className="py-3 px-4">
-                                {isTelat
-                                  ? <span className="bg-red-50 text-red-600 border border-red-100 text-[10px] font-black px-2.5 py-1 rounded-md">Telat</span>
-                                  : log.in
-                                    ? <span className="bg-green-50 text-green-700 border border-green-100 text-[10px] font-black px-2.5 py-1 rounded-md">Tepat</span>
-                                    : <span className="text-gray-400 text-xs">-</span>
-                                }
-                              </td>
+                  {(() => {
+                    // Expand leave records ke baris per hari
+                    const empLeaveData = leaveMap[emp.employee] !== undefined
+                      ? (() => {
+                          // Ambil leave raw dari state baru leaveRawMap
+                          const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+                          const [year, month] = bulanAktif.split('-').map(Number);
+                          const bulanMulai = new Date(year, month - 1, 1);
+                          const bulanAkhir = new Date(year, month, 0);
+                          const izinDates: Record<string, string> = {};
+                          rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').forEach((r: any) => {
+                            const from = new Date(r.from_date);
+                            const to = new Date(r.to_date);
+                            const start = from < bulanMulai ? bulanMulai : from;
+                            const end = to > bulanAkhir ? bulanAkhir : to;
+                            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                              if (d.getDay() !== 0 && d.getDay() !== 6) {
+                                const key = d.toISOString().substring(0, 10);
+                                izinDates[key] = r.leave_type;
+                              }
+                            }
+                          });
+                          return izinDates;
+                        })()
+                      : {};
+
+                    // Gabung semua tanggal: absen + izin
+                    const allDates = Array.from(new Set([
+                      ...sortedDates,
+                      ...Object.keys(empLeaveData),
+                    ])).sort();
+
+                    return (
+                      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-gray-100 text-[#3e2723] font-black border-b border-gray-200">
+                            <tr>
+                              <th className="py-4 px-4">Tanggal</th>
+                              <th className="py-4 px-4">Shift</th>
+                              <th className="py-4 px-4">Masuk</th>
+                              <th className="py-4 px-4">Keluar</th>
+                              <th className="py-4 px-4">Status</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {allDates.length === 0 ? (
+                              <tr><td colSpan={5} className="py-8 text-center text-gray-400 font-bold">Tidak ada absen di bulan ini</td></tr>
+                            ) : allDates.map(date => {
+                              const log = emp.logsByDate[date] ?? { in: null, out: null };
+                              const izinType = empLeaveData[date];
+                              const inJam = log.in ? formatJamLokal(log.in.time) : '-';
+                              const outJam = log.out ? formatJamLokal(log.out.time) : '-';
+                              const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
+                              const shiftLabel = getShiftLabel(date);
+                              const isTelat = log.in && toMenit(inJam) > toMenit(shiftInfo.in);
+
+                              // Baris izin (tanpa absen)
+                              if (izinType && !log.in && !log.out) {
+                                return (
+                                  <tr key={date} className="bg-blue-50/60 hover:bg-blue-50 transition-colors">
+                                    <td className="py-3 px-4 font-bold text-gray-700 text-xs">{date}</td>
+                                    <td className="py-3 px-4 text-xs text-blue-400 font-bold" colSpan={3}>
+                                      <i className="fa-solid fa-envelope-open-text mr-1.5" />{izinType}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <span className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-black px-2.5 py-1 rounded-md">Izin</span>
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
+                              return (
+                                <tr key={date} className="hover:bg-gray-50 transition-colors">
+                                  <td className="py-3 px-4 font-bold text-gray-700 text-xs">{date}</td>
+                                  <td className="py-3 px-4 text-xs">
+                                    <p className="font-black text-[#3e2723] leading-tight">{shiftLabel}</p>
+                                    <p className="text-gray-400 font-bold text-[10px]">{shiftInfo.in} – {shiftInfo.out}</p>
+                                  </td>
+                                  <td className="py-3 px-4 font-black text-green-600">{inJam}</td>
+                                  <td className="py-3 px-4 font-black text-orange-500">{outJam}</td>
+                                  <td className="py-3 px-4">
+                                    {isTelat
+                                      ? <span className="bg-red-50 text-red-600 border border-red-100 text-[10px] font-black px-2.5 py-1 rounded-md">Telat</span>
+                                      : log.in
+                                        ? <span className="bg-green-50 text-green-700 border border-green-100 text-[10px] font-black px-2.5 py-1 rounded-md">Tepat</span>
+                                        : <span className="text-gray-400 text-xs">-</span>
+                                    }
+                                    {izinType && (
+                                      <span className="ml-1 bg-blue-50 text-blue-600 border border-blue-100 text-[10px] font-bold px-2 py-0.5 rounded-md">+Izin</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
