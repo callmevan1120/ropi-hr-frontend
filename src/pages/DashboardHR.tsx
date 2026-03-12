@@ -665,13 +665,44 @@ const DashboardHR = () => {
             </div>
           );
 
-          return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
-              <div className="bg-gray-50 w-full max-w-4xl max-h-[95vh] rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn border border-white/20">
+          // Cari izin hari ini sekali saja
+          const izinHariIniData = (() => {
+            if (leaveMap[emp.employee] !== 1) return null;
+            const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+            return rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
+              const from = new Date(r.from_date);
+              const to = new Date(r.to_date);
+              const tgl = new Date(tanggalAktif);
+              return tgl >= from && tgl <= to;
+            }) ?? null;
+          })();
 
-                {/* Kolom Kiri */}
-                <div className="bg-white md:w-1/3 flex flex-col shrink-0 shadow-[5px_0_15px_rgba(0,0,0,0.03)] z-10">
-                  <div className="p-6 md:p-8 border-b border-gray-100 relative">
+          return (
+            <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
+              <div className="bg-white w-full max-w-4xl md:max-h-[95vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn" style={{ maxHeight: '92vh' }}>
+
+                {/* ── HEADER mobile: nama + tombol tutup (sticky) ── */}
+                <div className="bg-[#3e2723] px-5 py-4 flex items-center gap-3 shrink-0 md:hidden">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 border-2 border-white/30">
+                    {todayLog.in?.custom_foto_absen
+                      ? <img src={prosesUrlFoto(todayLog.in.custom_foto_absen)} className="w-full h-full object-cover" />
+                      : <i className="fa-solid fa-user text-[#fbc02d] text-lg flex items-center justify-center w-full h-full pt-2" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-white text-base leading-tight truncate">{emp.employee_name}</p>
+                    <p className="text-[10px] text-white/50 font-bold">{emp.employee}</p>
+                  </div>
+                  <button onClick={() => setDetailModal(null)} className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center shrink-0">
+                    <i className="fa-solid fa-xmark" />
+                  </button>
+                </div>
+
+                {/* ── KOLOM KIRI (desktop) / INFO SECTION (mobile) ── */}
+                <div className="bg-white md:w-1/3 flex flex-col shrink-0 md:shadow-[5px_0_15px_rgba(0,0,0,0.03)]">
+
+                  {/* Avatar + nama — hanya desktop */}
+                  <div className="hidden md:block p-8 border-b border-gray-100 relative">
                     <button onClick={() => setDetailModal(null)} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
                       <i className="fa-solid fa-xmark text-lg" />
                     </button>
@@ -685,57 +716,54 @@ const DashboardHR = () => {
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee}</p>
                   </div>
 
-                  <div className="p-6 md:p-8 flex-1 overflow-y-auto">
-                    {/* Shift — nama + jam */}
-                    <div className="bg-[#fff8e1] p-4 rounded-2xl border border-[#fbc02d]/30 mb-5">
-                      <p className="text-[10px] text-[#3e2723]/50 font-bold uppercase mb-1 flex items-center gap-1">
-                        <i className="fa-solid fa-calendar-check text-[#fbc02d]" /> Jadwal Shift
-                      </p>
-                      <p className="font-black text-[#3e2723] text-sm leading-snug mb-1">{shiftLabel}</p>
-                      <p className="font-black text-[#3e2723] text-lg">{shiftInfo.in} <span className="text-[#fbc02d] mx-1">→</span> {shiftInfo.out}</p>
+                  {/* Info: shift, masuk/keluar, izin, peta */}
+                  <div className="p-4 md:p-8 md:flex-1 md:overflow-y-auto">
+                    {/* Shift compact */}
+                    <div className="bg-[#fff8e1] px-4 py-3 rounded-2xl border border-[#fbc02d]/30 mb-3 flex items-center gap-3">
+                      <i className="fa-solid fa-calendar-check text-[#fbc02d] shrink-0" />
+                      <div>
+                        <p className="text-[10px] text-[#3e2723]/50 font-bold uppercase leading-none mb-0.5">Jadwal Shift</p>
+                        <p className="font-black text-[#3e2723] text-xs leading-snug">{shiftLabel}</p>
+                        <p className="font-bold text-[#3e2723] text-sm">{shiftInfo.in} → {shiftInfo.out}</p>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 mb-5">
-                      <div className="bg-white p-4 rounded-2xl border border-green-100 shadow-sm">
+                    {/* Masuk / Keluar */}
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div className="bg-green-50 p-3 rounded-2xl border border-green-100">
                         <p className="text-[10px] text-green-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-to-bracket" /> Masuk</p>
-                        <p className="font-black text-[#3e2723] text-2xl">{inJam}</p>
+                        <p className="font-black text-[#3e2723] text-xl">{inJam}</p>
                         {durasiTelat > 0 && <span className="inline-block mt-1 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md">TELAT {formatDurasi(durasiTelat)}</span>}
                       </div>
-                      <div className="bg-white p-4 rounded-2xl border border-orange-100 shadow-sm">
+                      <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100">
                         <p className="text-[10px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-from-bracket" /> Keluar</p>
-                        <p className="font-black text-[#3e2723] text-2xl">{outJam}</p>
+                        <p className="font-black text-[#3e2723] text-xl">{outJam}</p>
                         {durasiCepat > 0 && <span className="inline-block mt-1 bg-yellow-400 text-white text-[9px] font-black px-2 py-0.5 rounded-md">CEPAT {formatDurasi(durasiCepat)}</span>}
                       </div>
                     </div>
 
-                    {leaveMap[emp.employee] === 1 && (() => {
-                      const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
-                      const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
-                        const from = new Date(r.from_date);
-                        const to = new Date(r.to_date);
-                        const tgl = new Date(tanggalAktif);
-                        return tgl >= from && tgl <= to;
-                      });
-                      return izinHariIni ? (
-                        <div className="mb-5 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 flex items-start gap-3">
-                          <i className="fa-solid fa-envelope-open-text text-blue-400 mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-[10px] text-blue-500 font-bold uppercase mb-0.5">Izin Hari Ini</p>
-                            <p className="text-sm font-black text-blue-800">{izinHariIni.leave_type}</p>
-                            {izinHariIni.description && <p className="text-[10px] text-blue-600 mt-0.5">{izinHariIni.description}</p>}
-                          </div>
+                    {/* Izin */}
+                    {izinHariIniData && (
+                      <div className="mb-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+                        <i className="fa-solid fa-envelope-open-text text-blue-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-blue-500 font-bold uppercase mb-0.5">Izin Hari Ini</p>
+                          <p className="text-sm font-black text-blue-800">{izinHariIniData.leave_type}</p>
+                          {izinHariIniData.description && <p className="text-[10px] text-blue-600 mt-0.5">{izinHariIniData.description}</p>}
                         </div>
-                      ) : null;
-                    })()}
+                      </div>
+                    )}
+
+                    {/* Peta */}
                     <div className="flex flex-col gap-2">
                       {todayLog.in?.latitude && (
-                        <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
+                        <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                           <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                           <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                         </a>
                       )}
                       {todayLog.out?.latitude && (
-                        <a href={`https://maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
+                        <a href={`https://maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                           <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                           <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                         </a>
@@ -744,20 +772,22 @@ const DashboardHR = () => {
                   </div>
                 </div>
 
-                {/* Kolom Kanan Foto */}
-                <div className="md:w-2/3 p-6 md:p-8 overflow-y-auto max-h-[60vh] md:max-h-none flex-1 bg-gray-50/50">
-                  <h3 className="font-black text-[#3e2723] text-lg mb-4 flex items-center gap-2"><i className="fa-solid fa-images text-[#fbc02d]" /> Galeri Autentikasi</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* ── KOLOM KANAN: Galeri foto (scrollable) ── */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/50">
+                  <h3 className="font-black text-[#3e2723] text-base mb-3 flex items-center gap-2">
+                    <i className="fa-solid fa-images text-[#fbc02d]" /> Galeri Autentikasi
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                     {[
                       { label: 'Data Masuk', log: todayLog.in, iconColor: 'bg-green-100 text-green-600', icon: 'fa-arrow-right-to-bracket' },
                       { label: 'Data Keluar', log: todayLog.out, iconColor: 'bg-orange-100 text-orange-600', icon: 'fa-arrow-right-from-bracket' },
                     ].map(({ label, log, iconColor, icon }) => (
-                      <div key={label} className="flex flex-col gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-3">
-                          <div className={`w-7 h-7 rounded-full ${iconColor} flex items-center justify-center`}>
-                            <i className={`fa-solid ${icon} text-xs`} />
+                      <div key={label} className="flex flex-col gap-3 bg-white p-3 md:p-5 rounded-2xl shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                          <div className={`w-6 h-6 rounded-full ${iconColor} flex items-center justify-center shrink-0`}>
+                            <i className={`fa-solid ${icon} text-[10px]`} />
                           </div>
-                          <p className="font-black text-[#3e2723] text-sm uppercase">{label}</p>
+                          <p className="font-black text-[#3e2723] text-xs uppercase">{label}</p>
                         </div>
                         <FotoBesar src={log?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
                         <FotoBesar src={log?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
