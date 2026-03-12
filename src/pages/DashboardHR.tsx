@@ -274,8 +274,8 @@ const DashboardHR = () => {
       <div className="bg-[#3e2723] pt-8 pb-8 px-6 md:px-12 shadow-lg sticky top-0 z-20 w-full rounded-b-[2.5rem]">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <button onClick={handleLogout} className="flex items-center gap-2 bg-white/10 hover:bg-red-500/20 border border-white/20 hover:border-red-400/40 text-white/70 hover:text-red-300 px-4 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-95 transition-all">
-              <i className="fa-solid fa-arrow-right-from-bracket" /> Logout
+            <button onClick={handleLogout} title="Logout" className="w-10 h-10 bg-white/10 hover:bg-red-500/30 border border-white/20 hover:border-red-400/50 text-white/60 hover:text-red-300 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0">
+              <i className="fa-solid fa-arrow-right-from-bracket text-base" />
             </button>
             <div>
               <h1 className="text-2xl font-black text-[#fbc02d]">HR Command Center</h1>
