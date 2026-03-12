@@ -238,31 +238,77 @@ const DashboardHR = () => {
           setLeaveMap(newLeaveMap);
           setLeaveRawMap(newLeaveRawMap);
         } else {
-          // Harian: fetch juga, filter tanggal aktif saja
+          // Harian: fetch leave dari seluruh bulan aktif agar dapat semua karyawan
+          // (termasuk yang hanya izin tapi tidak absen hari ini)
+          const bulanRef = tanggalAktif.substring(0, 7); // "YYYY-MM"
+          const [yr, mo] = bulanRef.split('-').map(Number);
+          const lastDay = new Date(yr, mo, 0).getDate();
+          const fromBulan = `${bulanRef}-01`;
+          const toBulan = `${bulanRef}-${lastDay}`;
+
+          // Fetch all-history sebulan untuk dapat semua employee_id
+          let allEmployeeIds: { employee: string; employee_name: string }[] = [...arrData];
+          try {
+            const resBulan = await fetch(`${BACKEND}/api/attendance/all-history?from=${fromBulan}&to=${toBulan}`);
+            const dataBulan = await resBulan.json();
+            if (dataBulan.success && dataBulan.data) {
+              const empMap: Record<string, string> = {};
+              dataBulan.data.forEach((item: any) => {
+                if (!empMap[item.employee]) empMap[item.employee] = item.employee_name || item.employee;
+              });
+              // Merge — pastikan semua karyawan ada
+              Object.entries(empMap).forEach(([id, name]) => {
+                if (!allEmployeeIds.find(e => e.employee === id)) {
+                  allEmployeeIds.push({ employee: id, employee_name: name });
+                }
+              });
+            }
+          } catch { /* pakai arrData saja */ }
+
+          // Fetch leave semua karyawan
           const leaveResults = await Promise.allSettled(
-            arrData.map(emp =>
+            allEmployeeIds.map(emp =>
               fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}`)
                 .then(r => r.json())
-                .then(d => ({ employee: emp.employee, data: d.success ? d.data : [] }))
-                .catch(() => ({ employee: emp.employee, data: [] }))
+                .then(d => ({ employee: emp.employee, employee_name: emp.employee_name, data: d.success ? d.data : [] }))
+                .catch(() => ({ employee: emp.employee, employee_name: emp.employee_name, data: [] }))
             )
           );
+
           const newLeaveMap: Record<string, number> = {};
           const newLeaveRawMap: Record<string, any[]> = {};
+          const extraEmployees: EmployeeSummary[] = [];
+
           leaveResults.forEach(result => {
             if (result.status === 'fulfilled') {
-              const { employee, data } = result.value;
-              // Cek apakah tanggalAktif masuk dalam izin
-              const isIzin = (data as any[]).filter(r => r.status?.toLowerCase() !== 'rejected').some((r: any) => {
+              const { employee, employee_name, data } = result.value;
+              const izinHariIni = (data as any[]).filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
                 const from = new Date(r.from_date);
                 const to = new Date(r.to_date);
                 const tgl = new Date(tanggalAktif);
                 return tgl >= from && tgl <= to;
               });
-              newLeaveMap[employee] = isIzin ? 1 : 0;
+              newLeaveMap[employee] = izinHariIni ? 1 : 0;
               newLeaveRawMap[employee] = data as any[];
+
+              // Kalau karyawan ini izin tapi tidak ada di arrData (tidak absen hari ini)
+              if (izinHariIni && !arrData.find(e => e.employee === employee)) {
+                extraEmployees.push({
+                  employee,
+                  employee_name,
+                  totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 1,
+                  logsByDate: {},
+                });
+              }
             }
           });
+
+          // Merge karyawan izin-only ke arrData
+          if (extraEmployees.length > 0) {
+            const merged = [...arrData, ...extraEmployees].sort((a, b) => a.employee_name.localeCompare(b.employee_name));
+            setDataAbsen(merged);
+          }
+
           setLeaveMap(newLeaveMap);
           setLeaveRawMap(newLeaveRawMap);
         }
