@@ -47,8 +47,10 @@ const Login = () => {
         
         const roleKaryawan = responsData.data.role || responsData.data.designation || 'Staff';
         
+        // PASTIKAN EMAIL TERSIMPAN
         const userData = {
           name: responsData.data.name || responsData.data.employee_name || responsData.data.full_name || 'Karyawan',
+          email: responsData.data.email || email, 
           role: roleKaryawan, 
           employee_id: responsData.data.employee_id,
           branch: responsData.data.branch || 'PH Klaten',

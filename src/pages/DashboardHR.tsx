@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 
 interface RiwayatAbsen {
@@ -16,14 +16,21 @@ interface RiwayatAbsen {
   longitude?: string;
 }
 
-interface GroupedAbsen {
-  employee: string;
-  employee_name: string;
+interface DayLog {
   in: RiwayatAbsen | null;
   out: RiwayatAbsen | null;
 }
 
-// ── HELPER SHIFT & WAKTU (Sama seperti di Absen.tsx) ──
+interface EmployeeSummary {
+  employee: string;
+  employee_name: string;
+  totalHadir: number;
+  totalTelat: number;
+  totalCepat: number;
+  logsByDate: Record<string, DayLog>; // YYYY-MM-DD
+}
+
+// ── HELPER SHIFT & WAKTU ──
 const formatJamLokal = (timeString?: string) => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
@@ -55,6 +62,7 @@ const isRamadhan = (): boolean => {
   return false;
 };
 
+// Fungsi getJamShift dikembalikan lengkap dengan parameter tanggal
 const getJamShift = (
   shiftNameFromRecord: string | undefined,
   tanggal: string,
@@ -74,18 +82,21 @@ const DashboardHR = () => {
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const ERPNEXT_URL = 'http://103.187.147.240';
 
-  const [dataAbsen, setDataAbsen] = useState<GroupedAbsen[]>([]);
+  const [dataAbsen, setDataAbsen] = useState<EmployeeSummary[]>([]);
   const [masterShifts, setMasterShifts] = useState<Record<string, { in: string; out: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
   
+  // State Filter (Harian / Bulanan)
+  const [filterMode, setFilterMode] = useState<'harian' | 'bulanan'>('harian');
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
   const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
-  const [tanggalAktif, setTanggalAktif] = useState(localISOTime);
   
-  const [detailModal, setDetailModal] = useState<GroupedAbsen | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [tanggalAktif, setTanggalAktif] = useState(localISOTime);
+  const [bulanAktif, setBulanAktif] = useState(localISOTime.substring(0, 7)); // YYYY-MM
+  
+  const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
 
-  // PROTEKSI AKSES HR
+  // Cek Akses HRD
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) {
@@ -93,12 +104,10 @@ const DashboardHR = () => {
       return;
     }
     const parsedUser = JSON.parse(userData);
-    setUser(parsedUser);
-    
     const allowedRoles = ['HR', 'HR Manager', 'System Manager'];
     if (!allowedRoles.includes(parsedUser.role)) {
       alert('Akses Ditolak! Anda tidak memiliki hak akses HRD.');
-      navigate('/home');
+      navigate('/home', { replace: true });
     } else {
       ambilMasterShift();
     }
@@ -106,7 +115,7 @@ const DashboardHR = () => {
 
   useEffect(() => {
     tarikDataSemuaKaryawan();
-  }, [tanggalAktif]);
+  }, [tanggalAktif, bulanAktif, filterMode, masterShifts]);
 
   const ambilMasterShift = async () => {
     try {
@@ -126,30 +135,68 @@ const DashboardHR = () => {
   };
 
   const tarikDataSemuaKaryawan = async () => {
+    if (Object.keys(masterShifts).length === 0) return; 
     setIsLoading(true);
+
+    let from = tanggalAktif;
+    let to = tanggalAktif;
+
+    // Jika filter bulanan aktif, tarik data dari tanggal 1 sampai akhir bulan
+    if (filterMode === 'bulanan') {
+      from = `${bulanAktif}-01`;
+      const year = parseInt(bulanAktif.split('-')[0]);
+      const month = parseInt(bulanAktif.split('-')[1]);
+      const lastDay = new Date(year, month, 0).getDate();
+      to = `${bulanAktif}-${lastDay}`;
+    }
+
     try {
-      const res = await fetch(`${BACKEND}/api/attendance/all-today?date=${tanggalAktif}`);
+      const res = await fetch(`${BACKEND}/api/attendance/all-history?from=${from}&to=${to}`);
       const result = await res.json();
       if (result.success && result.data) {
-        const grouped: Record<string, GroupedAbsen> = {};
+        
+        const grouped: Record<string, EmployeeSummary> = {};
+        
         result.data.forEach((item: RiwayatAbsen) => {
           if (!grouped[item.employee]) {
             grouped[item.employee] = {
               employee: item.employee,
               employee_name: item.employee_name || item.employee,
-              in: null,
-              out: null
+              totalHadir: 0,
+              totalTelat: 0,
+              totalCepat: 0,
+              logsByDate: {}
             };
           }
+          
+          const dateKey = item.time.substring(0, 10);
+          if (!grouped[item.employee].logsByDate[dateKey]) {
+            grouped[item.employee].logsByDate[dateKey] = { in: null, out: null };
+          }
+
           if (item.log_type === 'IN') {
-            if (!grouped[item.employee].in || item.time < grouped[item.employee].in!.time) {
-              grouped[item.employee].in = item;
+            if (!grouped[item.employee].logsByDate[dateKey].in || item.time < grouped[item.employee].logsByDate[dateKey].in!.time) {
+              grouped[item.employee].logsByDate[dateKey].in = item;
             }
           } else {
-            if (!grouped[item.employee].out || item.time > grouped[item.employee].out!.time) {
-              grouped[item.employee].out = item;
+            if (!grouped[item.employee].logsByDate[dateKey].out || item.time > grouped[item.employee].logsByDate[dateKey].out!.time) {
+              grouped[item.employee].logsByDate[dateKey].out = item;
             }
           }
+        });
+
+        // Kalkulasi Statistik per Karyawan menggunakan Object.entries
+        Object.values(grouped).forEach(emp => {
+          let hadir = 0, telat = 0, cepat = 0;
+          Object.entries(emp.logsByDate).forEach(([date, log]) => {
+            if (log.in) hadir++;
+            const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
+            if (log.in && toMenit(formatJamLokal(log.in.time)) > toMenit(shiftInfo.in)) telat++;
+            if (log.out && toMenit(shiftInfo.out) > toMenit(formatJamLokal(log.out.time))) cepat++;
+          });
+          emp.totalHadir = hadir;
+          emp.totalTelat = telat;
+          emp.totalCepat = cepat;
         });
         
         const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
@@ -170,165 +217,229 @@ const DashboardHR = () => {
     return url;
   };
 
+  // EXPORT EXCEL
   const downloadExcel = () => {
     if (dataAbsen.length === 0) {
       alert('Tidak ada data untuk di-download!');
       return;
     }
 
-    const dataExcel = dataAbsen.map((item) => {
-      const inJam = item.in ? formatJamLokal(item.in.time) : '-';
-      const outJam = item.out ? formatJamLokal(item.out.time) : '-';
-      const shiftInfo = getJamShift(item.in?.shift || item.out?.shift, tanggalAktif, masterShifts);
-      
-      let telat = '-';
-      if (item.in) {
-        const selisihTelat = toMenit(inJam) - toMenit(shiftInfo.in);
-        if (selisihTelat > 0) telat = `${selisihTelat} Menit`;
-      }
+    const dataExcel: any[] = [];
 
-      let pulangCepat = '-';
-      if (item.out) {
-        const selisihCepat = toMenit(shiftInfo.out) - toMenit(outJam);
-        if (selisihCepat > 0) pulangCepat = `${selisihCepat} Menit`;
-      }
+    dataAbsen.forEach((emp) => {
+      Object.entries(emp.logsByDate).forEach(([date, log]) => {
+        const inJam = log.in ? formatJamLokal(log.in.time) : '-';
+        const outJam = log.out ? formatJamLokal(log.out.time) : '-';
+        const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
+        
+        let telat = '-';
+        if (log.in) {
+          const selisihTelat = toMenit(inJam) - toMenit(shiftInfo.in);
+          if (selisihTelat > 0) telat = formatDurasi(selisihTelat); // Menit dihitung jam jika > 59m
+        }
 
-      return {
-        'ID Karyawan': item.employee,
-        'Nama Karyawan': item.employee_name,
-        'Jam Shift': `${shiftInfo.in} - ${shiftInfo.out}`,
-        'Jam Masuk': inJam,
-        'Jam Keluar': outJam,
-        'Keterlambatan': telat,
-        'Pulang Cepat': pulangCepat,
-        'Lokasi Masuk': item.in?.latitude ? `https://maps.google.com/?q=${item.in.latitude},${item.in.longitude}` : '-',
-        'Lokasi Keluar': item.out?.latitude ? `https://maps.google.com/?q=${item.out.latitude},${item.out.longitude}` : '-',
-      };
+        let pulangCepat = '-';
+        if (log.out) {
+          const selisihCepat = toMenit(shiftInfo.out) - toMenit(outJam);
+          if (selisihCepat > 0) pulangCepat = formatDurasi(selisihCepat); 
+        }
+
+        dataExcel.push({
+          'Tanggal': date,
+          'ID Karyawan': emp.employee,
+          'Nama Karyawan': emp.employee_name,
+          'Jam Shift': `${shiftInfo.in} - ${shiftInfo.out}`,
+          'Jam Masuk': inJam,
+          'Jam Keluar': outJam,
+          'Keterlambatan': telat,
+          'Pulang Cepat': pulangCepat,
+          'Lokasi Masuk': log.in?.latitude ? `http://googleusercontent.com/maps.google.com/5{log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude ? `http://googleusercontent.com/maps.google.com/5{log.out.latitude},${log.out.longitude}` : '-',
+        });
+      });
     });
+
+    dataExcel.sort((a, b) => a.Tanggal.localeCompare(b.Tanggal) || a['Nama Karyawan'].localeCompare(b['Nama Karyawan']));
 
     const worksheet = XLSX.utils.json_to_sheet(dataExcel);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
-    XLSX.writeFile(workbook, `Laporan_Harian_HRD_${tanggalAktif}.xlsx`);
+    
+    const namaFile = filterMode === 'harian' ? `Laporan_Harian_${tanggalAktif}.xlsx` : `Laporan_Bulanan_${bulanAktif}.xlsx`;
+    XLSX.writeFile(workbook, namaFile);
   };
 
-  const totalHadir = dataAbsen.length;
-  let totalTelat = 0;
-  dataAbsen.forEach(d => {
-    if (d.in) {
-      const shiftInfo = getJamShift(d.in.shift, tanggalAktif, masterShifts);
-      if (toMenit(formatJamLokal(d.in.time)) > toMenit(shiftInfo.in)) totalTelat++;
+  let globalHadir = 0;
+  let globalTelat = 0;
+  dataAbsen.forEach(emp => {
+    if (filterMode === 'harian') {
+      const todayLog = emp.logsByDate[tanggalAktif];
+      if (todayLog?.in) {
+        globalHadir++;
+        const shiftInfo = getJamShift(todayLog.in.shift, tanggalAktif, masterShifts);
+        if (toMenit(formatJamLokal(todayLog.in.time)) > toMenit(shiftInfo.in)) globalTelat++;
+      }
+    } else {
+      globalHadir += emp.totalHadir;
+      globalTelat += emp.totalTelat;
     }
   });
 
+  const handleLogout = () => {
+    localStorage.removeItem('ropi_user');
+    navigate('/login', { replace: true });
+  };
+
   return (
-    // Mempertahankan background dasar bg-gray-200 sesuai gaya karyawan
-    <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
+    <div className="bg-gray-100 min-h-screen font-sans w-full text-[#3e2723] pb-10">
       
-      {/* ── HEADER ── */}
-      <div className="bg-[#3e2723] pt-8 pb-8 px-6 md:px-12 shadow-lg sticky top-0 z-20 w-full rounded-b-[2.5rem]">
+      {/* ── HEADER MODERN SEPERTI REFERENSI ── */}
+      <div className="bg-white/80 backdrop-blur-md pt-6 pb-6 px-6 md:px-12 shadow-sm sticky top-0 z-20 w-full border-b border-gray-200">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          
           <div className="flex items-center gap-4">
-            <Link to="/home" className="w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-[#fbc02d] active:scale-95 transition-all shadow-inner border border-white/5">
+            <button onClick={handleLogout} className="w-12 h-12 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center text-gray-500 active:scale-95 transition-all shadow-sm border border-gray-200">
               <i className="fa-solid fa-arrow-left text-xl" />
-            </Link>
+            </button>
             <div>
-              <h1 className="text-2xl md:text-3xl font-black text-[#fbc02d]">HR Command Center</h1>
-              <p className="text-xs md:text-sm text-white/70 font-bold uppercase tracking-widest mt-1">Laporan Kehadiran Karyawan</p>
+              <h1 className="text-2xl font-black text-[#3e2723] flex items-center gap-2">
+                HR Command Center
+              </h1>
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Laporan Kehadiran Karyawan</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            {/* Input Date */}
-            <div className="flex items-center bg-white/10 rounded-2xl p-1.5 w-full md:w-auto border border-white/10">
-              <input 
-                type="date" 
-                value={tanggalAktif}
-                onChange={(e) => setTanggalAktif(e.target.value)}
-                className="bg-transparent text-white px-4 py-2 font-bold text-sm outline-none cursor-pointer"
-                style={{ colorScheme: 'dark' }} // Agar kalender native HP pakai tema gelap
-              />
+            
+            {/* Filter Toggle */}
+            <div className="flex bg-gray-100 rounded-xl p-1 w-full md:w-auto border border-gray-200 shadow-inner">
+              <button onClick={() => setFilterMode('harian')} className={`px-5 py-2 text-xs font-black rounded-lg w-1/2 md:w-auto transition-all ${filterMode === 'harian' ? 'bg-white text-[#3e2723] shadow' : 'text-gray-500 hover:bg-gray-200'}`}>Harian</button>
+              <button onClick={() => setFilterMode('bulanan')} className={`px-5 py-2 text-xs font-black rounded-lg w-1/2 md:w-auto transition-all ${filterMode === 'bulanan' ? 'bg-white text-[#3e2723] shadow' : 'text-gray-500 hover:bg-gray-200'}`}>Bulanan</button>
             </div>
 
-            {/* Statistik Cepat */}
-            <div className="flex gap-2 w-full md:w-auto">
-              <div className="bg-green-500/20 border border-green-500/30 rounded-2xl px-5 py-2.5 flex flex-col items-center justify-center flex-1 md:flex-none shadow-sm">
-                <p className="text-[10px] text-green-300 font-bold uppercase tracking-wide">Hadir</p>
-                <p className="text-white font-black text-2xl leading-none mt-1">{totalHadir}</p>
+            {/* Date/Month Picker */}
+            <div className="flex items-center bg-white rounded-xl px-4 py-2 w-full md:w-auto border border-gray-200 shadow-sm">
+              {filterMode === 'harian' ? (
+                <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-[#3e2723] font-bold text-sm outline-none cursor-pointer w-full" />
+              ) : (
+                <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-[#3e2723] font-bold text-sm outline-none cursor-pointer w-full" />
+              )}
+            </div>
+
+            {/* Stats Cards Header */}
+            <div className="flex gap-3 w-full md:w-auto">
+              <div className="bg-gradient-to-r from-emerald-400 to-green-500 rounded-xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none shadow-md shadow-green-500/20 text-white min-w-[90px]">
+                <p className="text-[10px] font-bold uppercase tracking-wide opacity-90 flex items-center gap-1"><i className="fa-solid fa-user-check"></i> Hadir</p>
+                <p className="font-black text-2xl leading-none mt-1">{globalHadir}</p>
               </div>
-              <div className="bg-red-500/20 border border-red-500/30 rounded-2xl px-5 py-2.5 flex flex-col items-center justify-center flex-1 md:flex-none shadow-sm">
-                <p className="text-[10px] text-red-300 font-bold uppercase tracking-wide">Telat</p>
-                <p className="text-white font-black text-2xl leading-none mt-1">{totalTelat}</p>
+              <div className="bg-gradient-to-r from-orange-400 to-amber-500 rounded-xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none shadow-md shadow-orange-500/20 text-white min-w-[90px]">
+                <p className="text-[10px] font-bold uppercase tracking-wide opacity-90 flex items-center gap-1"><i className="fa-solid fa-clock"></i> Telat</p>
+                <p className="font-black text-2xl leading-none mt-1">{globalTelat}</p>
               </div>
             </div>
 
             {/* Export Button */}
-            <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-6 py-3.5 rounded-2xl shadow-lg shadow-[#fbc02d]/20 flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto">
+            <button onClick={downloadExcel} className="bg-green-500 hover:bg-green-600 text-white font-black px-6 py-3 rounded-xl shadow-lg shadow-green-500/30 flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto">
               <i className="fa-solid fa-file-excel text-lg" /> <span>Export Excel</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── CARD GALLERY GRID ── */}
-      <div className="max-w-7xl mx-auto p-6 md:p-8 -mt-6 relative z-10">
+      {/* ── GRID KARYAWAN (SESUAI REFERENSI UI) ── */}
+      <div className="max-w-7xl mx-auto p-6 md:p-8">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center pt-24 text-gray-500">
             <i className="fa-solid fa-spinner fa-spin text-5xl mb-4 text-[#fbc02d]" />
-            <p className="font-bold text-lg">Menganalisa data dari server...</p>
+            <p className="font-bold text-lg">Memuat data absensi...</p>
           </div>
         ) : dataAbsen.length === 0 ? (
           <div className="flex flex-col items-center justify-center pt-24 text-gray-400">
             <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
               <i className="fa-solid fa-users-slash text-4xl text-gray-300" />
             </div>
-            <p className="font-bold text-lg text-gray-500">Belum ada absen karyawan hari ini.</p>
+            <p className="font-bold text-lg text-gray-500">Tidak ada data kehadiran di periode ini.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {dataAbsen.map((emp) => {
-              const inJam = emp.in ? formatJamLokal(emp.in.time) : '-';
-              const outJam = emp.out ? formatJamLokal(emp.out.time) : '-';
-              const shiftInfo = getJamShift(emp.in?.shift || emp.out?.shift, tanggalAktif, masterShifts);
-              const isTelat = emp.in && toMenit(inJam) > toMenit(shiftInfo.in);
+              const todayLog = filterMode === 'harian' ? (emp.logsByDate[tanggalAktif] || { in: null, out: null }) : null;
+              const inJam = todayLog?.in ? formatJamLokal(todayLog.in.time) : '-';
+              const outJam = todayLog?.out ? formatJamLokal(todayLog.out.time) : '-';
+              const shiftInfo = getJamShift(todayLog?.in?.shift || todayLog?.out?.shift, tanggalAktif, masterShifts);
+              const isTelat = todayLog?.in && toMenit(inJam) > toMenit(shiftInfo.in);
+
+              let avatarSrc = null;
+              if (filterMode === 'harian') avatarSrc = todayLog?.in?.custom_foto_absen;
+              else {
+                const firstAvailableLog = Object.values(emp.logsByDate).find(l => l.in?.custom_foto_absen);
+                if (firstAvailableLog) avatarSrc = firstAvailableLog.in!.custom_foto_absen;
+              }
 
               return (
                 <div 
                   key={emp.employee} 
                   onClick={() => setDetailModal(emp)} 
-                  className="bg-white rounded-3xl p-5 shadow-[0_10px_30px_-10px_rgba(62,39,35,0.1)] hover:shadow-[0_15px_40px_-10px_rgba(251,192,45,0.3)] transition-all cursor-pointer border border-white hover:border-[#fbc02d] flex flex-col active:scale-95 group relative overflow-hidden"
+                  className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all cursor-pointer flex flex-col active:scale-95 group relative"
                 >
-                  {/* Efek aksen kuning di atas kartu */}
-                  <div className="absolute top-0 left-0 w-full h-1 bg-[#fbc02d] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 shadow-inner relative border-2 border-[#fff8e1]">
-                      {emp.in?.custom_foto_absen ? (
-                        <img src={prosesUrlFoto(emp.in.custom_foto_absen)} className="w-full h-full object-cover" />
-                      ) : <i className="fa-solid fa-user text-[#fbc02d] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl" />}
+                  {/* Top Row: Avatar & Name */}
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-100 shrink-0 border-2 border-white shadow-sm relative">
+                      {avatarSrc ? (
+                        <img src={prosesUrlFoto(avatarSrc)} className="w-full h-full object-cover" />
+                      ) : <i className="fa-solid fa-user text-gray-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl" />}
                     </div>
-                    <div className="flex-1 pt-1">
-                      <h3 className="font-black text-[#3e2723] text-sm leading-tight line-clamp-2">
-                        {emp.employee_name}
-                      </h3>
-                      {isTelat ? (
-                        <span className="inline-flex mt-1.5 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Telat Masuk</span>
-                      ) : emp.in ? (
-                        <span className="inline-flex mt-1.5 bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Hadir</span>
-                      ) : null}
+                    <div className="flex-1">
+                      <h3 className="font-black text-[#3e2723] text-base leading-tight line-clamp-1">{emp.employee_name}</h3>
+                      {filterMode === 'harian' ? (
+                        isTelat ? <span className="inline-block mt-1 bg-red-50 text-red-500 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-100">Telat Masuk</span> :
+                        todayLog?.in ? <span className="inline-block mt-1 bg-green-50 text-green-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-green-100">Hadir</span> : 
+                        <span className="inline-block mt-1 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Belum Absen</span>
+                      ) : (
+                        <span className="inline-block mt-1 bg-blue-50 text-blue-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-blue-100">Rekap Bulanan</span>
+                      )}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mt-auto">
-                    <div className="bg-[#fff8e1] rounded-2xl p-2.5 text-center border border-[#fbc02d]/30">
-                      <p className="text-[9px] text-[#3e2723]/60 font-bold uppercase mb-0.5 flex justify-center items-center gap-1"><i className="fa-solid fa-clock text-[#fbc02d]" /> Masuk</p>
-                      <p className="font-black text-[#3e2723] text-sm">{inJam}</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-2xl p-2.5 text-center border border-gray-100">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase mb-0.5 flex justify-center items-center gap-1"><i className="fa-solid fa-clock text-gray-300" /> Keluar</p>
-                      <p className="font-black text-gray-600 text-sm">{outJam}</p>
-                    </div>
+                  {/* Middle Row: Designation & Branch */}
+                  <div className="mb-4">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Designation</p>
+                    <p className="text-xs font-black text-gray-700">{emp.employee.includes('HR') ? 'HR Manager' : 'Staff'}</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5 mt-2">Branch</p>
+                    <p className="text-xs font-black text-gray-700">PH Klaten</p>
                   </div>
+
+                  {/* Bottom Row: Status Boxes */}
+                  {filterMode === 'harian' ? (
+                    <div className="grid grid-cols-2 gap-3 mt-auto">
+                      <div className="bg-green-50 rounded-xl p-3 flex flex-col justify-center border border-green-100">
+                        <div className="flex items-center gap-1.5 mb-1 text-green-600">
+                          <i className="fa-solid fa-clock text-xs" />
+                          <p className="text-[10px] font-black uppercase">Masuk</p>
+                        </div>
+                        <p className="font-black text-green-800 text-lg">{inJam}</p>
+                      </div>
+                      <div className="bg-orange-50 rounded-xl p-3 flex flex-col justify-center border border-orange-100">
+                        <div className="flex items-center gap-1.5 mb-1 text-orange-500">
+                          <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
+                          <p className="text-[10px] font-black uppercase">Keluar</p>
+                        </div>
+                        <p className="font-black text-orange-800 text-lg">{outJam}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3 mt-auto">
+                      <div className="bg-green-50 rounded-xl p-3 flex flex-col justify-center border border-green-100">
+                        <p className="text-[10px] text-green-600 font-black uppercase mb-1">Total Hadir</p>
+                        <p className="font-black text-green-800 text-lg">{emp.totalHadir} <span className="text-xs font-bold">Hari</span></p>
+                      </div>
+                      <div className="bg-red-50 rounded-xl p-3 flex flex-col justify-center border border-red-100">
+                        <p className="text-[10px] text-red-500 font-black uppercase mb-1">Total Telat</p>
+                        <p className="font-black text-red-800 text-lg">{emp.totalTelat} <span className="text-xs font-bold">Kali</span></p>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               );
             })}
@@ -336,129 +447,181 @@ const DashboardHR = () => {
         )}
       </div>
 
-      {/* ── MODAL "BOOM" DETAIL KARYAWAN ── */}
+      {/* ── MODAL DETAIL ── */}
       {detailModal && (() => {
         const emp = detailModal;
-        const shiftInfo = getJamShift(emp.in?.shift || emp.out?.shift, tanggalAktif, masterShifts);
-        const inJam = emp.in ? formatJamLokal(emp.in.time) : '-';
-        const outJam = emp.out ? formatJamLokal(emp.out.time) : '-';
         
-        let durasiTelat = 0;
-        if (emp.in) {
-          const selisih = toMenit(inJam) - toMenit(shiftInfo.in);
-          if (selisih > 0) durasiTelat = selisih;
-        }
-        
-        let durasiCepat = 0;
-        if (emp.out) {
-          const selisih = toMenit(shiftInfo.out) - toMenit(outJam);
-          if (selisih > 0) durasiCepat = selisih;
-        }
+        if (filterMode === 'harian') {
+          const todayLog = emp.logsByDate[tanggalAktif] || { in: null, out: null };
+          const shiftInfo = getJamShift(todayLog.in?.shift || todayLog.out?.shift, tanggalAktif, masterShifts);
+          const inJam = todayLog.in ? formatJamLokal(todayLog.in.time) : '-';
+          const outJam = todayLog.out ? formatJamLokal(todayLog.out.time) : '-';
+          
+          let durasiTelat = 0, durasiCepat = 0;
+          if (todayLog.in) {
+            const selisih = toMenit(inJam) - toMenit(shiftInfo.in);
+            if (selisih > 0) durasiTelat = selisih;
+          }
+          if (todayLog.out) {
+            const selisih = toMenit(shiftInfo.out) - toMenit(outJam);
+            if (selisih > 0) durasiCepat = selisih;
+          }
 
-        const FotoBesar = ({ src, icon, title, isSignature=false }: any) => (
-          <div className="flex flex-col gap-1">
-            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1">{title}</p>
-            <div className="relative bg-gray-50 rounded-2xl overflow-hidden shadow-inner border border-gray-200" style={{ height: isSignature ? '120px' : '220px' }}>
-              {src ? (
-                <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain p-2 bg-white' : 'object-cover'}`} />
-              ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 gap-2">
-                  <i className={`fa-solid ${icon} text-3xl`} />
-                  <p className="text-[10px] font-bold">Tidak ada foto</p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
-            <div className="bg-gray-100 w-full max-w-4xl max-h-[95vh] rounded-[2.5rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn border border-white/20">
-              
-              {/* Kolom Kiri: Profil & Status */}
-              <div className="bg-white md:w-1/3 flex flex-col shrink-0 shadow-[5px_0_15px_rgba(0,0,0,0.03)] z-10">
-                <div className="p-6 md:p-8 border-b border-gray-100 relative">
-                  <button onClick={() => setDetailModal(null)} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
-                    <i className="fa-solid fa-xmark text-lg" />
-                  </button>
-                  <div className="w-20 h-20 rounded-full overflow-hidden bg-[#fff8e1] border-4 border-white shadow-md mb-4">
-                    {emp.in?.custom_foto_absen ? (
-                      <img src={prosesUrlFoto(emp.in.custom_foto_absen)} className="w-full h-full object-cover" />
-                    ) : <i className="fa-solid fa-user text-[#fbc02d] text-4xl mt-3 ml-4" />}
+          const FotoBesar = ({ src, icon, title, isSignature=false }: any) => (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1">{title}</p>
+              <div className="relative bg-gray-50 rounded-2xl overflow-hidden shadow-inner border border-gray-200 flex items-center justify-center" style={{ height: isSignature ? '120px' : '220px' }}>
+                {src ? (
+                  <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain p-2 bg-white' : 'object-cover'}`} />
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-gray-300">
+                    <i className={`fa-solid ${icon} text-3xl`} />
+                    <p className="text-[10px] font-bold">Tidak ada foto</p>
                   </div>
-                  <h2 className="text-2xl font-black text-[#3e2723] leading-tight mb-1">{emp.employee_name}</h2>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee}</p>
-                </div>
-                
-                <div className="p-6 md:p-8 flex-1 overflow-y-auto">
-                  <div className="bg-[#fff8e1] p-4 rounded-2xl border border-[#fbc02d]/30 mb-5">
-                    <p className="text-[10px] text-[#3e2723]/50 font-bold uppercase mb-1">Jadwal Shift</p>
-                    <p className="font-black text-[#3e2723] text-lg">{shiftInfo.in} <span className="text-[#fbc02d] mx-1">→</span> {shiftInfo.out}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mb-5">
-                    <div className="bg-white p-4 rounded-2xl border border-green-100 shadow-sm">
-                      <p className="text-[10px] text-green-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-to-bracket"/> Masuk</p>
-                      <p className="font-black text-[#3e2723] text-2xl">{inJam}</p>
-                      {durasiTelat > 0 && <span className="inline-block mt-1 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md">TELAT {formatDurasi(durasiTelat)}</span>}
-                    </div>
-                    <div className="bg-white p-4 rounded-2xl border border-orange-100 shadow-sm">
-                      <p className="text-[10px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-from-bracket"/> Keluar</p>
-                      <p className="font-black text-[#3e2723] text-2xl">{outJam}</p>
-                      {durasiCepat > 0 && <span className="inline-block mt-1 bg-orange-100 text-orange-600 text-[9px] font-black px-2 py-0.5 rounded-md">CEPAT {formatDurasi(durasiCepat)}</span>}
-                    </div>
-                  </div>
-
-                  {/* Tombol Lokasi GPS */}
-                  <div className="flex flex-col gap-2">
-                    {emp.in?.latitude && (
-                      <a href={`https://maps.google.com/?q=${emp.in.latitude},${emp.in.longitude}`} target="_blank" rel="noreferrer" className="bg-[#3e2723] hover:bg-[#4e342e] text-[#fbc02d] p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-colors shadow-md">
-                        <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot" /> Lokasi Masuk (GPS)</span>
-                        <i className="fa-solid fa-arrow-up-right-from-square" />
-                      </a>
-                    )}
-                    {emp.out?.latitude && (
-                      <a href={`https://maps.google.com/?q=${emp.out.latitude},${emp.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 text-[#3e2723] border border-gray-200 p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
-                        <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-gray-400" /> Lokasi Keluar (GPS)</span>
-                        <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
-                      </a>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
+            </div>
+          );
 
-              {/* Kolom Kanan: Galeri Foto */}
-              <div className="md:w-2/3 p-6 md:p-8 overflow-y-auto max-h-[60vh] md:max-h-none flex-1">
-                <h3 className="font-black text-[#3e2723] text-lg mb-4 flex items-center gap-2"><i className="fa-solid fa-images text-[#fbc02d]" /> Galeri Autentikasi</h3>
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(30,15,30,0.85)', backdropFilter: 'blur(8px)' }}>
+              <div className="bg-gray-50 w-full max-w-4xl max-h-[95vh] rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn border border-white/20">
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Bagian Masuk */}
-                  <div className="flex flex-col gap-4 bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-2">
-                      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-green-600"><i className="fa-solid fa-arrow-right-to-bracket text-[10px]"></i></div>
-                      <p className="font-black text-[#3e2723] text-sm uppercase">Data Masuk</p>
+                {/* Kolom Kiri Profil */}
+                <div className="bg-white md:w-1/3 flex flex-col shrink-0 shadow-[5px_0_15px_rgba(0,0,0,0.03)] z-10">
+                  <div className="p-6 md:p-8 border-b border-gray-100 relative">
+                    <button onClick={() => setDetailModal(null)} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
+                      <i className="fa-solid fa-xmark text-lg" />
+                    </button>
+                    <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-sm mb-4 relative">
+                      {todayLog.in?.custom_foto_absen ? (
+                        <img src={prosesUrlFoto(todayLog.in.custom_foto_absen)} className="w-full h-full object-cover" />
+                      ) : <i className="fa-solid fa-user text-gray-300 text-4xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />}
                     </div>
-                    <FotoBesar src={emp.in?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
-                    <FotoBesar src={emp.in?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
-                    <FotoBesar src={emp.in?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
+                    <h2 className="text-2xl font-black text-[#3e2723] leading-tight mb-1">{emp.employee_name}</h2>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee}</p>
                   </div>
                   
-                  {/* Bagian Keluar */}
-                  <div className="flex flex-col gap-4 bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-2">
-                      <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><i className="fa-solid fa-arrow-right-from-bracket text-[10px]"></i></div>
-                      <p className="font-black text-[#3e2723] text-sm uppercase">Data Keluar</p>
+                  <div className="p-6 md:p-8 flex-1 overflow-y-auto">
+                    <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-5">
+                      <p className="text-[10px] text-blue-500 font-bold uppercase mb-1">Jadwal Shift</p>
+                      <p className="font-black text-blue-800 text-lg">{shiftInfo.in} <span className="text-blue-300 mx-1">→</span> {shiftInfo.out}</p>
                     </div>
-                    <FotoBesar src={emp.out?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
-                    <FotoBesar src={emp.out?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
-                    <FotoBesar src={emp.out?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
+                    <div className="grid grid-cols-2 gap-3 mb-5">
+                      <div className="bg-green-50 p-4 rounded-2xl border border-green-100">
+                        <p className="text-[10px] text-green-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-to-bracket"/> Masuk</p>
+                        <p className="font-black text-green-800 text-2xl">{inJam}</p>
+                        {durasiTelat > 0 && <span className="inline-block mt-1 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm">TELAT {formatDurasi(durasiTelat)}</span>}
+                      </div>
+                      <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
+                        <p className="text-[10px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-from-bracket"/> Keluar</p>
+                        <p className="font-black text-orange-800 text-2xl">{outJam}</p>
+                        {durasiCepat > 0 && <span className="inline-block mt-1 bg-yellow-400 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm">CEPAT {formatDurasi(durasiCepat)}</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {todayLog.in?.latitude && (
+                        <a href={`http://googleusercontent.com/maps.google.com/6{todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
+                          <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
+                          <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
+                        </a>
+                      )}
+                      {todayLog.out?.latitude && (
+                        <a href={`http://googleusercontent.com/maps.google.com/6{todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
+                          <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
+                          <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kolom Kanan Foto */}
+                <div className="md:w-2/3 p-6 md:p-8 overflow-y-auto max-h-[60vh] md:max-h-none flex-1 bg-gray-50/50">
+                  <h3 className="font-black text-[#3e2723] text-lg mb-4 flex items-center gap-2"><i className="fa-solid fa-images text-[#fbc02d]" /> Galeri Autentikasi</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="flex flex-col gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                      <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-3">
+                        <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-600"><i className="fa-solid fa-arrow-right-to-bracket text-xs"></i></div>
+                        <p className="font-black text-[#3e2723] text-sm uppercase">Data Masuk</p>
+                      </div>
+                      <FotoBesar src={todayLog.in?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
+                      <FotoBesar src={todayLog.in?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
+                      <FotoBesar src={todayLog.in?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
+                    </div>
+                    <div className="flex flex-col gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                      <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-3">
+                        <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><i className="fa-solid fa-arrow-right-from-bracket text-xs"></i></div>
+                        <p className="font-black text-[#3e2723] text-sm uppercase">Data Keluar</p>
+                      </div>
+                      <FotoBesar src={todayLog.out?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
+                      <FotoBesar src={todayLog.out?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
+                      <FotoBesar src={todayLog.out?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
+                    </div>
                   </div>
                 </div>
               </div>
-
             </div>
-          </div>
-        );
+          );
+        } else {
+          // MODAL BULANAN
+          const sortedDates = Object.keys(emp.logsByDate).sort();
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(30,15,30,0.85)', backdropFilter: 'blur(8px)' }}>
+              <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-zoomIn">
+                <div className="bg-white border-b border-gray-100 p-6 relative flex justify-between items-center shrink-0">
+                  <div>
+                    <h2 className="text-xl font-black text-[#3e2723]">{emp.employee_name}</h2>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{emp.employee} • Rekap {bulanAktif}</p>
+                  </div>
+                  <button onClick={() => setDetailModal(null)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors">
+                    <i className="fa-solid fa-xmark text-lg" />
+                  </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-gray-100 text-[#3e2723] font-black border-b border-gray-200">
+                        <tr>
+                          <th className="py-4 px-5">Tanggal</th>
+                          <th className="py-4 px-5">Masuk</th>
+                          <th className="py-4 px-5">Keluar</th>
+                          <th className="py-4 px-5">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {sortedDates.length === 0 ? (
+                          <tr><td colSpan={4} className="py-8 text-center text-gray-400 font-bold">Tidak ada absen di bulan ini</td></tr>
+                        ) : sortedDates.map(date => {
+                          const log = emp.logsByDate[date];
+                          const inJam = log.in ? formatJamLokal(log.in.time) : '-';
+                          const outJam = log.out ? formatJamLokal(log.out.time) : '-';
+                          const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
+                          const isTelat = log.in && toMenit(inJam) > toMenit(shiftInfo.in);
+
+                          return (
+                            <tr key={date} className="hover:bg-gray-50 transition-colors">
+                              <td className="py-4 px-5 font-bold text-gray-700">{date}</td>
+                              <td className="py-4 px-5 font-black text-green-600">{inJam}</td>
+                              <td className="py-4 px-5 font-black text-orange-500">{outJam}</td>
+                              <td className="py-4 px-5">
+                                {isTelat ? <span className="bg-red-50 text-red-600 border border-red-100 text-[10px] font-black px-2.5 py-1 rounded-md">Telat</span> : 
+                                 log.in ? <span className="bg-green-50 text-green-700 border border-green-100 text-[10px] font-black px-2.5 py-1 rounded-md">Tepat</span> : 
+                                 <span className="text-gray-400 text-xs">-</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
       })()}
       
       <style>{`
