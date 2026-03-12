@@ -807,88 +807,10 @@ const Absen = () => {
             Step 4: Preview semua + kirim
             ══════════════════════════════════════════════════ */}
         {isModalAbsenOpen && (
-          <div className="fixed inset-0 z-50" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
-
-            {/* ══ STEP 1 & 2: FULLSCREEN KAMERA ══ */}
-            {(cameraStep === 1 || cameraStep === 2) && (
-              <div className="absolute inset-0 flex flex-col">
-                {/* Video fullscreen */}
-                <video
-                  ref={videoRef}
-                  className="absolute inset-0 w-full h-full object-contain bg-black"
-                  playsInline muted
-                  style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }}
-                />
-
-                {/* Overlay gelap atas — info + peringatan */}
-                <div className="relative z-10 px-4 pt-10 pb-3" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)' }}>
-                  {/* Baris info: jam + mode + step */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="text-white text-lg font-black leading-none">{jamModal}</p>
-                    <div className={`rounded-xl px-2.5 py-1 ${modeAbsen === 'MASUK' ? 'bg-green-500/40 border border-green-400/50' : 'bg-orange-500/40 border border-orange-400/50'}`}>
-                      <p className={`font-black text-xs leading-none ${modeAbsen === 'MASUK' ? 'text-green-200' : 'text-orange-200'}`}>
-                        {modeAbsen === 'MASUK' ? '🟢 MASUK' : '🔴 KELUAR'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 ml-auto">
-                      {[{ n: 1, icon: 'fa-camera' }, { n: 2, icon: 'fa-fingerprint' }, { n: 3, icon: 'fa-pen-nib' }, { n: 4, icon: 'fa-paper-plane' }].map((s, i) => (
-                        <div key={s.n} className="flex items-center gap-1">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black ${cameraStep > s.n ? 'bg-green-400 text-white' : cameraStep === s.n ? 'bg-[#fbc02d] text-[#3e2723]' : 'bg-white/20 text-white/50'}`}>
-                            {cameraStep > s.n ? <i className="fa-solid fa-check" /> : <i className={`fa-solid ${s.icon}`} />}
-                          </div>
-                          {i < 3 && <div className={`w-2 h-0.5 rounded-full ${cameraStep > s.n ? 'bg-green-400' : 'bg-white/20'}`} />}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {/* GPS */}
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold w-fit ${gpsStatus.tipe === 'error' ? 'bg-red-900/70 text-red-300' : gpsStatus.tipe === 'ok' ? 'bg-green-900/60 text-green-300' : 'bg-black/40 text-white/70'}`}>
-                    {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin text-[10px]" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-[10px]`} />}
-                    <span>{gpsStatus.pesan}</span>
-                  </div>
-                </div>
-
-                {/* Overlay gelap bawah — peringatan + tombol */}
-                <div className="relative z-10 mt-auto px-4 pb-10 pt-4" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)' }}>
-                  {/* Peringatan */}
-                  {cameraStep === 1 && (
-                    <div className="bg-red-600/90 rounded-2xl px-3 py-2.5 flex gap-2.5 items-center mb-3 border border-red-400/40">
-                      <span className="text-2xl shrink-0">🤳</span>
-                      <div>
-                        <p className="text-white text-xs font-black leading-tight">Berdiri di depan mesin finger!</p>
-                        <p className="text-red-200 text-[10px] font-bold leading-snug">Mesin fingerprint <u>harus kelihatan</u> di belakangmu.</p>
-                      </div>
-                    </div>
-                  )}
-                  {cameraStep === 2 && (
-                    <div className="bg-red-600/90 rounded-2xl px-3 py-2.5 flex gap-2.5 items-center mb-3 border border-red-400/40">
-                      <span className="text-2xl shrink-0">📋</span>
-                      <div>
-                        <p className="text-white text-xs font-black leading-tight">Layar mesin harus terbaca jelas!</p>
-                        <p className="text-red-200 text-[10px] font-bold leading-snug">Hari, tanggal, jam & nama <u>wajib terlihat</u>.</p>
-                      </div>
-                    </div>
-                  )}
-                  {/* Tombol */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button onClick={tutupModal} className="bg-white/15 backdrop-blur text-white font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2 border border-white/20">
-                      <i className="fa-solid fa-xmark" /> Batal
-                    </button>
-                    <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white shadow-lg shadow-green-500/40' : 'bg-blue-500 text-white shadow-lg shadow-blue-500/40') : 'bg-white/20 text-white/40 cursor-not-allowed'}`}>
-                      <i className="fa-solid fa-camera shrink-0" />
-                      <span>{jepretState.teks}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ══ STEP 3 & 4: BOTTOM SHEET SEPERTI BIASA ══ */}
-            {(cameraStep === 3 || cameraStep === 4) && (
-            <div className="absolute inset-x-0 bottom-0 flex items-end">
+          <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
             <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col shadow-2xl overflow-hidden" style={{ maxHeight: '95vh' }}>
 
-              {/* Header cokelat */}
+              {/* ── HEADER cokelat ── */}
               <div className="bg-[#3e2723] px-4 pt-3 pb-3 shrink-0">
                 <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-3" />
                 <div className="flex items-center gap-2">
@@ -909,10 +831,52 @@ const Absen = () => {
                     ))}
                   </div>
                 </div>
+                {/* GPS — hanya step 1 & 2 */}
+                {(cameraStep === 1 || cameraStep === 2) && (
+                  <div className={`mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold ${gpsStatus.tipe === 'error' ? 'bg-red-900/50 text-red-300' : gpsStatus.tipe === 'ok' ? 'bg-green-900/40 text-green-300' : 'bg-white/10 text-white/70'}`}>
+                    {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin text-[10px]" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'} text-[10px]`} />}
+                    <span className="truncate">{gpsStatus.pesan}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Konten step 3 & 4 */}
+              {/* ── KONTEN ── */}
               <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+
+                {/* STEP 1 & 2: KAMERA */}
+                {(cameraStep === 1 || cameraStep === 2) && (
+                  <>
+                    {cameraStep === 1 && (
+                      <div className="bg-red-600 rounded-2xl px-3 py-2.5 flex gap-2.5 items-center">
+                        <span className="text-2xl shrink-0">🤳</span>
+                        <div>
+                          <p className="text-white text-xs font-black leading-tight">Berdiri di depan mesin finger!</p>
+                          <p className="text-red-200 text-[10px] font-bold leading-snug">Mesin fingerprint <u>harus kelihatan</u> di belakangmu.</p>
+                        </div>
+                      </div>
+                    )}
+                    {cameraStep === 2 && (
+                      <div className="bg-red-600 rounded-2xl px-3 py-2.5 flex gap-2.5 items-center">
+                        <span className="text-2xl shrink-0">📋</span>
+                        <div>
+                          <p className="text-white text-xs font-black leading-tight">Layar mesin harus terbaca jelas!</p>
+                          <p className="text-red-200 text-[10px] font-bold leading-snug">Hari, tanggal, jam & nama <u>wajib terlihat</u>.</p>
+                        </div>
+                      </div>
+                    )}
+                    {/* Viewfinder 4:3 */}
+                    <div className={`w-full rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-gray-900 relative transition-colors`} style={{ aspectRatio: '4/3' }}>
+                      {cameraStep === 2 && (
+                        <div className="absolute top-3 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
+                          <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg animate-pulse">
+                            <i className="fa-solid fa-camera mr-1" /> Arahkan ke Mesin Fingerprint!
+                          </span>
+                        </div>
+                      )}
+                      <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
+                    </div>
+                  </>
+                )}
 
                 {/* STEP 3: TTD */}
                 {cameraStep === 3 && (
@@ -967,8 +931,19 @@ const Absen = () => {
 
               </div>
 
-              {/* ── FOOTER TOMBOL step 3 & 4 ── */}
+              {/* ── FOOTER TOMBOL ── */}
               <div className="px-5 pb-8 pt-3 shrink-0 border-t border-gray-100">
+                {(cameraStep === 1 || cameraStep === 2) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2">
+                      <i className="fa-solid fa-xmark" /> Batal
+                    </button>
+                    <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 text-white shadow-lg shadow-green-500/30' : 'bg-blue-500 text-white shadow-lg shadow-blue-500/30') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                      <i className="fa-solid fa-camera shrink-0" />
+                      <span>{jepretState.teks}</span>
+                    </button>
+                  </div>
+                )}
                 {cameraStep === 3 && (
                   <div className="grid grid-cols-2 gap-3">
                     <button onClick={tutupModal} className="bg-gray-100 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2">
@@ -993,9 +968,6 @@ const Absen = () => {
               </div>
 
             </div>
-            </div>
-            )}
-
           </div>
         )}
 
