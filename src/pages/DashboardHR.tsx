@@ -27,6 +27,7 @@ interface EmployeeSummary {
   totalHadir: number;
   totalTelat: number;
   totalCepat: number;
+  totalIzin: number;
   logsByDate: Record<string, DayLog>;
 }
 
@@ -100,6 +101,7 @@ const DashboardHR = () => {
   const ERPNEXT_URL = 'http://103.187.147.240';
 
   const [dataAbsen, setDataAbsen] = useState<EmployeeSummary[]>([]);
+  const [leaveMap, setLeaveMap] = useState<Record<string, number>>({});
   const [masterShifts, setMasterShifts] = useState<Record<string, { in: string; out: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -168,7 +170,7 @@ const DashboardHR = () => {
             grouped[item.employee] = {
               employee: item.employee,
               employee_name: item.employee_name || item.employee,
-              totalHadir: 0, totalTelat: 0, totalCepat: 0,
+              totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 0,
               logsByDate: {}
             };
           }
@@ -196,7 +198,44 @@ const DashboardHR = () => {
           emp.totalHadir = hadir; emp.totalTelat = telat; emp.totalCepat = cepat;
         });
 
-        setDataAbsen(Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name)));
+        const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
+        setDataAbsen(arrData);
+
+        // Fetch leave per karyawan secara paralel
+        if (filterMode === 'bulanan') {
+          const leaveResults = await Promise.allSettled(
+            arrData.map(emp =>
+              fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}`)
+                .then(r => r.json())
+                .then(d => ({ employee: emp.employee, data: d.success ? d.data : [] }))
+                .catch(() => ({ employee: emp.employee, data: [] }))
+            )
+          );
+          const newLeaveMap: Record<string, number> = {};
+          leaveResults.forEach(result => {
+            if (result.status === 'fulfilled') {
+              const { employee, data } = result.value;
+              const year = parseInt(bulanAktif.split('-')[0]);
+              const month = parseInt(bulanAktif.split('-')[1]) - 1;
+              const bulanMulai = new Date(year, month, 1);
+              const bulanAkhir = new Date(year, month + 1, 0);
+              let totalIzin = 0;
+              (data as any[]).filter(r => r.status?.toLowerCase() !== 'rejected').forEach((r: any) => {
+                const from = new Date(r.from_date);
+                const to = new Date(r.to_date);
+                const start = from < bulanMulai ? bulanMulai : from;
+                const end = to > bulanAkhir ? bulanAkhir : to;
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                  if (d.getDay() !== 0 && d.getDay() !== 6) totalIzin++;
+                }
+              });
+              newLeaveMap[employee] = totalIzin;
+            }
+          });
+          setLeaveMap(newLeaveMap);
+        } else {
+          setLeaveMap({});
+        }
       } else {
         setDataAbsen([]);
       }
@@ -402,14 +441,18 @@ const DashboardHR = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3 mt-auto">
-                      <div className="bg-green-50 rounded-xl p-3 flex flex-col justify-center border border-green-100">
-                        <p className="text-[10px] text-green-600 font-black uppercase mb-1">Total Hadir</p>
-                        <p className="font-black text-green-800 text-lg">{emp.totalHadir} <span className="text-xs font-bold">Hari</span></p>
+                    <div className="grid grid-cols-3 gap-2 mt-auto">
+                      <div className="bg-green-50 rounded-xl p-2.5 flex flex-col justify-center border border-green-100">
+                        <p className="text-[9px] text-green-600 font-black uppercase mb-1">Hadir</p>
+                        <p className="font-black text-green-800 text-base">{emp.totalHadir} <span className="text-[10px] font-bold">Hari</span></p>
                       </div>
-                      <div className="bg-red-50 rounded-xl p-3 flex flex-col justify-center border border-red-100">
-                        <p className="text-[10px] text-red-500 font-black uppercase mb-1">Total Telat</p>
-                        <p className="font-black text-red-800 text-lg">{emp.totalTelat} <span className="text-xs font-bold">Kali</span></p>
+                      <div className="bg-red-50 rounded-xl p-2.5 flex flex-col justify-center border border-red-100">
+                        <p className="text-[9px] text-red-500 font-black uppercase mb-1">Telat</p>
+                        <p className="font-black text-red-800 text-base">{emp.totalTelat} <span className="text-[10px] font-bold">Kali</span></p>
+                      </div>
+                      <div className="bg-blue-50 rounded-xl p-2.5 flex flex-col justify-center border border-blue-100">
+                        <p className="text-[9px] text-blue-500 font-black uppercase mb-1">Izin</p>
+                        <p className="font-black text-blue-800 text-base">{leaveMap[emp.employee] ?? 0} <span className="text-[10px] font-bold">Hari</span></p>
                       </div>
                     </div>
                   )}
