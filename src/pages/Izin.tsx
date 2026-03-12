@@ -265,7 +265,7 @@ const Izin = () => {
         {/* PANEL FORM PENGAJUAN          */}
         {/* ══════════════════════════════ */}
         {showForm && (
-          <div className="flex-1 overflow-y-auto pb-32 pt-6 px-6">
+          <div className="flex-1 overflow-y-auto pt-6 px-6">
             <div className="bg-[#fff8e1] p-4 rounded-2xl border border-[#fbc02d]/40 flex gap-3 shadow-sm items-start mb-6">
               <i className="fa-solid fa-circle-info text-[#fbc02d] text-lg mt-0.5"></i>
               <p className="text-[11px] text-[#3e2723] font-medium leading-relaxed">
@@ -390,7 +390,7 @@ const Izin = () => {
         {/* PANEL RIWAYAT IZIN            */}
         {/* ══════════════════════════════ */}
         {!showForm && (
-          <div className="flex-1 overflow-y-auto pb-32 pt-5 px-6">
+          <div className="flex-1 overflow-y-auto pt-5 px-6">
 
             <div className="flex justify-between items-center mb-4">
               <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">
@@ -705,7 +705,7 @@ const Izin = () => {
         )}
 
         {/* Navigation Bottom */}
-        <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+        <nav className="shrink-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
           <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
             <i className="fa-solid fa-house text-xl mb-1"></i>
             <span className="text-[10px] font-black uppercase">Home</span>

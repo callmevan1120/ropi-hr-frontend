@@ -166,7 +166,7 @@ const Home = () => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 px-6 -mt-12 relative z-10 overflow-y-auto pb-24">
+        <div className="flex-1 px-6 -mt-12 relative z-10 overflow-y-auto">
           <div className="bg-white rounded-3xl p-5 shadow-lg border border-gray-100 mb-6 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1.5 bg-[#fbc02d]"></div>
             <p className="text-gray-400 text-xs font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
@@ -299,7 +299,7 @@ const Home = () => {
         </div>
 
         {/* NAVIGATION BOTTOM */}
-        <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+        <nav className="shrink-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
           <div className="flex flex-col items-center text-[#3e2723] w-1/4">
             <i className="fa-solid fa-house text-xl mb-1"></i>
             <span className="text-[10px] font-black uppercase">Home</span>

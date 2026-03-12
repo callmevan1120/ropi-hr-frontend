@@ -120,7 +120,7 @@ const Cuti = () => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+        <div className="flex-1 overflow-y-auto no-scrollbar">
 
           {/* Sisa Kuota */}
           <div className="px-6 pt-5">
@@ -199,7 +199,7 @@ const Cuti = () => {
         </div>
 
         {/* Navigation Bottom */}
-        <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+        <nav className="shrink-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
           <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
             <i className="fa-solid fa-house text-xl mb-1"></i>
             <span className="text-[10px] font-black uppercase">Home</span>

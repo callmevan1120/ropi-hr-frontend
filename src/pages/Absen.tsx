@@ -696,7 +696,7 @@ const Absen = () => {
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 overflow-y-auto pb-32 pt-4">
+        <div className="flex-1 overflow-y-auto pt-4">
           {leaveRecords.length > 0 && (
             <div className="px-4 mb-3 flex flex-wrap gap-1.5">
               {leaveRecords.map(r => {
@@ -792,7 +792,7 @@ const Absen = () => {
         </div>
 
         {/* BOTTOM NAV */}
-        <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+        <nav className="shrink-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
           <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-house text-xl mb-1" /><span className="text-[10px] font-black uppercase">Home</span></Link>
           <div className="flex flex-col items-center text-[#3e2723] w-1/4"><i className="fa-solid fa-clipboard-user text-xl mb-1 drop-shadow-md" /><span className="text-[10px] font-black uppercase">Absen</span></div>
           <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-envelope-open-text text-xl mb-1" /><span className="text-[10px] font-black uppercase">Izin</span></Link>
