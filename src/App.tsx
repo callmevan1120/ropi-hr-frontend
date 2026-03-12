@@ -8,6 +8,9 @@ import Cuti from './pages/Cuti';
 import Profil from './pages/Profil';
 import Izin from './pages/Izin';
 
+//  IMPORT HALAMAN BARU DASHBOARD HR 
+import DashboardHR from './pages/DashboardHR'; 
+
 function App() {
   return (
     <BrowserRouter>
@@ -25,6 +28,9 @@ function App() {
         <Route path="/cuti" element={<Cuti />} />
         <Route path="/profil" element={<Profil />} />
         <Route path="/izin" element={<Izin />} />
+        
+        {/*  RUTE BARU KHUSUS HR  */}
+        <Route path="/hr-dashboard" element={<DashboardHR />} />
 
         {/* 4. Rute Sapu Jagat (Fallback) */}
         {/* Jika user ngetik rute aneh-aneh atau rute tidak ditemukan, balikkan ke login */}

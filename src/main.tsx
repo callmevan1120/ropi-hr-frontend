@@ -5,6 +5,7 @@ import App from './App';
 import './index.css'; 
 
 // 🚀 DAFTARKAN SERVICE WORKER PWA
+// @ts-ignore  <-- INI JURUS NINJA NYA BIAR MERAHNYA HILANG
 import { registerSW } from 'virtual:pwa-register';
 
 // Panggil pendaftar otomatis agar fitur "Install ke HP" aktif

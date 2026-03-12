@@ -1,46 +1,53 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  const [email, setEmail] = useState<string>('');
+  const [employeeId, setEmployeeId] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  
-  // 🔥 STATE BARU UNTUK HIDE/SHOW PASSWORD
   const [showPassword, setShowPassword] = useState<boolean>(false);
   
   const navigate = useNavigate();
 
-  // 🚀 KITA HARDCODE LINK-NYA BIAR 1000% AMAN DARI ERROR VITE
   const BACKEND = 'https://ropi-hr-backend.vercel.app';
 
-  // 🛑 KITA MATIKAN AUTO-LOGIN SEMENTARA BIAR NGGAK INFINITE LOOP!
-  /*
+  // Otomatis arahkan ke home jika sudah login
   useEffect(() => {
-    if (localStorage.getItem('ropi_user')) {
-      navigate('/home');
-    }
+    const user = localStorage.getItem('ropi_user');
+    if (user) navigate('/home');
   }, [navigate]);
-  */
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!employeeId) {
+      alert('Employee ID wajib diisi!');
+      return;
+    }
+    
     setIsLoading(true);
 
     try {
       const res = await fetch(`${BACKEND}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ employeeId, password }), // Mengirim employeeId
       });
 
       const responsData = await res.json();
 
       if (res.ok || responsData.statusCode === 200) {
-        localStorage.setItem('ropi_user', JSON.stringify(responsData.data));
+        // VERSI DINAMIS: Langsung baca dari Backend/ERPNext 
+        const userData = {
+          name: responsData.data.name || responsData.data.employee_name || responsData.data.full_name || 'Karyawan',
+          role: responsData.data.role || responsData.data.designation || 'Staff', 
+          employee_id: responsData.data.employee_id,
+          branch: responsData.data.branch || 'PH Klaten',
+        };
+        
+        localStorage.setItem('ropi_user', JSON.stringify(userData));
         navigate('/home'); 
       } else {
-        alert('❌ Login gagal! Email tidak terdaftar atau password salah.');
+        alert('❌ Login gagal! ID Karyawan tidak terdaftar atau password salah.');
       }
     } catch (err) {
       console.error(err);
@@ -72,22 +79,20 @@ const Login = () => {
               <div className="relative">
                 <i className="fa-regular fa-user absolute left-5 top-4 text-[#3e2723] opacity-50 text-lg"></i>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email ERPNext"
+                  type="text"
+                  value={employeeId}
+                  onChange={(e) => setEmployeeId(e.target.value)}
+                  placeholder="ID Karyawan (Contoh: HR-EMP-00007)"
                   className="w-full bg-white border-2 border-transparent rounded-2xl py-4 pl-14 pr-4 text-lg focus:border-[#fbc02d] outline-none transition-all shadow-sm"
                   required
                 />
               </div>
             </div>
             
-            {/* 🔥 REVISI KOTAK PASSWORD 🔥 */}
             <div>
               <div className="relative">
                 <i className="fa-solid fa-lock absolute left-5 top-4 text-[#3e2723] opacity-50 text-lg"></i>
                 <input
-                  // Tipe input berubah dinamis berdasarkan state showPassword
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -95,7 +100,6 @@ const Login = () => {
                   className="w-full bg-white border-2 border-transparent rounded-2xl py-4 pl-14 pr-12 text-lg focus:border-[#fbc02d] outline-none transition-all shadow-sm"
                   required
                 />
-                {/* Tombol Mata */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -120,7 +124,6 @@ const Login = () => {
             </button>
           </form>
           
-          {/* Tombol Darurat untuk Hapus Cache */}
           <button 
             onClick={() => { localStorage.clear(); alert('Cache dibersihkan! Silakan reload page.'); window.location.reload(); }}
             className="mt-8 text-xs font-bold text-red-500 underline z-10"
