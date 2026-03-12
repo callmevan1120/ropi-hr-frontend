@@ -332,8 +332,8 @@ const DashboardHR = () => {
     dataAbsen.forEach((emp) => {
       // Expand izin per hari untuk Excel
       const empIzinDates: Record<string, string> = {};
+      const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
       if (filterMode === 'bulanan') {
-        const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
         const [year, month] = bulanAktif.split('-').map(Number);
         const bulanMulai = new Date(year, month - 1, 1);
         const bulanAkhir = new Date(year, month, 0);
@@ -349,6 +349,15 @@ const DashboardHR = () => {
             }
           }
         });
+      } else {
+        // Harian: cek apakah tanggalAktif masuk izin
+        const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
+          const from = new Date(r.from_date);
+          const to = new Date(r.to_date);
+          const tgl = new Date(tanggalAktif);
+          return tgl >= from && tgl <= to;
+        });
+        if (izinHariIni) empIzinDates[tanggalAktif] = izinHariIni.leave_type;
       }
 
       // Semua tanggal: absen + izin
@@ -435,6 +444,7 @@ const DashboardHR = () => {
         const shiftInfo = getJamShift(todayLog.in.shift, tanggalAktif, masterShifts);
         if (toMenit(formatJamLokal(todayLog.in.time)) > toMenit(shiftInfo.in)) globalTelat++;
       }
+      if (leaveMap[emp.employee] === 1) globalIzin++;
     } else {
       globalHadir += emp.totalHadir;
       globalTelat += emp.totalTelat;
@@ -482,12 +492,10 @@ const DashboardHR = () => {
                 <p className="text-[10px] text-red-300 font-bold uppercase tracking-wide">Telat</p>
                 <p className="font-black text-2xl leading-none mt-1">{globalTelat}</p>
               </div>
-              {filterMode === 'bulanan' && (
-                <div className="bg-blue-500/20 rounded-2xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none border border-blue-500/30 text-white min-w-[90px]">
-                  <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wide">Izin</p>
-                  <p className="font-black text-2xl leading-none mt-1">{globalIzin}</p>
-                </div>
-              )}
+              <div className="bg-blue-500/20 rounded-2xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none border border-blue-500/30 text-white min-w-[90px]">
+                <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wide">Izin</p>
+                <p className="font-black text-2xl leading-none mt-1">{globalIzin}</p>
+              </div>
             </div>
             <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-6 py-3.5 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto">
               <i className="fa-solid fa-file-excel text-lg" /> <span>Export Excel</span>
@@ -700,25 +708,6 @@ const DashboardHR = () => {
                       </div>
                     </div>
 
-                    {leaveMap[emp.employee] === 1 && (() => {
-                      const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
-                      const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
-                        const from = new Date(r.from_date);
-                        const to = new Date(r.to_date);
-                        const tgl = new Date(tanggalAktif);
-                        return tgl >= from && tgl <= to;
-                      });
-                      return izinHariIni ? (
-                        <div className="mb-5 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 flex items-start gap-3">
-                          <i className="fa-solid fa-envelope-open-text text-blue-400 mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-[10px] text-blue-500 font-bold uppercase mb-0.5">Izin Hari Ini</p>
-                            <p className="text-sm font-black text-blue-800">{izinHariIni.leave_type}</p>
-                            {izinHariIni.description && <p className="text-[10px] text-blue-600 mt-0.5">{izinHariIni.description}</p>}
-                          </div>
-                        </div>
-                      ) : null;
-                    })()}
                     {leaveMap[emp.employee] === 1 && (() => {
                       const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
                       const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
