@@ -238,7 +238,33 @@ const DashboardHR = () => {
           setLeaveMap(newLeaveMap);
           setLeaveRawMap(newLeaveRawMap);
         } else {
-          setLeaveMap({});
+          // Harian: fetch juga, filter tanggal aktif saja
+          const leaveResults = await Promise.allSettled(
+            arrData.map(emp =>
+              fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}`)
+                .then(r => r.json())
+                .then(d => ({ employee: emp.employee, data: d.success ? d.data : [] }))
+                .catch(() => ({ employee: emp.employee, data: [] }))
+            )
+          );
+          const newLeaveMap: Record<string, number> = {};
+          const newLeaveRawMap: Record<string, any[]> = {};
+          leaveResults.forEach(result => {
+            if (result.status === 'fulfilled') {
+              const { employee, data } = result.value;
+              // Cek apakah tanggalAktif masuk dalam izin
+              const isIzin = (data as any[]).filter(r => r.status?.toLowerCase() !== 'rejected').some((r: any) => {
+                const from = new Date(r.from_date);
+                const to = new Date(r.to_date);
+                const tgl = new Date(tanggalAktif);
+                return tgl >= from && tgl <= to;
+              });
+              newLeaveMap[employee] = isIzin ? 1 : 0;
+              newLeaveRawMap[employee] = data as any[];
+            }
+          });
+          setLeaveMap(newLeaveMap);
+          setLeaveRawMap(newLeaveRawMap);
         }
       } else {
         setDataAbsen([]);
@@ -499,22 +525,39 @@ const DashboardHR = () => {
 
                   {/* Jam Masuk / Keluar atau Rekap */}
                   {filterMode === 'harian' ? (
-                    <div className="grid grid-cols-2 gap-3 mt-auto">
-                      <div className="bg-[#fff8e1] rounded-xl p-3 flex flex-col justify-center border border-[#fbc02d]/30">
-                        <div className="flex items-center gap-1.5 mb-1 text-[#fbc02d]">
-                          <i className="fa-solid fa-clock text-xs" />
-                          <p className="text-[10px] font-black uppercase text-[#3e2723]/60">Masuk</p>
+                    <>
+                      <div className="grid grid-cols-2 gap-3 mt-auto">
+                        <div className="bg-[#fff8e1] rounded-xl p-3 flex flex-col justify-center border border-[#fbc02d]/30">
+                          <div className="flex items-center gap-1.5 mb-1 text-[#fbc02d]">
+                            <i className="fa-solid fa-clock text-xs" />
+                            <p className="text-[10px] font-black uppercase text-[#3e2723]/60">Masuk</p>
+                          </div>
+                          <p className="font-black text-[#3e2723] text-lg">{inJam}</p>
                         </div>
-                        <p className="font-black text-[#3e2723] text-lg">{inJam}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-center border border-gray-200">
-                        <div className="flex items-center gap-1.5 mb-1 text-gray-400">
-                          <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
-                          <p className="text-[10px] font-black uppercase">Keluar</p>
+                        <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-center border border-gray-200">
+                          <div className="flex items-center gap-1.5 mb-1 text-gray-400">
+                            <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
+                            <p className="text-[10px] font-black uppercase">Keluar</p>
+                          </div>
+                          <p className="font-black text-gray-600 text-lg">{outJam}</p>
                         </div>
-                        <p className="font-black text-gray-600 text-lg">{outJam}</p>
                       </div>
-                    </div>
+                      {leaveMap[emp.employee] === 1 && (() => {
+                        const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+                        const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
+                          const from = new Date(r.from_date);
+                          const to = new Date(r.to_date);
+                          const tgl = new Date(tanggalAktif);
+                          return tgl >= from && tgl <= to;
+                        });
+                        return izinHariIni ? (
+                          <div className="mt-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                            <i className="fa-solid fa-envelope-open-text text-blue-400 text-xs shrink-0" />
+                            <p className="text-[10px] font-black text-blue-700">{izinHariIni.leave_type}</p>
+                          </div>
+                        ) : null;
+                      })()}
+                    </>
                   ) : (
                     <div className="grid grid-cols-3 gap-2 mt-auto">
                       <div className="bg-green-50 rounded-xl p-2.5 flex flex-col justify-center border border-green-100">
@@ -611,6 +654,44 @@ const DashboardHR = () => {
                       </div>
                     </div>
 
+                    {leaveMap[emp.employee] === 1 && (() => {
+                      const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+                      const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
+                        const from = new Date(r.from_date);
+                        const to = new Date(r.to_date);
+                        const tgl = new Date(tanggalAktif);
+                        return tgl >= from && tgl <= to;
+                      });
+                      return izinHariIni ? (
+                        <div className="mb-5 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+                          <i className="fa-solid fa-envelope-open-text text-blue-400 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-[10px] text-blue-500 font-bold uppercase mb-0.5">Izin Hari Ini</p>
+                            <p className="text-sm font-black text-blue-800">{izinHariIni.leave_type}</p>
+                            {izinHariIni.description && <p className="text-[10px] text-blue-600 mt-0.5">{izinHariIni.description}</p>}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+                    {leaveMap[emp.employee] === 1 && (() => {
+                      const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+                      const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
+                        const from = new Date(r.from_date);
+                        const to = new Date(r.to_date);
+                        const tgl = new Date(tanggalAktif);
+                        return tgl >= from && tgl <= to;
+                      });
+                      return izinHariIni ? (
+                        <div className="mb-5 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+                          <i className="fa-solid fa-envelope-open-text text-blue-400 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-[10px] text-blue-500 font-bold uppercase mb-0.5">Izin Hari Ini</p>
+                            <p className="text-sm font-black text-blue-800">{izinHariIni.leave_type}</p>
+                            {izinHariIni.description && <p className="text-[10px] text-blue-600 mt-0.5">{izinHariIni.description}</p>}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
                     <div className="flex flex-col gap-2">
                       {todayLog.in?.latitude && (
                         <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
