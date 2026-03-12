@@ -15,18 +15,12 @@ interface BtnConfig {
   mode: string;
 }
 
-// ── HELPER: AMBIL JAM LANGSUNG DARI ERPNEXT (Tanpa konversi zona waktu) ──
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
-  
-  // Data dari ERPNext biasanya: "2026-03-11 07:48:43"
-  // Kita pisahkan berdasarkan spasi, lalu ambil jamnya saja
   const parts = timeString.split(' ');
   if (parts.length > 1) {
-    return parts[1].substring(0, 5); // Mengambil format HH:mm (07:48)
+    return parts[1].substring(0, 5); 
   }
-  
-  // Fallback jika formatnya berbeda
   return timeString.substring(0, 5); 
 };
 
@@ -51,50 +45,49 @@ const Home = () => {
       navigate('/');
       return;
     }
+    
     const parsedUser: User = JSON.parse(userData);
     setUser(parsedUser);
+
+    if (parsedUser.role === 'HR' || parsedUser.role === 'HR Manager' || parsedUser.role === 'System Manager') {
+      navigate('/hr-dashboard');
+      return;
+    }
+
     ambilStatusHariIni(parsedUser.employee_id);
   }, [navigate]);
 
   const ambilStatusHariIni = async (employeeId: string) => {
     try {
-      // 🔥 REVISI: Gunakan waktu lokal HP, bukan toISOString() yang berbasis UTC (London)
       const now = new Date();
       const yyyy = now.getFullYear();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
-      const tglHariIni = `${yyyy}-${mm}-${dd}`; // Menghasilkan YYYY-MM-DD sesuai jam lokal
+      const tglHariIni = `${yyyy}-${mm}-${dd}`; 
 
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(employeeId)}&from=${tglHariIni}&to=${tglHariIni}`);
       const data = await res.json();
 
-      // Helper untuk reset tombol ke state awal (MASUK)
       const setTombolMasukAwal = () => {
         setStatusAbsen('Belum ada catatan absen hari ini');
         localStorage.removeItem('ropi_status_absen');
         setBtnConfig({
           text: 'Absen Masuk Sekarang',
           icon: 'fa-right-to-bracket',
-          className: 'bg-green-500 text-white shadow-green-500/30',
+          className: 'bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-500/30',
           mode: 'MASUK',
         });
       };
 
       if (data.success && data.data && data.data.length > 0) {
-        // Filter khusus untuk memastikan data benar-benar hari ini
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const absenHariIni = data.data.filter((item: any) => {
           const tglAbsen = item.time ? item.time.substring(0, 10) : item.attendance_date;
           return tglAbsen === tglHariIni;
         });
 
         if (absenHariIni.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const sorted = absenHariIni.sort((a: any, b: any) => b.time.localeCompare(a.time));
-          
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const sudahMasuk = sorted.some((d: any) => d.log_type === 'IN');
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const sudahKeluar = sorted.some((d: any) => d.log_type === 'OUT');
 
           const terakhir = sorted[0];
@@ -105,29 +98,25 @@ const Home = () => {
           setStatusAbsen(statusText);
           localStorage.setItem('ropi_status_absen', statusText);
 
-          // Sudah MASUK tapi belum KELUAR → tombol KELUAR
           if (sudahMasuk && !sudahKeluar) {
             setBtnConfig({
               text: 'Absen Keluar Sekarang',
               icon: 'fa-right-from-bracket',
-              className: 'bg-red-500 text-white shadow-red-500/30',
+              className: 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30',
               mode: 'KELUAR',
             });
           } else {
-            // Belum MASUK, atau sudah MASUK & KELUAR → tombol MASUK
             setBtnConfig({
               text: 'Absen Masuk Sekarang',
               icon: 'fa-right-to-bracket',
-              className: 'bg-green-500 text-white shadow-green-500/30',
+              className: 'bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-500/30',
               mode: 'MASUK',
             });
           }
         } else {
-          // Jika array ada tapi bukan tanggal hari ini
           setTombolMasukAwal();
         }
       } else {
-        // Jika belum ada absen sama sekali hari ini
         setTombolMasukAwal();
       }
     } catch (e) {
@@ -136,7 +125,7 @@ const Home = () => {
       setBtnConfig({
         text: 'Buka Kamera Absen',
         icon: 'fa-camera',
-        className: 'bg-[#3e2723] text-[#fbc02d]',
+        className: 'bg-[#3e2723] hover:bg-[#4e342e] text-[#fbc02d] shadow-lg shadow-[#3e2723]/20',
         mode: 'MASUK',
       });
     }
@@ -147,176 +136,204 @@ const Home = () => {
   };
 
   return (
-    <div className="bg-gray-100 flex justify-center h-screen overflow-hidden font-sans">
-      <div className="w-full max-w-sm bg-white h-full flex flex-col shadow-2xl relative">
-
-        {/* Header */}
-        <div className="bg-[#3e2723] pt-12 pb-20 px-6 rounded-b-[2.5rem] shrink-0">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-black text-[#fbc02d]">
-                Halo, <span>{user.name}</span> 👋
-              </h2>
-              <p className="text-white/70 text-sm mt-0.5">{user.role || 'Staff Roti Ropi'}</p>
+    <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
+      <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+      
+      {/* ── BUNGKUS UTAMA RESPONSIVE (SPLIT SCREEN) ── */}
+      <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
+        
+        {/* BAGIAN KIRI: ILLUSTRASI PC */}
+        <div className="hidden md:flex flex-col w-1/2 bg-[#3e2723] relative p-12 lg:p-16 justify-between overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+            <div className="absolute -top-20 -left-20 w-96 h-96 bg-[#fbc02d] rounded-full blur-3xl"></div>
+            <div className="absolute bottom-10 -right-10 w-72 h-72 bg-orange-400 rounded-full blur-3xl"></div>
+          </div>
+          <div className="relative z-10">
+            <div className="w-20 h-20 bg-[#fbc02d] rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-[#fbc02d]/20 rotate-3">
+              <i className="fa-solid fa-bread-slice text-[#3e2723] text-4xl -rotate-3"></i>
             </div>
-            <Link to="/profil" className="w-14 h-14 rounded-full bg-[#fbc02d] border-2 border-[#fbc02d] flex items-center justify-center text-[#3e2723] font-black text-xl shadow-lg active:scale-95 transition-transform">
-              <span>{(user.name || 'K').charAt(0).toUpperCase()}</span>
-            </Link>
+            <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+              Ropi<span className="text-[#fbc02d]">HR</span> <br /> Workspace.
+            </h1>
+            <p className="text-white/70 mt-6 font-medium text-base lg:text-lg leading-relaxed max-w-sm">
+              Sistem absensi dan laporan terpadu untuk Karyawan dan Manajemen Roti Ropi.
+            </p>
+          </div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 bg-white/10 p-4 rounded-2xl border border-white/5 backdrop-blur-sm w-max">
+              <div className="w-10 h-10 rounded-full bg-green-400/20 flex items-center justify-center text-green-400">
+                <i className="fa-solid fa-shield-halved"></i>
+              </div>
+              <div>
+                <p className="text-white font-bold text-sm">Aman & Terintegrasi</p>
+                <p className="text-white/50 text-xs">Terkoneksi langsung ke ERPNext</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 px-6 -mt-12 relative z-10 overflow-y-auto">
-          <div className="bg-white rounded-3xl p-5 shadow-lg border border-gray-100 mb-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-[#fbc02d]"></div>
-            <p className="text-gray-400 text-xs font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
-            <p className="text-[#3e2723] font-bold text-sm mb-4">{statusAbsen}</p>
-
-            <button
-              onClick={() => navigate(`/absen?mode=${btnConfig.mode}&auto=true`)}
-              className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg shadow-lg ${btnConfig.className}`}
-            >
-              <i className={`fa-solid ${btnConfig.icon} fa-fw`}></i> {btnConfig.text}
-            </button>
-          </div>
-
-          <h3 className="font-black text-[#3e2723] text-base mb-3">Menu Laporan</h3>
-          <div className="flex flex-col gap-3 mb-8">
-            {/* MENU IZIN */}
-            <Link to="/izin" className="bg-[#fff8e1] p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-transparent hover:border-[#fbc02d]">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-[#fbc02d] rounded-full flex items-center justify-center text-[#3e2723] text-lg shrink-0">
-                  <i className="fa-solid fa-envelope-open-text"></i>
-                </div>
+        {/* BAGIAN KANAN: APLIKASI MOBILE */}
+        <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
+          <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto">
+            
+            {/* ── HEADER MELENGKUNG ── */}
+            <div className="bg-[#3e2723] pt-12 pb-24 px-6 rounded-b-[2.5rem] shrink-0 shadow-sm relative z-0">
+              <div className="flex justify-between items-center">
                 <div>
-                  <p className="font-black text-[#3e2723] text-sm">Pengajuan Izin</p>
-                  <p className="text-gray-400 text-xs">Izin sakit & keperluan lain</p>
+                  <h2 className="text-2xl font-black text-[#fbc02d] leading-tight">
+                    Halo, <span>{user.name.split(' ')[0]}</span> 👋
+                  </h2>
+                  <p className="text-white/70 text-sm mt-0.5">{user.role || 'Staff Roti Ropi'}</p>
                 </div>
+                <Link to="/profil" className="w-14 h-14 rounded-full bg-[#fff8e1] border-2 border-[#fbc02d] flex items-center justify-center text-[#3e2723] font-black text-2xl shadow-lg active:scale-95 transition-transform">
+                  <span>{(user.name || 'K').charAt(0).toUpperCase()}</span>
+                </Link>
               </div>
-              <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
-            </Link>
-
-            {/* MENU CUTI TAHUNAN */}
-            <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-lg shrink-0">
-                  <i className="fa-solid fa-calendar-minus"></i>
-                </div>
-                <div>
-                  <p className="font-black text-[#3e2723] text-sm">Cuti Tahunan</p>
-                  <p className="text-gray-400 text-xs">Cek sisa kuota cuti</p>
-                </div>
-              </div>
-              <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
-            </Link>
-
-            {/* MENU REKAP ABSEN */}
-            <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-[#3e2723] rounded-full flex items-center justify-center text-[#fbc02d] text-lg shrink-0">
-                  <i className="fa-solid fa-clipboard-list"></i>
-                </div>
-                <div>
-                  <p className="font-black text-[#3e2723] text-sm">Riwayat Absen</p>
-                  <p className="text-gray-400 text-xs">Rekap kehadiran bulanan</p>
-                </div>
-              </div>
-              <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
-            </Link>
-          </div>
-
-          {/* SECTION BUKU PANDUAN */}
-          <h3 className="font-black text-[#3e2723] text-base mb-3 flex items-center gap-2">
-            <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
-          </h3>
-          <div className="flex flex-col gap-2">
-
-            {/* Panduan 1: Cara Absen */}
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              <button
-                onClick={() => togglePanduan('absen')}
-                className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
-              >
-                <span className="font-bold text-[#3e2723] text-sm">1. Cara Absen Harian</span>
-                <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'absen' ? 'rotate-180' : ''}`}></i>
-              </button>
-              {bukaPanduan === 'absen' && (
-                <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
-                  <ul className="list-decimal pl-4 space-y-1.5">
-                    <li>Pastikan Anda berada di area kantor/outlet.</li>
-                    <li>Klik tombol warna hijau/merah di atas (Absen Masuk/Keluar).</li>
-                    <li>Izinkan akses lokasi (GPS) dan Kamera jika diminta browser.</li>
-                    <li>Posisikan wajah Anda hingga kotak kamera berwarna hijau dan muncul teks "Jepret!".</li>
-                    <li><strong>Penting:</strong> Pastikan Anda memegang mesin fingerprint/area sekitar sesuai instruksi HR.</li>
-                    <li>Klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
-                  </ul>
-                </div>
-              )}
             </div>
 
-            {/* Panduan 2: Izin & Cuti */}
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              <button
-                onClick={() => togglePanduan('izin')}
-                className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
-              >
-                <span className="font-bold text-[#3e2723] text-sm">2. Pengajuan Izin & Cuti</span>
-                <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'izin' ? 'rotate-180' : ''}`}></i>
-              </button>
-              {bukaPanduan === 'izin' && (
-                <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
-                  <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
-                  <ul className="list-disc pl-4 space-y-1.5 mb-2">
-                    <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak/Penting. Wajib melampirkan bukti (Surat Dokter, dll).</li>
-                    <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan.</li>
-                  </ul>
-                  <p>Buka menu "Pengajuan Izin" atau "Cuti Tahunan", isi tanggal mulai dan selesai, serta alasan yang jelas. Status pengajuan bisa dicek di riwayat.</p>
+            {/* ── CONTENT AREA ── */}
+            <div className="flex-1 px-6 -mt-16 relative z-10 overflow-y-auto no-scrollbar pb-24">
+              
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300"></div>
+                <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
+                <p className="text-[#3e2723] font-bold text-sm mb-5 bg-gray-50 p-2.5 rounded-xl border border-gray-100 inline-block w-full">{statusAbsen}</p>
+
+                <button
+                  onClick={() => navigate(`/absen?mode=${btnConfig.mode}&auto=true`)}
+                  className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg ${btnConfig.className}`}
+                >
+                  <i className={`fa-solid ${btnConfig.icon} fa-fw text-xl`}></i> {btnConfig.text}
+                </button>
+              </div>
+
+              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide">Menu Laporan</h3>
+              <div className="flex flex-col gap-3 mb-8">
+                <Link to="/izin" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50 group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-[#fff8e1] rounded-full flex items-center justify-center text-[#fbc02d] text-xl shrink-0 group-hover:bg-[#fbc02d] group-hover:text-[#3e2723] transition-colors">
+                      <i className="fa-solid fa-envelope-open-text"></i>
+                    </div>
+                    <div>
+                      <p className="font-black text-[#3e2723] text-sm">Pengajuan Izin</p>
+                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Sakit & Keperluan</p>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-[#fff8e1] group-hover:text-[#fbc02d] transition-colors">
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                  </div>
+                </Link>
+
+                <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-blue-400/50 group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-xl shrink-0 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                      <i className="fa-solid fa-calendar-minus"></i>
+                    </div>
+                    <div>
+                      <p className="font-black text-[#3e2723] text-sm">Cuti Tahunan</p>
+                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Cek Sisa Kuota</p>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                  </div>
+                </Link>
+
+                <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#3e2723]/50 group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 text-xl shrink-0 group-hover:bg-[#3e2723] group-hover:text-[#fbc02d] transition-colors">
+                      <i className="fa-solid fa-clipboard-list"></i>
+                    </div>
+                    <div>
+                      <p className="font-black text-[#3e2723] text-sm">Riwayat Absen</p>
+                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Kehadiran Bulanan</p>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-gray-200 group-hover:text-[#3e2723] transition-colors">
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                  </div>
+                </Link>
+              </div>
+
+              {/* SECTION BUKU PANDUAN */}
+              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide flex items-center gap-2">
+                <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
+              </h3>
+              <div className="flex flex-col gap-2">
+                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                  <button onClick={() => togglePanduan('absen')} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
+                    <span className="font-bold text-[#3e2723] text-sm">1. Cara Absen Harian</span>
+                    <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'absen' ? 'rotate-180' : ''}`}></i>
+                  </button>
+                  {bukaPanduan === 'absen' && (
+                    <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                      <ul className="list-decimal pl-4 space-y-1.5">
+                        <li>Pastikan Anda berada di area kantor/outlet.</li>
+                        <li>Klik tombol warna hijau/merah di atas (Absen Masuk/Keluar).</li>
+                        <li>Izinkan akses lokasi (GPS) dan Kamera jika diminta browser.</li>
+                        <li>Posisikan wajah Anda hingga kotak kamera berwarna hijau dan muncul teks "Jepret!".</li>
+                        <li><strong>Penting:</strong> Pastikan Anda memegang mesin fingerprint/area sekitar sesuai instruksi HR.</li>
+                        <li>Klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
+                      </ul>
+                    </div>
+                  )}
                 </div>
-              )}
+                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                  <button onClick={() => togglePanduan('izin')} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
+                    <span className="font-bold text-[#3e2723] text-sm">2. Pengajuan Izin & Cuti</span>
+                    <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'izin' ? 'rotate-180' : ''}`}></i>
+                  </button>
+                  {bukaPanduan === 'izin' && (
+                    <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                      <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
+                      <ul className="list-disc pl-4 space-y-1.5 mb-2">
+                        <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak/Penting. Wajib melampirkan bukti (Surat Dokter, dll).</li>
+                        <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan.</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                  <button onClick={() => togglePanduan('error')} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
+                    <span className="font-bold text-[#3e2723] text-sm">3. Solusi Jika Error</span>
+                    <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'error' ? 'rotate-180' : ''}`}></i>
+                  </button>
+                  {bukaPanduan === 'error' && (
+                    <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                      <ul className="list-disc pl-4 space-y-2">
+                        <li><strong>Lokasi Jauh/Tidak Sesuai:</strong> Pastikan GPS HP Anda menyala dan di-setting "Akurasi Tinggi". Buka Google Maps sebentar untuk memancing sinyal GPS, lalu coba absen lagi.</li>
+                        <li><strong>Kamera Error:</strong> Pastikan Anda menggunakan browser Chrome/Safari terbaru dan sudah memberikan izin kamera.</li>
+                        <li><strong>Layar Putih/Blank:</strong> Keluar dari akun (Logout) atau hapus cache browser Anda.</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* Panduan 3: Solusi Error */}
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              <button
-                onClick={() => togglePanduan('error')}
-                className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50"
-              >
-                <span className="font-bold text-[#3e2723] text-sm">3. Solusi Jika Error</span>
-                <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'error' ? 'rotate-180' : ''}`}></i>
-              </button>
-              {bukaPanduan === 'error' && (
-                <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
-                  <ul className="list-disc pl-4 space-y-2">
-                    <li><strong>Lokasi Jauh/Tidak Sesuai:</strong> Pastikan GPS HP Anda menyala dan di-setting "Akurasi Tinggi". Buka Google Maps sebentar untuk memancing sinyal GPS, lalu coba absen lagi.</li>
-                    <li><strong>Kamera Error:</strong> Pastikan Anda menggunakan browser Chrome/Safari terbaru dan sudah memberikan izin kamera.</li>
-                    <li><strong>Layar Putih/Blank:</strong> Keluar dari akun (Logout) atau hapus cache browser Anda.</li>
-                  </ul>
-                </div>
-              )}
-            </div>
+            {/* NAVIGATION BOTTOM */}
+            <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+              <div className="flex flex-col items-center text-[#3e2723] w-1/4">
+                <i className="fa-solid fa-house text-xl mb-1"></i>
+                <span className="text-[10px] font-black uppercase">Home</span>
+              </div>
+              <Link to="/absen" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+                <i className="fa-solid fa-clipboard-user text-xl mb-1"></i>
+                <span className="text-[10px] font-black uppercase">Absen</span>
+              </Link>
+              <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+                <i className="fa-solid fa-envelope-open-text text-xl mb-1"></i>
+                <span className="text-[10px] font-black uppercase">Izin</span>
+              </Link>
+              <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
+                <i className="fa-solid fa-calendar-minus text-xl mb-1"></i>
+                <span className="text-[10px] font-black uppercase">Cuti</span>
+              </Link>
+            </nav>
 
           </div>
         </div>
 
-        {/* NAVIGATION BOTTOM */}
-        <nav className="shrink-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
-          <div className="flex flex-col items-center text-[#3e2723] w-1/4">
-            <i className="fa-solid fa-house text-xl mb-1"></i>
-            <span className="text-[10px] font-black uppercase">Home</span>
-          </div>
-          <Link to="/absen" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-clipboard-user text-xl mb-1"></i>
-            <span className="text-[10px] font-black uppercase">Absen</span>
-          </Link>
-          <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-envelope-open-text text-xl mb-1"></i>
-            <span className="text-[10px] font-black uppercase">Izin</span>
-          </Link>
-          <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-            <i className="fa-solid fa-calendar-minus text-xl mb-1"></i>
-            <span className="text-[10px] font-black uppercase">Cuti</span>
-          </Link>
-        </nav>
       </div>
     </div>
   );

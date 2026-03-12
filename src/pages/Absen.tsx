@@ -667,38 +667,77 @@ const Absen = () => {
   const stepLabel = cameraStep === 1 ? 'Langkah 1/3' : cameraStep === 2 ? 'Langkah 2/3' : cameraStep === 3 ? 'Langkah 3/3' : 'Konfirmasi';
 
   return (
-    <div className="bg-gray-100 flex justify-center h-screen overflow-hidden font-sans">
-      <div className="w-full max-w-sm bg-white h-full flex flex-col shadow-2xl relative">
+    <div className="bg-gray-100 flex justify-center h-screen overflow-hidden font-sans md:bg-[#3e2723]">
+      <div className="w-full max-w-sm md:max-w-none md:w-full bg-white h-full flex flex-col md:flex-row shadow-2xl relative">
 
-        {/* HEADER */}
-        <div className="bg-[#3e2723] pt-12 pb-5 px-6 shrink-0 shadow-md z-10">
-          <div className="flex items-center justify-between">
+        {/* HEADER — mobile: top bar | desktop: sidebar kiri */}
+        <div className="bg-[#3e2723] pt-12 pb-5 px-6 shrink-0 shadow-md z-10 md:pt-8 md:w-72 md:h-full md:flex md:flex-col md:shadow-[5px_0_30px_rgba(0,0,0,0.3)]">
+
+          {/* Logo/judul */}
+          <div className="flex items-center justify-between md:flex-col md:items-start md:gap-0 md:mb-8">
             <div className="flex items-center gap-3">
-              <Link to="/home" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white active:scale-95 transition-transform">
+              <Link to="/home" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white active:scale-95 transition-transform hover:bg-white/30">
                 <i className="fa-solid fa-arrow-left" />
               </Link>
-              <h1 className="text-xl font-black text-[#fbc02d]">Laporan Absen</h1>
+              <div>
+                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest hidden md:block">Ropi HR</p>
+                <h1 className="text-xl font-black text-[#fbc02d]">Laporan Absen</h1>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
+
+            {/* Navigator bulan — mobile: inline | desktop: block di bawah judul */}
+            <div className="flex items-center gap-1.5 md:mt-5 md:w-full md:justify-between">
               <button onClick={() => { if (bulanAktif === 0) { setBulanAktif(11); setTahunAktif(tahunAktif - 1); } else setBulanAktif(bulanAktif - 1); }} className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30"><i className="fa-solid fa-chevron-left" /></button>
               <span className="text-white text-xs font-bold min-w-[80px] text-center">{new Date(tahunAktif, bulanAktif, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</span>
               <button onClick={() => { if (bulanAktif === 11) { setBulanAktif(0); setTahunAktif(tahunAktif + 1); } else setBulanAktif(bulanAktif + 1); }} className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30"><i className="fa-solid fa-chevron-right" /></button>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-4 gap-2">
+
+          {/* Rekap chips */}
+          <div className="mt-4 grid grid-cols-4 gap-2 md:grid-cols-2 md:gap-3">
             {[{ label: 'Hadir', value: rekapHadir, color: 'text-green-400' }, { label: 'Telat', value: rekapTelat, color: 'text-red-400' }, { label: 'Izin', value: rekapIzin, color: 'text-blue-300' }, { label: 'Cuti', value: rekapCuti, color: 'text-purple-300' }].map(item => (
-              <div key={item.label} className="bg-white/10 rounded-xl py-2 text-center">
-                <p className={`text-xl font-black ${item.color}`}>{item.value}</p>
+              <div key={item.label} className="bg-white/10 rounded-xl py-2 text-center md:py-3">
+                <p className={`text-xl font-black ${item.color} md:text-3xl`}>{item.value}</p>
                 <p className="text-[9px] font-black text-white/60 uppercase tracking-wide">{item.label}</p>
               </div>
             ))}
           </div>
+
+          {/* Desktop: user info + nav vertikal di sidebar */}
+          <div className="hidden md:flex md:flex-col md:flex-1 md:mt-8">
+            {user && (
+              <div className="bg-white/10 rounded-2xl px-4 py-3 mb-6">
+                <p className="text-[10px] text-white/50 font-bold uppercase mb-0.5">Karyawan</p>
+                <p className="text-white font-black text-sm leading-tight">{user.name}</p>
+                <p className="text-white/40 text-[10px] font-bold">{user.employee_id}</p>
+              </div>
+            )}
+            <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-3 px-1">Menu</p>
+            <nav className="flex flex-col gap-1">
+              {[
+                { to: '/home', icon: 'fa-house', label: 'Home' },
+                { to: '/absen', icon: 'fa-clipboard-user', label: 'Absen', active: true },
+                { to: '/izin', icon: 'fa-envelope-open-text', label: 'Izin' },
+                { to: '/cuti', icon: 'fa-calendar-minus', label: 'Cuti' },
+              ].map(item => (
+                item.active
+                  ? <div key={item.label} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#fbc02d] text-[#3e2723]">
+                      <i className={`fa-solid ${item.icon} w-4`} />
+                      <span className="font-black text-sm">{item.label}</span>
+                    </div>
+                  : <Link key={item.label} to={item.to} className="flex items-center gap-3 px-4 py-3 rounded-xl text-white/60 hover:bg-white/10 hover:text-white transition-colors">
+                      <i className={`fa-solid ${item.icon} w-4`} />
+                      <span className="font-black text-sm">{item.label}</span>
+                    </Link>
+              ))}
+            </nav>
+          </div>
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 overflow-y-auto pt-4">
+        <div className="flex-1 overflow-y-auto pt-4 md:bg-gray-50">
           {leaveRecords.length > 0 && (
-            <div className="px-4 mb-3 flex flex-wrap gap-1.5">
+            <div className="px-4 md:px-8 mb-3 flex flex-wrap gap-1.5">
               {leaveRecords.map(r => {
                 const statusColor = r.status?.toLowerCase() === 'approved' ? 'bg-blue-100 text-blue-700 border-blue-200' : r.status?.toLowerCase() === 'rejected' ? 'bg-red-100 text-red-600 border-red-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200';
                 const fromLabel = new Date(r.from_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
@@ -713,8 +752,8 @@ const Absen = () => {
             </div>
           )}
 
-          <div className="px-4 mb-4">
-            <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
+          <div className="px-4 md:px-8 mb-4">
+            <div className="bg-white rounded-2xl p-3 md:p-5 shadow-sm border border-gray-100">
               <div className="grid grid-cols-7 text-center text-[9px] font-black text-gray-400 mb-1.5">
                 {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(h => <div key={h}>{h}</div>)}
               </div>
@@ -730,7 +769,7 @@ const Absen = () => {
             </div>
           </div>
 
-          <div className="px-4">
+          <div className="px-4 md:px-8">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-black text-[#3e2723] text-sm">Riwayat Kehadiran</h3>
               <p className="text-[10px] text-gray-400"><i className="fa-solid fa-hand-pointer mr-1" />Klik untuk detail</p>
@@ -767,7 +806,7 @@ const Absen = () => {
                       badgeBelumKeluar = <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">Belum Keluar</span>;
                     }
                     return (
-                      <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-3 rounded-2xl border border-gray-100 flex items-center gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
+                      <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-3 rounded-2xl border border-gray-100 flex items-center gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/60 hover:shadow-md hover:bg-[#fffdf7]">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
                           <i className={`fa-solid ${d.in ? 'fa-check' : adaIzinHariIni ? 'fa-envelope-open-text' : 'fa-minus'}`} />
                         </div>
@@ -791,8 +830,8 @@ const Absen = () => {
           </div>
         </div>
 
-        {/* BOTTOM NAV */}
-        <nav className="shrink-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
+        {/* BOTTOM NAV — mobile only */}
+        <nav className="shrink-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)] md:hidden">
           <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-house text-xl mb-1" /><span className="text-[10px] font-black uppercase">Home</span></Link>
           <div className="flex flex-col items-center text-[#3e2723] w-1/4"><i className="fa-solid fa-clipboard-user text-xl mb-1 drop-shadow-md" /><span className="text-[10px] font-black uppercase">Absen</span></div>
           <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-envelope-open-text text-xl mb-1" /><span className="text-[10px] font-black uppercase">Izin</span></Link>
@@ -807,8 +846,8 @@ const Absen = () => {
             Step 4: Preview semua + kirim
             ══════════════════════════════════════════════════ */}
         {isModalAbsenOpen && (
-          <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
-            <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col shadow-2xl overflow-hidden" style={{ maxHeight: '95vh' }}>
+          <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
+            <div className="bg-white w-full max-w-sm mx-auto md:max-w-lg md:rounded-[2rem] rounded-t-[2.5rem] flex flex-col shadow-2xl overflow-hidden" style={{ maxHeight: '95vh' }}>
 
               {/* ── HEADER cokelat ── */}
               <div className="bg-[#3e2723] px-4 pt-3 pb-3 shrink-0">
@@ -1003,8 +1042,8 @@ const Absen = () => {
           );
 
           return (
-            <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
-              <div className="bg-white w-full max-w-sm mx-auto rounded-t-[2.5rem] flex flex-col shadow-2xl overflow-hidden" style={{ maxHeight: '92vh' }}>
+            <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
+              <div className="bg-white w-full max-w-sm mx-auto md:max-w-2xl md:rounded-[2rem] rounded-t-[2.5rem] flex flex-col shadow-2xl overflow-hidden" style={{ maxHeight: '92vh' }}>
 
                 {/* ── HEADER MODAL ── */}
                 <div className="bg-[#3e2723] px-6 pt-5 pb-4 shrink-0">
@@ -1045,7 +1084,7 @@ const Absen = () => {
                 </div>
 
                 {/* ── KONTEN FOTO ── */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
+                <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5 md:grid md:grid-cols-3 md:gap-6 md:items-start">
 
                   {/* Selfie: Masuk | Keluar */}
                   <div>
