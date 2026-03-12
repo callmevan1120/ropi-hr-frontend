@@ -815,7 +815,7 @@ const Absen = () => {
                 {/* Video fullscreen */}
                 <video
                   ref={videoRef}
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-contain bg-black"
                   playsInline muted
                   style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }}
                 />
