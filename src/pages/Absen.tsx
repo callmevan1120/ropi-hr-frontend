@@ -667,8 +667,8 @@ const Absen = () => {
   const stepLabel = cameraStep === 1 ? 'Langkah 1/3' : cameraStep === 2 ? 'Langkah 2/3' : cameraStep === 3 ? 'Langkah 3/3' : 'Konfirmasi';
 
   return (
-    <div className="bg-gray-100 flex justify-center min-h-screen font-sans">
-      <div className="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl relative">
+    <div className="bg-gray-100 flex justify-center h-screen overflow-hidden font-sans">
+      <div className="w-full max-w-sm bg-white h-full flex flex-col shadow-2xl relative">
 
         {/* HEADER */}
         <div className="bg-[#3e2723] pt-12 pb-5 px-6 shrink-0 shadow-md z-10">

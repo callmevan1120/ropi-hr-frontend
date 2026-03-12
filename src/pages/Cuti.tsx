@@ -96,13 +96,13 @@ const Cuti = () => {
   };
 
   return (
-    <div className="bg-gray-100 flex justify-center min-h-screen font-sans">
+    <div className="bg-gray-100 flex justify-center h-screen overflow-hidden font-sans">
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
-      <div className="w-full max-w-sm bg-white min-h-screen flex flex-col shadow-2xl relative">
+      <div className="w-full max-w-sm bg-white h-full flex flex-col shadow-2xl relative">
 
         {/* Header */}
         <div className="bg-[#3e2723] pt-12 pb-6 px-6 shrink-0 shadow-md z-10">
