@@ -865,7 +865,7 @@ const Absen = () => {
                       </div>
                     )}
                     {/* Viewfinder 4:3 */}
-                    <div className={`w-full rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-gray-900 relative transition-colors`} style={{ aspectRatio: '4/3' }}>
+                    <div className={`w-full rounded-3xl overflow-hidden border-4 ${kameraBorder} bg-gray-900 relative transition-colors`} style={{ aspectRatio: '3/4' }}>
                       {cameraStep === 2 && (
                         <div className="absolute top-3 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
                           <span className="bg-blue-600/90 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg animate-pulse">
