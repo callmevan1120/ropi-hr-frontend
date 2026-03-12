@@ -18,10 +18,15 @@ interface BtnConfig {
 // ── HELPER: AMBIL JAM LANGSUNG DARI ERPNEXT (Tanpa konversi zona waktu) ──
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
+  
+  // Data dari ERPNext biasanya: "2026-03-11 07:48:43"
+  // Kita pisahkan berdasarkan spasi, lalu ambil jamnya saja
   const parts = timeString.split(' ');
   if (parts.length > 1) {
     return parts[1].substring(0, 5); // Mengambil format HH:mm (07:48)
   }
+  
+  // Fallback jika formatnya berbeda
   return timeString.substring(0, 5); 
 };
 
@@ -53,15 +58,17 @@ const Home = () => {
 
   const ambilStatusHariIni = async (employeeId: string) => {
     try {
+      // 🔥 REVISI: Gunakan waktu lokal HP, bukan toISOString() yang berbasis UTC (London)
       const now = new Date();
       const yyyy = now.getFullYear();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
-      const tglHariIni = `${yyyy}-${mm}-${dd}`; 
+      const tglHariIni = `${yyyy}-${mm}-${dd}`; // Menghasilkan YYYY-MM-DD sesuai jam lokal
 
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(employeeId)}&from=${tglHariIni}&to=${tglHariIni}`);
       const data = await res.json();
 
+      // Helper untuk reset tombol ke state awal (MASUK)
       const setTombolMasukAwal = () => {
         setStatusAbsen('Belum ada catatan absen hari ini');
         localStorage.removeItem('ropi_status_absen');
@@ -74,6 +81,7 @@ const Home = () => {
       };
 
       if (data.success && data.data && data.data.length > 0) {
+        // Filter khusus untuk memastikan data benar-benar hari ini
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const absenHariIni = data.data.filter((item: any) => {
           const tglAbsen = item.time ? item.time.substring(0, 10) : item.attendance_date;
@@ -83,6 +91,7 @@ const Home = () => {
         if (absenHariIni.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const sorted = absenHariIni.sort((a: any, b: any) => b.time.localeCompare(a.time));
+          
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const sudahMasuk = sorted.some((d: any) => d.log_type === 'IN');
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -96,6 +105,7 @@ const Home = () => {
           setStatusAbsen(statusText);
           localStorage.setItem('ropi_status_absen', statusText);
 
+          // Sudah MASUK tapi belum KELUAR → tombol KELUAR
           if (sudahMasuk && !sudahKeluar) {
             setBtnConfig({
               text: 'Absen Keluar Sekarang',
@@ -104,6 +114,7 @@ const Home = () => {
               mode: 'KELUAR',
             });
           } else {
+            // Belum MASUK, atau sudah MASUK & KELUAR → tombol MASUK
             setBtnConfig({
               text: 'Absen Masuk Sekarang',
               icon: 'fa-right-to-bracket',
@@ -112,9 +123,11 @@ const Home = () => {
             });
           }
         } else {
+          // Jika array ada tapi bukan tanggal hari ini
           setTombolMasukAwal();
         }
       } else {
+        // Jika belum ada absen sama sekali hari ini
         setTombolMasukAwal();
       }
     } catch (e) {
@@ -169,23 +182,7 @@ const Home = () => {
 
           <h3 className="font-black text-[#3e2723] text-base mb-3">Menu Laporan</h3>
           <div className="flex flex-col gap-3 mb-8">
-            
-            {/*  MENU KHUSUS HR */}
-            {(user.role === 'HR' || user.role === 'HR Manager' || user.role === 'System Manager') && (
-              <Link to="/hr-dashboard" className="bg-gradient-to-r from-purple-800 to-purple-600 p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-purple-500 shadow-md">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-white text-lg shrink-0">
-                    <i className="fa-solid fa-crown"></i>
-                  </div>
-                  <div>
-                    <p className="font-black text-white text-sm">Dashboard HR</p>
-                    <p className="text-purple-200 text-xs">Cek & Export Absen Hari Ini</p>
-                  </div>
-                </div>
-                <i className="fa-solid fa-chevron-right text-purple-300 text-sm"></i>
-              </Link>
-            )}
-
+            {/* MENU IZIN */}
             <Link to="/izin" className="bg-[#fff8e1] p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-transparent hover:border-[#fbc02d]">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 bg-[#fbc02d] rounded-full flex items-center justify-center text-[#3e2723] text-lg shrink-0">
@@ -199,6 +196,7 @@ const Home = () => {
               <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
             </Link>
 
+            {/* MENU CUTI TAHUNAN */}
             <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-lg shrink-0">
@@ -212,6 +210,7 @@ const Home = () => {
               <i className="fa-solid fa-chevron-right text-gray-300 text-sm"></i>
             </Link>
 
+            {/* MENU REKAP ABSEN */}
             <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 bg-[#3e2723] rounded-full flex items-center justify-center text-[#fbc02d] text-lg shrink-0">

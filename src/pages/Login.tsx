@@ -2,25 +2,33 @@ import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  const [employeeId, setEmployeeId] = useState<string>('');
+  // PAKAI EMAIL 
+  const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   
   const navigate = useNavigate();
-
   const BACKEND = 'https://ropi-hr-backend.vercel.app';
 
-  // Otomatis arahkan ke home jika sudah login
+  // Cek jika sudah login, langsung arahkan ke jalurnya masing-masing
   useEffect(() => {
-    const user = localStorage.getItem('ropi_user');
-    if (user) navigate('/home');
+    const userStr = localStorage.getItem('ropi_user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      const isHR = user.role === 'HR' || user.role === 'HR Manager' || user.role === 'System Manager';
+      if (isHR) {
+        navigate('/hr-dashboard');
+      } else {
+        navigate('/home');
+      }
+    }
   }, [navigate]);
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!employeeId) {
-      alert('Employee ID wajib diisi!');
+    if (!email) {
+      alert('Email wajib diisi!');
       return;
     }
     
@@ -30,24 +38,34 @@ const Login = () => {
       const res = await fetch(`${BACKEND}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, password }), // Mengirim employeeId
+        body: JSON.stringify({ email, password }), // Mengirim Email
       });
 
       const responsData = await res.json();
 
       if (res.ok || responsData.statusCode === 200) {
-        // VERSI DINAMIS: Langsung baca dari Backend/ERPNext 
+        
+        const roleKaryawan = responsData.data.role || responsData.data.designation || 'Staff';
+        
         const userData = {
           name: responsData.data.name || responsData.data.employee_name || responsData.data.full_name || 'Karyawan',
-          role: responsData.data.role || responsData.data.designation || 'Staff', 
+          role: roleKaryawan, 
           employee_id: responsData.data.employee_id,
           branch: responsData.data.branch || 'PH Klaten',
         };
         
         localStorage.setItem('ropi_user', JSON.stringify(userData));
-        navigate('/home'); 
+
+        // LOGIKA JALAN BERCABANG: PISAHKAN DUNIA HR & KARYAWAN
+        const isHR = roleKaryawan === 'HR' || roleKaryawan === 'HR Manager' || roleKaryawan === 'System Manager';
+        if (isHR) {
+          navigate('/hr-dashboard'); // HRD langsung terlempar ke Dashboard HR
+        } else {
+          navigate('/home'); // Karyawan masuk ke Home biasa
+        }
+
       } else {
-        alert('❌ Login gagal! ID Karyawan tidak terdaftar atau password salah.');
+        alert('❌ Login gagal! Email tidak terdaftar atau password salah.');
       }
     } catch (err) {
       console.error(err);
@@ -77,12 +95,12 @@ const Login = () => {
           <form onSubmit={handleLogin} className="space-y-5 z-10 w-full">
             <div>
               <div className="relative">
-                <i className="fa-regular fa-user absolute left-5 top-4 text-[#3e2723] opacity-50 text-lg"></i>
+                <i className="fa-regular fa-envelope absolute left-5 top-4 text-[#3e2723] opacity-50 text-lg"></i>
                 <input
-                  type="text"
-                  value={employeeId}
-                  onChange={(e) => setEmployeeId(e.target.value)}
-                  placeholder="ID Karyawan (Contoh: HR-EMP-00007)"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email ERPNext"
                   className="w-full bg-white border-2 border-transparent rounded-2xl py-4 pl-14 pr-4 text-lg focus:border-[#fbc02d] outline-none transition-all shadow-sm"
                   required
                 />

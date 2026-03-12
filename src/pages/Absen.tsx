@@ -157,6 +157,7 @@ const Absen = () => {
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
 
+  // Step: 1=selfie wajah, 2=foto fingerprint, 3=TTD canvas, 4=preview & kirim
   const [cameraStep, setCameraStep] = useState(1);
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
   const [fotoMesinBase64, setFotoMesinBase64] = useState<string | null>(null);
@@ -210,9 +211,11 @@ const Absen = () => {
 
   useEffect(() => { return () => matikanKamera(); }, []);
 
+  // ── TTD CANVAS: setup event saat step 3 aktif ──
   useEffect(() => {
     if (cameraStep !== 3) return;
 
+    // Tunggu sebentar agar canvas sudah render
     const timer = setTimeout(() => {
       const canvas = ttdCanvasRef.current;
       if (!canvas) return;
@@ -271,6 +274,7 @@ const Absen = () => {
       canvas.addEventListener('touchmove', onMove, { passive: false });
       canvas.addEventListener('touchend', onEnd);
 
+      // simpan cleanup ke ref agar bisa dipanggil saat unmount
       (canvas as any)._cleanup = () => {
         canvas.removeEventListener('mousedown', onStart);
         canvas.removeEventListener('mousemove', onMove);
@@ -797,6 +801,10 @@ const Absen = () => {
 
         {/* ══════════════════════════════════════════════════
             MODAL ABSEN — 3 LANGKAH + KONFIRMASI
+            Step 1: Selfie wajah (face detection)
+            Step 2: Foto mesin fingerprint (kamera belakang)
+            Step 3: Tanda tangan canvas
+            Step 4: Preview semua + kirim
             ══════════════════════════════════════════════════ */}
         {isModalAbsenOpen && (
           <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
