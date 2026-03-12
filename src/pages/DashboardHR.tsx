@@ -282,11 +282,25 @@ const DashboardHR = () => {
     const worksheet = XLSX.utils.json_to_sheet(dataExcel);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
+
+    // Sheet ringkasan per karyawan (bulanan saja)
+    if (filterMode === 'bulanan') {
+      const ringkasan = dataAbsen.map(emp => ({
+        'ID Karyawan': emp.employee,
+        'Nama Karyawan': emp.employee_name,
+        'Total Hadir': emp.totalHadir,
+        'Total Telat': emp.totalTelat,
+        'Total Izin (Hari)': leaveMap[emp.employee] ?? 0,
+      }));
+      const wsRingkasan = XLSX.utils.json_to_sheet(ringkasan);
+      XLSX.utils.book_append_sheet(workbook, wsRingkasan, "Ringkasan");
+    }
+
     const namaFile = filterMode === 'harian' ? `Laporan_Harian_${tanggalAktif}.xlsx` : `Laporan_Bulanan_${bulanAktif}.xlsx`;
     XLSX.writeFile(workbook, namaFile);
   };
 
-  let globalHadir = 0, globalTelat = 0;
+  let globalHadir = 0, globalTelat = 0, globalIzin = 0;
   dataAbsen.forEach(emp => {
     if (filterMode === 'harian') {
       const todayLog = emp.logsByDate[tanggalAktif];
@@ -298,6 +312,7 @@ const DashboardHR = () => {
     } else {
       globalHadir += emp.totalHadir;
       globalTelat += emp.totalTelat;
+      globalIzin += leaveMap[emp.employee] ?? 0;
     }
   });
 
@@ -341,6 +356,12 @@ const DashboardHR = () => {
                 <p className="text-[10px] text-red-300 font-bold uppercase tracking-wide">Telat</p>
                 <p className="font-black text-2xl leading-none mt-1">{globalTelat}</p>
               </div>
+              {filterMode === 'bulanan' && (
+                <div className="bg-blue-500/20 rounded-2xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none border border-blue-500/30 text-white min-w-[90px]">
+                  <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wide">Izin</p>
+                  <p className="font-black text-2xl leading-none mt-1">{globalIzin}</p>
+                </div>
+              )}
             </div>
             <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-6 py-3.5 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto">
               <i className="fa-solid fa-file-excel text-lg" /> <span>Export Excel</span>
