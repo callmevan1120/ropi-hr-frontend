@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 
 interface RiwayatAbsen {
@@ -27,10 +27,10 @@ interface EmployeeSummary {
   totalHadir: number;
   totalTelat: number;
   totalCepat: number;
-  logsByDate: Record<string, DayLog>; // YYYY-MM-DD
+  logsByDate: Record<string, DayLog>;
 }
 
-// ── HELPER SHIFT & WAKTU ──
+// ── HELPER ──
 const formatJamLokal = (timeString?: string) => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
@@ -62,7 +62,17 @@ const isRamadhan = (): boolean => {
   return false;
 };
 
-// Fungsi getJamShift dikembalikan lengkap dengan parameter tanggal
+// Derive nama label shift dari tanggal (tanpa info branch per karyawan, default PH Klaten)
+const getShiftLabel = (tanggal: string, shiftNameFromRecord?: string): string => {
+  if (shiftNameFromRecord) return shiftNameFromRecord;
+  const tglDate = new Date(tanggal);
+  const isFriday = tglDate.getDay() === 5;
+  const ramadhan = isRamadhan();
+  const hariLabel = isFriday ? 'Jumat' : 'Senin - Kamis';
+  const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
+  return `${hariLabel} (PH Klaten ${periodeLabel})`;
+};
+
 const getJamShift = (
   shiftNameFromRecord: string | undefined,
   tanggal: string,
@@ -70,8 +80,7 @@ const getJamShift = (
 ): { in: string; out: string } => {
   if (shiftNameFromRecord && masterShifts[shiftNameFromRecord]) return masterShifts[shiftNameFromRecord];
   const tglDate = new Date(tanggal);
-  const hari = tglDate.getDay();
-  const isFriday = hari === 5;
+  const isFriday = tglDate.getDay() === 5;
   const ramadhan = isRamadhan();
   if (ramadhan) return isFriday ? { in: '07:00', out: '16:00' } : { in: '07:00', out: '15:30' };
   return isFriday ? { in: '07:30', out: '17:00' } : { in: '07:30', out: '16:30' };
@@ -85,24 +94,19 @@ const DashboardHR = () => {
   const [dataAbsen, setDataAbsen] = useState<EmployeeSummary[]>([]);
   const [masterShifts, setMasterShifts] = useState<Record<string, { in: string; out: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
-  
-  // State Filter (Harian / Bulanan)
+
   const [filterMode, setFilterMode] = useState<'harian' | 'bulanan'>('harian');
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
   const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
-  
+
   const [tanggalAktif, setTanggalAktif] = useState(localISOTime);
-  const [bulanAktif, setBulanAktif] = useState(localISOTime.substring(0, 7)); // YYYY-MM
-  
+  const [bulanAktif, setBulanAktif] = useState(localISOTime.substring(0, 7));
+
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
 
-  // Cek Akses HRD
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
-    if (!userData) {
-      navigate('/');
-      return;
-    }
+    if (!userData) { navigate('/'); return; }
     const parsedUser = JSON.parse(userData);
     const allowedRoles = ['HR', 'HR Manager', 'System Manager'];
     if (!allowedRoles.includes(parsedUser.role)) {
@@ -113,9 +117,7 @@ const DashboardHR = () => {
     }
   }, [navigate]);
 
-  useEffect(() => {
-    tarikDataSemuaKaryawan();
-  }, [tanggalAktif, bulanAktif, filterMode, masterShifts]);
+  useEffect(() => { tarikDataSemuaKaryawan(); }, [tanggalAktif, bulanAktif, filterMode, masterShifts]);
 
   const ambilMasterShift = async () => {
     try {
@@ -135,13 +137,10 @@ const DashboardHR = () => {
   };
 
   const tarikDataSemuaKaryawan = async () => {
-    if (Object.keys(masterShifts).length === 0) return; 
+    if (Object.keys(masterShifts).length === 0) return;
     setIsLoading(true);
 
-    let from = tanggalAktif;
-    let to = tanggalAktif;
-
-    // Jika filter bulanan aktif, tarik data dari tanggal 1 sampai akhir bulan
+    let from = tanggalAktif, to = tanggalAktif;
     if (filterMode === 'bulanan') {
       from = `${bulanAktif}-01`;
       const year = parseInt(bulanAktif.split('-')[0]);
@@ -154,38 +153,30 @@ const DashboardHR = () => {
       const res = await fetch(`${BACKEND}/api/attendance/all-history?from=${from}&to=${to}`);
       const result = await res.json();
       if (result.success && result.data) {
-        
         const grouped: Record<string, EmployeeSummary> = {};
-        
+
         result.data.forEach((item: RiwayatAbsen) => {
           if (!grouped[item.employee]) {
             grouped[item.employee] = {
               employee: item.employee,
               employee_name: item.employee_name || item.employee,
-              totalHadir: 0,
-              totalTelat: 0,
-              totalCepat: 0,
+              totalHadir: 0, totalTelat: 0, totalCepat: 0,
               logsByDate: {}
             };
           }
-          
           const dateKey = item.time.substring(0, 10);
-          if (!grouped[item.employee].logsByDate[dateKey]) {
+          if (!grouped[item.employee].logsByDate[dateKey])
             grouped[item.employee].logsByDate[dateKey] = { in: null, out: null };
-          }
 
           if (item.log_type === 'IN') {
-            if (!grouped[item.employee].logsByDate[dateKey].in || item.time < grouped[item.employee].logsByDate[dateKey].in!.time) {
+            if (!grouped[item.employee].logsByDate[dateKey].in || item.time < grouped[item.employee].logsByDate[dateKey].in!.time)
               grouped[item.employee].logsByDate[dateKey].in = item;
-            }
           } else {
-            if (!grouped[item.employee].logsByDate[dateKey].out || item.time > grouped[item.employee].logsByDate[dateKey].out!.time) {
+            if (!grouped[item.employee].logsByDate[dateKey].out || item.time > grouped[item.employee].logsByDate[dateKey].out!.time)
               grouped[item.employee].logsByDate[dateKey].out = item;
-            }
           }
         });
 
-        // Kalkulasi Statistik per Karyawan menggunakan Object.entries
         Object.values(grouped).forEach(emp => {
           let hadir = 0, telat = 0, cepat = 0;
           Object.entries(emp.logsByDate).forEach(([date, log]) => {
@@ -194,19 +185,14 @@ const DashboardHR = () => {
             if (log.in && toMenit(formatJamLokal(log.in.time)) > toMenit(shiftInfo.in)) telat++;
             if (log.out && toMenit(shiftInfo.out) > toMenit(formatJamLokal(log.out.time))) cepat++;
           });
-          emp.totalHadir = hadir;
-          emp.totalTelat = telat;
-          emp.totalCepat = cepat;
+          emp.totalHadir = hadir; emp.totalTelat = telat; emp.totalCepat = cepat;
         });
-        
-        const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
-        setDataAbsen(arrData);
+
+        setDataAbsen(Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name)));
       } else {
         setDataAbsen([]);
       }
-    } catch (err) {
-      console.error('Gagal tarik data HR');
-    }
+    } catch (err) { console.error('Gagal tarik data HR'); }
     setIsLoading(false);
   };
 
@@ -217,60 +203,43 @@ const DashboardHR = () => {
     return url;
   };
 
-  // EXPORT EXCEL
   const downloadExcel = () => {
-    if (dataAbsen.length === 0) {
-      alert('Tidak ada data untuk di-download!');
-      return;
-    }
-
+    if (dataAbsen.length === 0) { alert('Tidak ada data untuk di-download!'); return; }
     const dataExcel: any[] = [];
-
     dataAbsen.forEach((emp) => {
       Object.entries(emp.logsByDate).forEach(([date, log]) => {
         const inJam = log.in ? formatJamLokal(log.in.time) : '-';
         const outJam = log.out ? formatJamLokal(log.out.time) : '-';
         const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
-        
+        const shiftLabel = getShiftLabel(date, log.in?.shift || log.out?.shift);
         let telat = '-';
-        if (log.in) {
-          const selisihTelat = toMenit(inJam) - toMenit(shiftInfo.in);
-          if (selisihTelat > 0) telat = formatDurasi(selisihTelat); // Menit dihitung jam jika > 59m
-        }
-
+        if (log.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) telat = formatDurasi(s); }
         let pulangCepat = '-';
-        if (log.out) {
-          const selisihCepat = toMenit(shiftInfo.out) - toMenit(outJam);
-          if (selisihCepat > 0) pulangCepat = formatDurasi(selisihCepat); 
-        }
-
+        if (log.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) pulangCepat = formatDurasi(s); }
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
           'Nama Karyawan': emp.employee_name,
+          'Shift': shiftLabel,
           'Jam Shift': `${shiftInfo.in} - ${shiftInfo.out}`,
           'Jam Masuk': inJam,
           'Jam Keluar': outJam,
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
-          'Lokasi Masuk': log.in?.latitude ? `http://googleusercontent.com/maps.google.com/5{log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude ? `http://googleusercontent.com/maps.google.com/5{log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude ? `https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude ? `https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
-
     dataExcel.sort((a, b) => a.Tanggal.localeCompare(b.Tanggal) || a['Nama Karyawan'].localeCompare(b['Nama Karyawan']));
-
     const worksheet = XLSX.utils.json_to_sheet(dataExcel);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
-    
     const namaFile = filterMode === 'harian' ? `Laporan_Harian_${tanggalAktif}.xlsx` : `Laporan_Bulanan_${bulanAktif}.xlsx`;
     XLSX.writeFile(workbook, namaFile);
   };
 
-  let globalHadir = 0;
-  let globalTelat = 0;
+  let globalHadir = 0, globalTelat = 0;
   dataAbsen.forEach(emp => {
     if (filterMode === 'harian') {
       const todayLog = emp.logsByDate[tanggalAktif];
@@ -291,63 +260,50 @@ const DashboardHR = () => {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen font-sans w-full text-[#3e2723] pb-10">
-      
-      {/* ── HEADER MODERN SEPERTI REFERENSI ── */}
-      <div className="bg-white/80 backdrop-blur-md pt-6 pb-6 px-6 md:px-12 shadow-sm sticky top-0 z-20 w-full border-b border-gray-200">
+    <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
+
+      {/* ── HEADER ── */}
+      <div className="bg-[#3e2723] pt-8 pb-8 px-6 md:px-12 shadow-lg sticky top-0 z-20 w-full rounded-b-[2.5rem]">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          
           <div className="flex items-center gap-4">
-            <button onClick={handleLogout} className="w-12 h-12 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center text-gray-500 active:scale-95 transition-all shadow-sm border border-gray-200">
-              <i className="fa-solid fa-arrow-left text-xl" />
+            <button onClick={handleLogout} className="w-12 h-12 bg-red-500/20 hover:bg-red-500/40 rounded-full flex items-center justify-center text-red-400 active:scale-95 transition-all shadow-inner border border-red-500/30">
+              <i className="fa-solid fa-power-off text-xl" />
             </button>
             <div>
-              <h1 className="text-2xl font-black text-[#3e2723] flex items-center gap-2">
-                HR Command Center
-              </h1>
-              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Laporan Kehadiran Karyawan</p>
+              <h1 className="text-2xl font-black text-[#fbc02d]">HR Command Center</h1>
+              <p className="text-xs text-white/70 font-bold uppercase tracking-widest mt-1">Laporan Kehadiran Karyawan</p>
             </div>
           </div>
-
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            
-            {/* Filter Toggle */}
-            <div className="flex bg-gray-100 rounded-xl p-1 w-full md:w-auto border border-gray-200 shadow-inner">
-              <button onClick={() => setFilterMode('harian')} className={`px-5 py-2 text-xs font-black rounded-lg w-1/2 md:w-auto transition-all ${filterMode === 'harian' ? 'bg-white text-[#3e2723] shadow' : 'text-gray-500 hover:bg-gray-200'}`}>Harian</button>
-              <button onClick={() => setFilterMode('bulanan')} className={`px-5 py-2 text-xs font-black rounded-lg w-1/2 md:w-auto transition-all ${filterMode === 'bulanan' ? 'bg-white text-[#3e2723] shadow' : 'text-gray-500 hover:bg-gray-200'}`}>Bulanan</button>
+            <div className="flex bg-white/10 rounded-2xl p-1.5 w-full md:w-auto border border-white/10 shadow-inner">
+              <button onClick={() => setFilterMode('harian')} className={`px-5 py-2 text-xs font-black rounded-xl w-1/2 md:w-auto transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white hover:bg-white/20'}`}>Harian</button>
+              <button onClick={() => setFilterMode('bulanan')} className={`px-5 py-2 text-xs font-black rounded-xl w-1/2 md:w-auto transition-all ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white hover:bg-white/20'}`}>Bulanan</button>
             </div>
-
-            {/* Date/Month Picker */}
-            <div className="flex items-center bg-white rounded-xl px-4 py-2 w-full md:w-auto border border-gray-200 shadow-sm">
-              {filterMode === 'harian' ? (
-                <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-[#3e2723] font-bold text-sm outline-none cursor-pointer w-full" />
-              ) : (
-                <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-[#3e2723] font-bold text-sm outline-none cursor-pointer w-full" />
-              )}
+            <div className="flex items-center bg-white/10 rounded-2xl px-4 py-2 w-full md:w-auto border border-white/10 shadow-sm">
+              {filterMode === 'harian'
+                ? <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer w-full" style={{ colorScheme: 'dark' }} />
+                : <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer w-full" style={{ colorScheme: 'dark' }} />
+              }
             </div>
-
-            {/* Stats Cards Header */}
             <div className="flex gap-3 w-full md:w-auto">
-              <div className="bg-gradient-to-r from-emerald-400 to-green-500 rounded-xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none shadow-md shadow-green-500/20 text-white min-w-[90px]">
-                <p className="text-[10px] font-bold uppercase tracking-wide opacity-90 flex items-center gap-1"><i className="fa-solid fa-user-check"></i> Hadir</p>
+              <div className="bg-green-500/20 rounded-2xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none border border-green-500/30 text-white min-w-[90px]">
+                <p className="text-[10px] text-green-300 font-bold uppercase tracking-wide">Hadir</p>
                 <p className="font-black text-2xl leading-none mt-1">{globalHadir}</p>
               </div>
-              <div className="bg-gradient-to-r from-orange-400 to-amber-500 rounded-xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none shadow-md shadow-orange-500/20 text-white min-w-[90px]">
-                <p className="text-[10px] font-bold uppercase tracking-wide opacity-90 flex items-center gap-1"><i className="fa-solid fa-clock"></i> Telat</p>
+              <div className="bg-red-500/20 rounded-2xl px-5 py-2 flex flex-col items-center justify-center flex-1 md:flex-none border border-red-500/30 text-white min-w-[90px]">
+                <p className="text-[10px] text-red-300 font-bold uppercase tracking-wide">Telat</p>
                 <p className="font-black text-2xl leading-none mt-1">{globalTelat}</p>
               </div>
             </div>
-
-            {/* Export Button */}
-            <button onClick={downloadExcel} className="bg-green-500 hover:bg-green-600 text-white font-black px-6 py-3 rounded-xl shadow-lg shadow-green-500/30 flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto">
+            <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-6 py-3.5 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto">
               <i className="fa-solid fa-file-excel text-lg" /> <span>Export Excel</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── GRID KARYAWAN (SESUAI REFERENSI UI) ── */}
-      <div className="max-w-7xl mx-auto p-6 md:p-8">
+      {/* ── GRID KARYAWAN ── */}
+      <div className="max-w-7xl mx-auto p-6 md:p-8 -mt-4 relative z-10">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center pt-24 text-gray-500">
             <i className="fa-solid fa-spinner fa-spin text-5xl mb-4 text-[#fbc02d]" />
@@ -367,6 +323,7 @@ const DashboardHR = () => {
               const inJam = todayLog?.in ? formatJamLokal(todayLog.in.time) : '-';
               const outJam = todayLog?.out ? formatJamLokal(todayLog.out.time) : '-';
               const shiftInfo = getJamShift(todayLog?.in?.shift || todayLog?.out?.shift, tanggalAktif, masterShifts);
+              const shiftLabel = getShiftLabel(tanggalAktif, todayLog?.in?.shift || todayLog?.out?.shift);
               const isTelat = todayLog?.in && toMenit(inJam) > toMenit(shiftInfo.in);
 
               let avatarSrc = null;
@@ -377,54 +334,63 @@ const DashboardHR = () => {
               }
 
               return (
-                <div 
-                  key={emp.employee} 
-                  onClick={() => setDetailModal(emp)} 
-                  className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-gray-100 hover:shadow-xl hover:border-gray-300 transition-all cursor-pointer flex flex-col active:scale-95 group relative"
+                <div
+                  key={emp.employee}
+                  onClick={() => setDetailModal(emp)}
+                  className="bg-white rounded-[1.5rem] p-5 shadow-[0_10px_30px_-10px_rgba(62,39,35,0.1)] hover:shadow-[0_15px_40px_-10px_rgba(251,192,45,0.3)] transition-all cursor-pointer border border-white hover:border-[#fbc02d] flex flex-col active:scale-95 group relative overflow-hidden"
                 >
-                  {/* Top Row: Avatar & Name */}
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-100 shrink-0 border-2 border-white shadow-sm relative">
-                      {avatarSrc ? (
-                        <img src={prosesUrlFoto(avatarSrc)} className="w-full h-full object-cover" />
-                      ) : <i className="fa-solid fa-user text-gray-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl" />}
+                  <div className="absolute top-0 left-0 w-full h-1 bg-[#fbc02d] opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                  {/* Avatar + Nama */}
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="w-14 h-14 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 border-2 border-white shadow-sm relative">
+                      {avatarSrc
+                        ? <img src={prosesUrlFoto(avatarSrc)} className="w-full h-full object-cover" />
+                        : <i className="fa-solid fa-user text-[#fbc02d] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl" />
+                      }
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 pt-1">
                       <h3 className="font-black text-[#3e2723] text-base leading-tight line-clamp-1">{emp.employee_name}</h3>
                       {filterMode === 'harian' ? (
-                        isTelat ? <span className="inline-block mt-1 bg-red-50 text-red-500 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-red-100">Telat Masuk</span> :
-                        todayLog?.in ? <span className="inline-block mt-1 bg-green-50 text-green-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-green-100">Hadir</span> : 
-                        <span className="inline-block mt-1 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Belum Absen</span>
+                        isTelat
+                          ? <span className="inline-block mt-1.5 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Telat Masuk</span>
+                          : todayLog?.in
+                            ? <span className="inline-block mt-1.5 bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Hadir</span>
+                            : <span className="inline-block mt-1.5 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Belum Absen</span>
                       ) : (
-                        <span className="inline-block mt-1 bg-blue-50 text-blue-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-blue-100">Rekap Bulanan</span>
+                        <span className="inline-block mt-1.5 bg-[#fff8e1] text-[#fbc02d] border border-[#fbc02d]/50 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Rekap Bulanan</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Middle Row: Designation & Branch */}
-                  <div className="mb-4">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Designation</p>
-                    <p className="text-xs font-black text-gray-700">{emp.employee.includes('HR') ? 'HR Manager' : 'Staff'}</p>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5 mt-2">Branch</p>
-                    <p className="text-xs font-black text-gray-700">PH Klaten</p>
-                  </div>
+                  {/* Shift label — baris baru khusus */}
+                  {filterMode === 'harian' && (
+                    <div className="bg-[#fff8e1] border border-[#fbc02d]/30 rounded-xl px-3 py-1.5 mb-3 flex items-center gap-2">
+                      <i className="fa-solid fa-calendar-check text-[#fbc02d] text-[10px] shrink-0" />
+                      <div>
+                        <p className="text-[9px] text-[#3e2723]/50 font-bold uppercase leading-none">Shift</p>
+                        <p className="text-[10px] font-black text-[#3e2723] leading-snug">{shiftLabel}</p>
+                        <p className="text-[10px] text-[#3e2723]/60 font-bold">{shiftInfo.in} – {shiftInfo.out}</p>
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Bottom Row: Status Boxes */}
+                  {/* Jam Masuk / Keluar atau Rekap */}
                   {filterMode === 'harian' ? (
                     <div className="grid grid-cols-2 gap-3 mt-auto">
-                      <div className="bg-green-50 rounded-xl p-3 flex flex-col justify-center border border-green-100">
-                        <div className="flex items-center gap-1.5 mb-1 text-green-600">
+                      <div className="bg-[#fff8e1] rounded-xl p-3 flex flex-col justify-center border border-[#fbc02d]/30">
+                        <div className="flex items-center gap-1.5 mb-1 text-[#fbc02d]">
                           <i className="fa-solid fa-clock text-xs" />
-                          <p className="text-[10px] font-black uppercase">Masuk</p>
+                          <p className="text-[10px] font-black uppercase text-[#3e2723]/60">Masuk</p>
                         </div>
-                        <p className="font-black text-green-800 text-lg">{inJam}</p>
+                        <p className="font-black text-[#3e2723] text-lg">{inJam}</p>
                       </div>
-                      <div className="bg-orange-50 rounded-xl p-3 flex flex-col justify-center border border-orange-100">
-                        <div className="flex items-center gap-1.5 mb-1 text-orange-500">
+                      <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-center border border-gray-200">
+                        <div className="flex items-center gap-1.5 mb-1 text-gray-400">
                           <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
                           <p className="text-[10px] font-black uppercase">Keluar</p>
                         </div>
-                        <p className="font-black text-orange-800 text-lg">{outJam}</p>
+                        <p className="font-black text-gray-600 text-lg">{outJam}</p>
                       </div>
                     </div>
                   ) : (
@@ -439,7 +405,6 @@ const DashboardHR = () => {
                       </div>
                     </div>
                   )}
-
                 </div>
               );
             })}
@@ -450,84 +415,85 @@ const DashboardHR = () => {
       {/* ── MODAL DETAIL ── */}
       {detailModal && (() => {
         const emp = detailModal;
-        
+
         if (filterMode === 'harian') {
           const todayLog = emp.logsByDate[tanggalAktif] || { in: null, out: null };
           const shiftInfo = getJamShift(todayLog.in?.shift || todayLog.out?.shift, tanggalAktif, masterShifts);
+          const shiftLabel = getShiftLabel(tanggalAktif, todayLog.in?.shift || todayLog.out?.shift);
           const inJam = todayLog.in ? formatJamLokal(todayLog.in.time) : '-';
           const outJam = todayLog.out ? formatJamLokal(todayLog.out.time) : '-';
-          
-          let durasiTelat = 0, durasiCepat = 0;
-          if (todayLog.in) {
-            const selisih = toMenit(inJam) - toMenit(shiftInfo.in);
-            if (selisih > 0) durasiTelat = selisih;
-          }
-          if (todayLog.out) {
-            const selisih = toMenit(shiftInfo.out) - toMenit(outJam);
-            if (selisih > 0) durasiCepat = selisih;
-          }
 
-          const FotoBesar = ({ src, icon, title, isSignature=false }: any) => (
+          let durasiTelat = 0, durasiCepat = 0;
+          if (todayLog.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) durasiTelat = s; }
+          if (todayLog.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) durasiCepat = s; }
+
+          const FotoBesar = ({ src, icon, title, isSignature = false }: any) => (
             <div className="flex flex-col gap-1.5">
               <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1">{title}</p>
               <div className="relative bg-gray-50 rounded-2xl overflow-hidden shadow-inner border border-gray-200 flex items-center justify-center" style={{ height: isSignature ? '120px' : '220px' }}>
-                {src ? (
-                  <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain p-2 bg-white' : 'object-cover'}`} />
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-gray-300">
-                    <i className={`fa-solid ${icon} text-3xl`} />
-                    <p className="text-[10px] font-bold">Tidak ada foto</p>
-                  </div>
-                )}
+                {src
+                  ? <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain p-2 bg-white' : 'object-cover'}`} />
+                  : <div className="flex flex-col items-center gap-2 text-gray-300">
+                      <i className={`fa-solid ${icon} text-3xl`} />
+                      <p className="text-[10px] font-bold">Tidak ada foto</p>
+                    </div>
+                }
               </div>
             </div>
           );
 
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(30,15,30,0.85)', backdropFilter: 'blur(8px)' }}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
               <div className="bg-gray-50 w-full max-w-4xl max-h-[95vh] rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn border border-white/20">
-                
-                {/* Kolom Kiri Profil */}
+
+                {/* Kolom Kiri */}
                 <div className="bg-white md:w-1/3 flex flex-col shrink-0 shadow-[5px_0_15px_rgba(0,0,0,0.03)] z-10">
                   <div className="p-6 md:p-8 border-b border-gray-100 relative">
                     <button onClick={() => setDetailModal(null)} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
                       <i className="fa-solid fa-xmark text-lg" />
                     </button>
-                    <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-sm mb-4 relative">
-                      {todayLog.in?.custom_foto_absen ? (
-                        <img src={prosesUrlFoto(todayLog.in.custom_foto_absen)} className="w-full h-full object-cover" />
-                      ) : <i className="fa-solid fa-user text-gray-300 text-4xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />}
+                    <div className="w-20 h-20 rounded-full overflow-hidden bg-[#fff8e1] border-4 border-white shadow-md mb-4 relative">
+                      {todayLog.in?.custom_foto_absen
+                        ? <img src={prosesUrlFoto(todayLog.in.custom_foto_absen)} className="w-full h-full object-cover" />
+                        : <i className="fa-solid fa-user text-[#fbc02d] text-4xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                      }
                     </div>
                     <h2 className="text-2xl font-black text-[#3e2723] leading-tight mb-1">{emp.employee_name}</h2>
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee}</p>
                   </div>
-                  
+
                   <div className="p-6 md:p-8 flex-1 overflow-y-auto">
-                    <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 mb-5">
-                      <p className="text-[10px] text-blue-500 font-bold uppercase mb-1">Jadwal Shift</p>
-                      <p className="font-black text-blue-800 text-lg">{shiftInfo.in} <span className="text-blue-300 mx-1">→</span> {shiftInfo.out}</p>
+                    {/* Shift — nama + jam */}
+                    <div className="bg-[#fff8e1] p-4 rounded-2xl border border-[#fbc02d]/30 mb-5">
+                      <p className="text-[10px] text-[#3e2723]/50 font-bold uppercase mb-1 flex items-center gap-1">
+                        <i className="fa-solid fa-calendar-check text-[#fbc02d]" /> Jadwal Shift
+                      </p>
+                      <p className="font-black text-[#3e2723] text-sm leading-snug mb-1">{shiftLabel}</p>
+                      <p className="font-black text-[#3e2723] text-lg">{shiftInfo.in} <span className="text-[#fbc02d] mx-1">→</span> {shiftInfo.out}</p>
                     </div>
+
                     <div className="grid grid-cols-2 gap-3 mb-5">
-                      <div className="bg-green-50 p-4 rounded-2xl border border-green-100">
-                        <p className="text-[10px] text-green-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-to-bracket"/> Masuk</p>
-                        <p className="font-black text-green-800 text-2xl">{inJam}</p>
-                        {durasiTelat > 0 && <span className="inline-block mt-1 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm">TELAT {formatDurasi(durasiTelat)}</span>}
+                      <div className="bg-white p-4 rounded-2xl border border-green-100 shadow-sm">
+                        <p className="text-[10px] text-green-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-to-bracket" /> Masuk</p>
+                        <p className="font-black text-[#3e2723] text-2xl">{inJam}</p>
+                        {durasiTelat > 0 && <span className="inline-block mt-1 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md">TELAT {formatDurasi(durasiTelat)}</span>}
                       </div>
-                      <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
-                        <p className="text-[10px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-from-bracket"/> Keluar</p>
-                        <p className="font-black text-orange-800 text-2xl">{outJam}</p>
-                        {durasiCepat > 0 && <span className="inline-block mt-1 bg-yellow-400 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm">CEPAT {formatDurasi(durasiCepat)}</span>}
+                      <div className="bg-white p-4 rounded-2xl border border-orange-100 shadow-sm">
+                        <p className="text-[10px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-from-bracket" /> Keluar</p>
+                        <p className="font-black text-[#3e2723] text-2xl">{outJam}</p>
+                        {durasiCepat > 0 && <span className="inline-block mt-1 bg-yellow-400 text-white text-[9px] font-black px-2 py-0.5 rounded-md">CEPAT {formatDurasi(durasiCepat)}</span>}
                       </div>
                     </div>
+
                     <div className="flex flex-col gap-2">
                       {todayLog.in?.latitude && (
-                        <a href={`http://googleusercontent.com/maps.google.com/6{todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
+                        <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
                           <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                           <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                         </a>
                       )}
                       {todayLog.out?.latitude && (
-                        <a href={`http://googleusercontent.com/maps.google.com/6{todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
+                        <a href={`https://maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
                           <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                           <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                         </a>
@@ -540,24 +506,22 @@ const DashboardHR = () => {
                 <div className="md:w-2/3 p-6 md:p-8 overflow-y-auto max-h-[60vh] md:max-h-none flex-1 bg-gray-50/50">
                   <h3 className="font-black text-[#3e2723] text-lg mb-4 flex items-center gap-2"><i className="fa-solid fa-images text-[#fbc02d]" /> Galeri Autentikasi</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="flex flex-col gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                      <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-3">
-                        <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-600"><i className="fa-solid fa-arrow-right-to-bracket text-xs"></i></div>
-                        <p className="font-black text-[#3e2723] text-sm uppercase">Data Masuk</p>
+                    {[
+                      { label: 'Data Masuk', log: todayLog.in, iconColor: 'bg-green-100 text-green-600', icon: 'fa-arrow-right-to-bracket' },
+                      { label: 'Data Keluar', log: todayLog.out, iconColor: 'bg-orange-100 text-orange-600', icon: 'fa-arrow-right-from-bracket' },
+                    ].map(({ label, log, iconColor, icon }) => (
+                      <div key={label} className="flex flex-col gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-3">
+                          <div className={`w-7 h-7 rounded-full ${iconColor} flex items-center justify-center`}>
+                            <i className={`fa-solid ${icon} text-xs`} />
+                          </div>
+                          <p className="font-black text-[#3e2723] text-sm uppercase">{label}</p>
+                        </div>
+                        <FotoBesar src={log?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
+                        <FotoBesar src={log?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
+                        <FotoBesar src={log?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
                       </div>
-                      <FotoBesar src={todayLog.in?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
-                      <FotoBesar src={todayLog.in?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
-                      <FotoBesar src={todayLog.in?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
-                    </div>
-                    <div className="flex flex-col gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                      <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-3">
-                        <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><i className="fa-solid fa-arrow-right-from-bracket text-xs"></i></div>
-                        <p className="font-black text-[#3e2723] text-sm uppercase">Data Keluar</p>
-                      </div>
-                      <FotoBesar src={todayLog.out?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
-                      <FotoBesar src={todayLog.out?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
-                      <FotoBesar src={todayLog.out?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -566,50 +530,57 @@ const DashboardHR = () => {
         } else {
           // MODAL BULANAN
           const sortedDates = Object.keys(emp.logsByDate).sort();
-
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(30,15,30,0.85)', backdropFilter: 'blur(8px)' }}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
               <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-zoomIn">
-                <div className="bg-white border-b border-gray-100 p-6 relative flex justify-between items-center shrink-0">
+                <div className="bg-[#3e2723] p-6 relative flex justify-between items-center shrink-0">
                   <div>
-                    <h2 className="text-xl font-black text-[#3e2723]">{emp.employee_name}</h2>
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{emp.employee} • Rekap {bulanAktif}</p>
+                    <h2 className="text-xl font-black text-[#fbc02d]">{emp.employee_name}</h2>
+                    <p className="text-xs font-bold text-white/70 uppercase tracking-wider">{emp.employee} • Rekap {bulanAktif}</p>
                   </div>
-                  <button onClick={() => setDetailModal(null)} className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors">
+                  <button onClick={() => setDetailModal(null)} className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors border border-white/20">
                     <i className="fa-solid fa-xmark text-lg" />
                   </button>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <table className="w-full text-left text-sm">
                       <thead className="bg-gray-100 text-[#3e2723] font-black border-b border-gray-200">
                         <tr>
-                          <th className="py-4 px-5">Tanggal</th>
-                          <th className="py-4 px-5">Masuk</th>
-                          <th className="py-4 px-5">Keluar</th>
-                          <th className="py-4 px-5">Status</th>
+                          <th className="py-4 px-4">Tanggal</th>
+                          <th className="py-4 px-4">Shift</th>
+                          <th className="py-4 px-4">Masuk</th>
+                          <th className="py-4 px-4">Keluar</th>
+                          <th className="py-4 px-4">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {sortedDates.length === 0 ? (
-                          <tr><td colSpan={4} className="py-8 text-center text-gray-400 font-bold">Tidak ada absen di bulan ini</td></tr>
+                          <tr><td colSpan={5} className="py-8 text-center text-gray-400 font-bold">Tidak ada absen di bulan ini</td></tr>
                         ) : sortedDates.map(date => {
                           const log = emp.logsByDate[date];
                           const inJam = log.in ? formatJamLokal(log.in.time) : '-';
                           const outJam = log.out ? formatJamLokal(log.out.time) : '-';
                           const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
+                          const shiftLabel = getShiftLabel(date, log.in?.shift || log.out?.shift);
                           const isTelat = log.in && toMenit(inJam) > toMenit(shiftInfo.in);
-
                           return (
                             <tr key={date} className="hover:bg-gray-50 transition-colors">
-                              <td className="py-4 px-5 font-bold text-gray-700">{date}</td>
-                              <td className="py-4 px-5 font-black text-green-600">{inJam}</td>
-                              <td className="py-4 px-5 font-black text-orange-500">{outJam}</td>
-                              <td className="py-4 px-5">
-                                {isTelat ? <span className="bg-red-50 text-red-600 border border-red-100 text-[10px] font-black px-2.5 py-1 rounded-md">Telat</span> : 
-                                 log.in ? <span className="bg-green-50 text-green-700 border border-green-100 text-[10px] font-black px-2.5 py-1 rounded-md">Tepat</span> : 
-                                 <span className="text-gray-400 text-xs">-</span>}
+                              <td className="py-3 px-4 font-bold text-gray-700 text-xs">{date}</td>
+                              <td className="py-3 px-4 text-xs">
+                                <p className="font-black text-[#3e2723] leading-tight">{shiftLabel}</p>
+                                <p className="text-gray-400 font-bold text-[10px]">{shiftInfo.in} – {shiftInfo.out}</p>
+                              </td>
+                              <td className="py-3 px-4 font-black text-green-600">{inJam}</td>
+                              <td className="py-3 px-4 font-black text-orange-500">{outJam}</td>
+                              <td className="py-3 px-4">
+                                {isTelat
+                                  ? <span className="bg-red-50 text-red-600 border border-red-100 text-[10px] font-black px-2.5 py-1 rounded-md">Telat</span>
+                                  : log.in
+                                    ? <span className="bg-green-50 text-green-700 border border-green-100 text-[10px] font-black px-2.5 py-1 rounded-md">Tepat</span>
+                                    : <span className="text-gray-400 text-xs">-</span>
+                                }
                               </td>
                             </tr>
                           );
@@ -623,15 +594,13 @@ const DashboardHR = () => {
           );
         }
       })()}
-      
+
       <style>{`
         @keyframes zoomIn {
           from { opacity: 0; transform: scale(0.95) translateY(10px); }
           to { opacity: 1; transform: scale(1) translateY(0); }
         }
-        .animate-zoomIn {
-          animation: zoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
+        .animate-zoomIn { animation: zoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
     </div>
   );
