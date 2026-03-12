@@ -77,11 +77,15 @@ const DashboardHR = () => {
   const [dataAbsen, setDataAbsen] = useState<GroupedAbsen[]>([]);
   const [masterShifts, setMasterShifts] = useState<Record<string, { in: string; out: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [tanggalAktif, setTanggalAktif] = useState(new Date().toISOString().substring(0, 10));
   
-  // State untuk Modal "BOOM"
+  const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+  const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
+  const [tanggalAktif, setTanggalAktif] = useState(localISOTime);
+  
   const [detailModal, setDetailModal] = useState<GroupedAbsen | null>(null);
+  const [user, setUser] = useState<any>(null);
 
+  // PROTEKSI AKSES HR
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) {
@@ -89,7 +93,10 @@ const DashboardHR = () => {
       return;
     }
     const parsedUser = JSON.parse(userData);
-    if (parsedUser.role !== 'HR' && parsedUser.role !== 'HR Manager' && parsedUser.role !== 'System Manager') {
+    setUser(parsedUser);
+    
+    const allowedRoles = ['HR', 'HR Manager', 'System Manager'];
+    if (!allowedRoles.includes(parsedUser.role)) {
       alert('Akses Ditolak! Anda tidak memiliki hak akses HRD.');
       navigate('/home');
     } else {
@@ -124,7 +131,6 @@ const DashboardHR = () => {
       const res = await fetch(`${BACKEND}/api/attendance/all-today?date=${tanggalAktif}`);
       const result = await res.json();
       if (result.success && result.data) {
-        // LAKUKAN GROUPING BERDASARKAN KARYAWAN
         const grouped: Record<string, GroupedAbsen> = {};
         result.data.forEach((item: RiwayatAbsen) => {
           if (!grouped[item.employee]) {
@@ -146,7 +152,6 @@ const DashboardHR = () => {
           }
         });
         
-        // Convert ke array dan urutkan berdasarkan nama
         const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
         setDataAbsen(arrData);
       } else {
@@ -204,7 +209,7 @@ const DashboardHR = () => {
     const worksheet = XLSX.utils.json_to_sheet(dataExcel);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
-    XLSX.writeFile(workbook, `Laporan_Harian_${tanggalAktif}.xlsx`);
+    XLSX.writeFile(workbook, `Laporan_Harian_HRD_${tanggalAktif}.xlsx`);
   };
 
   const totalHadir = dataAbsen.length;
@@ -217,41 +222,48 @@ const DashboardHR = () => {
   });
 
   return (
-    <div className="bg-gray-50 min-h-screen font-sans w-full">
+    // Mempertahankan background dasar bg-gray-200 sesuai gaya karyawan
+    <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
       
       {/* ── HEADER ── */}
-      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 pt-8 pb-6 px-6 md:px-12 shadow-lg sticky top-0 z-20 w-full">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-[#3e2723] pt-8 pb-8 px-6 md:px-12 shadow-lg sticky top-0 z-20 w-full rounded-b-[2.5rem]">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <Link to="/home" className="w-12 h-12 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white active:scale-95 transition-all">
+            <Link to="/home" className="w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-[#fbc02d] active:scale-95 transition-all shadow-inner border border-white/5">
               <i className="fa-solid fa-arrow-left text-xl" />
             </Link>
             <div>
-              <h1 className="text-2xl md:text-3xl font-black text-white">HR Command Center</h1>
-              <p className="text-xs md:text-sm text-purple-200 font-bold uppercase tracking-widest mt-1">Laporan Kehadiran Karyawan</p>
+              <h1 className="text-2xl md:text-3xl font-black text-[#fbc02d]">HR Command Center</h1>
+              <p className="text-xs md:text-sm text-white/70 font-bold uppercase tracking-widest mt-1">Laporan Kehadiran Karyawan</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="flex items-center bg-white/10 rounded-xl p-1 w-full md:w-auto">
+            {/* Input Date */}
+            <div className="flex items-center bg-white/10 rounded-2xl p-1.5 w-full md:w-auto border border-white/10">
               <input 
                 type="date" 
                 value={tanggalAktif}
                 onChange={(e) => setTanggalAktif(e.target.value)}
                 className="bg-transparent text-white px-4 py-2 font-bold text-sm outline-none cursor-pointer"
+                style={{ colorScheme: 'dark' }} // Agar kalender native HP pakai tema gelap
               />
             </div>
-            <div className="flex gap-2">
-              <div className="bg-white/10 rounded-xl px-4 py-2 flex flex-col items-center justify-center min-w-[80px]">
-                <p className="text-[10px] text-green-300 font-bold uppercase">Hadir</p>
-                <p className="text-white font-black text-xl leading-none mt-1">{totalHadir}</p>
+
+            {/* Statistik Cepat */}
+            <div className="flex gap-2 w-full md:w-auto">
+              <div className="bg-green-500/20 border border-green-500/30 rounded-2xl px-5 py-2.5 flex flex-col items-center justify-center flex-1 md:flex-none shadow-sm">
+                <p className="text-[10px] text-green-300 font-bold uppercase tracking-wide">Hadir</p>
+                <p className="text-white font-black text-2xl leading-none mt-1">{totalHadir}</p>
               </div>
-              <div className="bg-white/10 rounded-xl px-4 py-2 flex flex-col items-center justify-center min-w-[80px]">
-                <p className="text-[10px] text-red-300 font-bold uppercase">Telat</p>
-                <p className="text-white font-black text-xl leading-none mt-1">{totalTelat}</p>
+              <div className="bg-red-500/20 border border-red-500/30 rounded-2xl px-5 py-2.5 flex flex-col items-center justify-center flex-1 md:flex-none shadow-sm">
+                <p className="text-[10px] text-red-300 font-bold uppercase tracking-wide">Telat</p>
+                <p className="text-white font-black text-2xl leading-none mt-1">{totalTelat}</p>
               </div>
             </div>
-            <button onClick={downloadExcel} className="bg-green-500 hover:bg-green-400 text-white font-black px-6 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto">
+
+            {/* Export Button */}
+            <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-6 py-3.5 rounded-2xl shadow-lg shadow-[#fbc02d]/20 flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto">
               <i className="fa-solid fa-file-excel text-lg" /> <span>Export Excel</span>
             </button>
           </div>
@@ -259,15 +271,17 @@ const DashboardHR = () => {
       </div>
 
       {/* ── CARD GALLERY GRID ── */}
-      <div className="max-w-7xl mx-auto p-6 md:p-8">
+      <div className="max-w-7xl mx-auto p-6 md:p-8 -mt-6 relative z-10">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center pt-32 text-gray-400">
-            <i className="fa-solid fa-spinner fa-spin text-5xl mb-4 text-purple-300" />
+          <div className="flex flex-col items-center justify-center pt-24 text-gray-500">
+            <i className="fa-solid fa-spinner fa-spin text-5xl mb-4 text-[#fbc02d]" />
             <p className="font-bold text-lg">Menganalisa data dari server...</p>
           </div>
         ) : dataAbsen.length === 0 ? (
-          <div className="flex flex-col items-center justify-center pt-32 text-gray-400">
-            <i className="fa-solid fa-users-slash text-7xl mb-4 text-gray-300" />
+          <div className="flex flex-col items-center justify-center pt-24 text-gray-400">
+            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+              <i className="fa-solid fa-users-slash text-4xl text-gray-300" />
+            </div>
             <p className="font-bold text-lg text-gray-500">Belum ada absen karyawan hari ini.</p>
           </div>
         ) : (
@@ -281,31 +295,38 @@ const DashboardHR = () => {
               return (
                 <div 
                   key={emp.employee} 
-                  onClick={() => setDetailModal(emp)} // 🔥 MUNCULIN MODAL SAAT KLIK
-                  className="bg-white rounded-3xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer border border-gray-100 hover:border-purple-300 flex flex-col active:scale-95 group"
+                  onClick={() => setDetailModal(emp)} 
+                  className="bg-white rounded-3xl p-5 shadow-[0_10px_30px_-10px_rgba(62,39,35,0.1)] hover:shadow-[0_15px_40px_-10px_rgba(251,192,45,0.3)] transition-all cursor-pointer border border-white hover:border-[#fbc02d] flex flex-col active:scale-95 group relative overflow-hidden"
                 >
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 shrink-0 border-2 border-white shadow-sm relative">
+                  {/* Efek aksen kuning di atas kartu */}
+                  <div className="absolute top-0 left-0 w-full h-1 bg-[#fbc02d] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-14 h-14 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 shadow-inner relative border-2 border-[#fff8e1]">
                       {emp.in?.custom_foto_absen ? (
                         <img src={prosesUrlFoto(emp.in.custom_foto_absen)} className="w-full h-full object-cover" />
-                      ) : <i className="fa-solid fa-user text-gray-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xl" />}
+                      ) : <i className="fa-solid fa-user text-[#fbc02d] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl" />}
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-black text-gray-800 text-sm leading-tight line-clamp-2 group-hover:text-purple-600 transition-colors">
+                    <div className="flex-1 pt-1">
+                      <h3 className="font-black text-[#3e2723] text-sm leading-tight line-clamp-2">
                         {emp.employee_name}
                       </h3>
-                      {isTelat && <span className="inline-block mt-1 bg-red-100 text-red-600 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Telat Masuk</span>}
+                      {isTelat ? (
+                        <span className="inline-flex mt-1.5 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Telat Masuk</span>
+                      ) : emp.in ? (
+                        <span className="inline-flex mt-1.5 bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Hadir</span>
+                      ) : null}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mt-auto">
-                    <div className="bg-green-50 rounded-xl p-2 text-center border border-green-100">
-                      <p className="text-[9px] text-green-500 font-bold uppercase mb-0.5">Masuk</p>
-                      <p className="font-black text-green-700 text-sm">{inJam}</p>
+                    <div className="bg-[#fff8e1] rounded-2xl p-2.5 text-center border border-[#fbc02d]/30">
+                      <p className="text-[9px] text-[#3e2723]/60 font-bold uppercase mb-0.5 flex justify-center items-center gap-1"><i className="fa-solid fa-clock text-[#fbc02d]" /> Masuk</p>
+                      <p className="font-black text-[#3e2723] text-sm">{inJam}</p>
                     </div>
-                    <div className="bg-orange-50 rounded-xl p-2 text-center border border-orange-100">
-                      <p className="text-[9px] text-orange-500 font-bold uppercase mb-0.5">Keluar</p>
-                      <p className="font-black text-orange-700 text-sm">{outJam}</p>
+                    <div className="bg-gray-50 rounded-2xl p-2.5 text-center border border-gray-100">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase mb-0.5 flex justify-center items-center gap-1"><i className="fa-solid fa-clock text-gray-300" /> Keluar</p>
+                      <p className="font-black text-gray-600 text-sm">{outJam}</p>
                     </div>
                   </div>
                 </div>
@@ -335,73 +356,71 @@ const DashboardHR = () => {
         }
 
         const FotoBesar = ({ src, icon, title, isSignature=false }: any) => (
-          <div className="relative bg-gray-100 rounded-2xl overflow-hidden shadow-inner border border-gray-200" style={{ height: isSignature ? '120px' : '200px' }}>
-            <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-lg z-10 font-bold flex items-center gap-1">
-              <i className={`fa-solid ${icon}`} /> {title}
+          <div className="flex flex-col gap-1">
+            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1">{title}</p>
+            <div className="relative bg-gray-50 rounded-2xl overflow-hidden shadow-inner border border-gray-200" style={{ height: isSignature ? '120px' : '220px' }}>
+              {src ? (
+                <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain p-2 bg-white' : 'object-cover'}`} />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 gap-2">
+                  <i className={`fa-solid ${icon} text-3xl`} />
+                  <p className="text-[10px] font-bold">Tidak ada foto</p>
+                </div>
+              )}
             </div>
-            {src ? (
-              <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain py-2 bg-white' : 'object-cover'}`} />
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300">
-                <i className={`fa-solid ${icon} text-3xl mb-1`} />
-                <p className="text-[10px] font-bold">Tidak ada data</p>
-              </div>
-            )}
           </div>
         );
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(30,15,30,0.85)', backdropFilter: 'blur(8px)' }}>
-            <div className="bg-white w-full max-w-4xl max-h-[95vh] rounded-3xl shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
+            <div className="bg-gray-100 w-full max-w-4xl max-h-[95vh] rounded-[2.5rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn border border-white/20">
               
               {/* Kolom Kiri: Profil & Status */}
-              <div className="bg-gray-50 md:w-1/3 border-r border-gray-200 flex flex-col shrink-0">
-                <div className="p-6 md:p-8">
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="w-16 h-16 rounded-full overflow-hidden bg-purple-100 border-4 border-white shadow-md">
-                      {emp.in?.custom_foto_absen ? (
-                        <img src={prosesUrlFoto(emp.in.custom_foto_absen)} className="w-full h-full object-cover" />
-                      ) : <i className="fa-solid fa-user text-purple-300 text-3xl mt-2 ml-3" />}
-                    </div>
-                    <button onClick={() => setDetailModal(null)} className="w-8 h-8 rounded-full bg-gray-200 hover:bg-red-100 hover:text-red-500 text-gray-500 flex items-center justify-center transition-colors">
-                      <i className="fa-solid fa-xmark text-lg" />
-                    </button>
+              <div className="bg-white md:w-1/3 flex flex-col shrink-0 shadow-[5px_0_15px_rgba(0,0,0,0.03)] z-10">
+                <div className="p-6 md:p-8 border-b border-gray-100 relative">
+                  <button onClick={() => setDetailModal(null)} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
+                    <i className="fa-solid fa-xmark text-lg" />
+                  </button>
+                  <div className="w-20 h-20 rounded-full overflow-hidden bg-[#fff8e1] border-4 border-white shadow-md mb-4">
+                    {emp.in?.custom_foto_absen ? (
+                      <img src={prosesUrlFoto(emp.in.custom_foto_absen)} className="w-full h-full object-cover" />
+                    ) : <i className="fa-solid fa-user text-[#fbc02d] text-4xl mt-3 ml-4" />}
                   </div>
-                  <h2 className="text-xl font-black text-gray-800 leading-tight mb-1">{emp.employee_name}</h2>
-                  <p className="text-xs font-bold text-purple-500 uppercase tracking-wider">{emp.employee}</p>
+                  <h2 className="text-2xl font-black text-[#3e2723] leading-tight mb-1">{emp.employee_name}</h2>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee}</p>
                 </div>
                 
-                <div className="px-6 md:px-8 pb-6 flex-1 overflow-y-auto">
-                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-4">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Jadwal Shift</p>
-                    <p className="font-black text-gray-700 text-lg">{shiftInfo.in} <span className="text-gray-300 mx-1">→</span> {shiftInfo.out}</p>
+                <div className="p-6 md:p-8 flex-1 overflow-y-auto">
+                  <div className="bg-[#fff8e1] p-4 rounded-2xl border border-[#fbc02d]/30 mb-5">
+                    <p className="text-[10px] text-[#3e2723]/50 font-bold uppercase mb-1">Jadwal Shift</p>
+                    <p className="font-black text-[#3e2723] text-lg">{shiftInfo.in} <span className="text-[#fbc02d] mx-1">→</span> {shiftInfo.out}</p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="bg-green-50 p-4 rounded-2xl border border-green-100">
-                      <p className="text-[10px] text-green-600 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-to-bracket"/> Masuk</p>
-                      <p className="font-black text-green-700 text-2xl">{inJam}</p>
-                      {durasiTelat > 0 && <span className="inline-block mt-1 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded shadow-sm animate-pulse">TELAT {formatDurasi(durasiTelat)}</span>}
+                  <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="bg-white p-4 rounded-2xl border border-green-100 shadow-sm">
+                      <p className="text-[10px] text-green-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-to-bracket"/> Masuk</p>
+                      <p className="font-black text-[#3e2723] text-2xl">{inJam}</p>
+                      {durasiTelat > 0 && <span className="inline-block mt-1 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md">TELAT {formatDurasi(durasiTelat)}</span>}
                     </div>
-                    <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
-                      <p className="text-[10px] text-orange-600 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-from-bracket"/> Keluar</p>
-                      <p className="font-black text-orange-700 text-2xl">{outJam}</p>
-                      {durasiCepat > 0 && <span className="inline-block mt-1 bg-yellow-400 text-white text-[9px] font-black px-2 py-0.5 rounded shadow-sm">CEPAT {formatDurasi(durasiCepat)}</span>}
+                    <div className="bg-white p-4 rounded-2xl border border-orange-100 shadow-sm">
+                      <p className="text-[10px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1"><i className="fa-solid fa-right-from-bracket"/> Keluar</p>
+                      <p className="font-black text-[#3e2723] text-2xl">{outJam}</p>
+                      {durasiCepat > 0 && <span className="inline-block mt-1 bg-orange-100 text-orange-600 text-[9px] font-black px-2 py-0.5 rounded-md">CEPAT {formatDurasi(durasiCepat)}</span>}
                     </div>
                   </div>
 
                   {/* Tombol Lokasi GPS */}
                   <div className="flex flex-col gap-2">
                     {emp.in?.latitude && (
-                      <a href={`https://maps.google.com/?q=${emp.in.latitude},${emp.in.longitude}`} target="_blank" className="bg-blue-50 hover:bg-blue-100 text-blue-600 p-3 rounded-xl text-xs font-bold flex items-center justify-between border border-blue-100 transition-colors">
-                        <span className="flex items-center gap-2"><i className="fa-solid fa-location-dot" /> Peta Masuk</span>
+                      <a href={`https://maps.google.com/?q=${emp.in.latitude},${emp.in.longitude}`} target="_blank" rel="noreferrer" className="bg-[#3e2723] hover:bg-[#4e342e] text-[#fbc02d] p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-colors shadow-md">
+                        <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot" /> Lokasi Masuk (GPS)</span>
                         <i className="fa-solid fa-arrow-up-right-from-square" />
                       </a>
                     )}
                     {emp.out?.latitude && (
-                      <a href={`https://maps.google.com/?q=${emp.out.latitude},${emp.out.longitude}`} target="_blank" className="bg-orange-50 hover:bg-orange-100 text-orange-600 p-3 rounded-xl text-xs font-bold flex items-center justify-between border border-orange-100 transition-colors">
-                        <span className="flex items-center gap-2"><i className="fa-solid fa-location-dot" /> Peta Keluar</span>
-                        <i className="fa-solid fa-arrow-up-right-from-square" />
+                      <a href={`https://maps.google.com/?q=${emp.out.latitude},${emp.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 text-[#3e2723] border border-gray-200 p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between transition-colors shadow-sm">
+                        <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-gray-400" /> Lokasi Keluar (GPS)</span>
+                        <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
                       </a>
                     )}
                   </div>
@@ -409,21 +428,27 @@ const DashboardHR = () => {
               </div>
 
               {/* Kolom Kanan: Galeri Foto */}
-              <div className="bg-white md:w-2/3 p-6 md:p-8 overflow-y-auto max-h-[60vh] md:max-h-none flex-1">
-                <h3 className="font-black text-gray-800 text-lg mb-4 flex items-center gap-2"><i className="fa-solid fa-images text-purple-500" /> Galeri Bukti Autentikasi</h3>
+              <div className="md:w-2/3 p-6 md:p-8 overflow-y-auto max-h-[60vh] md:max-h-none flex-1">
+                <h3 className="font-black text-[#3e2723] text-lg mb-4 flex items-center gap-2"><i className="fa-solid fa-images text-[#fbc02d]" /> Galeri Autentikasi</h3>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {/* Bagian Masuk */}
-                  <div className="flex flex-col gap-3">
-                    <div className="bg-green-500 text-white text-xs font-black py-1.5 px-3 rounded-t-xl text-center uppercase tracking-widest">Data Masuk</div>
+                  <div className="flex flex-col gap-4 bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-2">
+                      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-green-600"><i className="fa-solid fa-arrow-right-to-bracket text-[10px]"></i></div>
+                      <p className="font-black text-[#3e2723] text-sm uppercase">Data Masuk</p>
+                    </div>
                     <FotoBesar src={emp.in?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
                     <FotoBesar src={emp.in?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
                     <FotoBesar src={emp.in?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
                   </div>
                   
                   {/* Bagian Keluar */}
-                  <div className="flex flex-col gap-3">
-                    <div className="bg-orange-500 text-white text-xs font-black py-1.5 px-3 rounded-t-xl text-center uppercase tracking-widest">Data Keluar</div>
+                  <div className="flex flex-col gap-4 bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-2">
+                      <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><i className="fa-solid fa-arrow-right-from-bracket text-[10px]"></i></div>
+                      <p className="font-black text-[#3e2723] text-sm uppercase">Data Keluar</p>
+                    </div>
                     <FotoBesar src={emp.out?.custom_foto_absen} icon="fa-camera" title="Selfie Wajah" />
                     <FotoBesar src={emp.out?.custom_verification_image} icon="fa-fingerprint" title="Mesin Finger" />
                     <FotoBesar src={emp.out?.custom_signature} icon="fa-pen-nib" title="Tanda Tangan" isSignature={true} />
@@ -436,7 +461,6 @@ const DashboardHR = () => {
         );
       })()}
       
-      {/* Tambahan CSS Animasi pop-up (bisa otomatis dibaca Tailwind jika pakai mode arbitary) */}
       <style>{`
         @keyframes zoomIn {
           from { opacity: 0; transform: scale(0.95) translateY(10px); }
