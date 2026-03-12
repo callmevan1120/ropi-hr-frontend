@@ -63,10 +63,14 @@ const isRamadhan = (): boolean => {
 };
 
 // Derive nama label shift dari tanggal (tanpa info branch per karyawan, default PH Klaten)
-const getShiftLabel = (tanggal: string, shiftNameFromRecord?: string): string => {
-  if (shiftNameFromRecord) return shiftNameFromRecord;
+// Sama persis dengan getShiftKantor di Absen.tsx —
+// selalu derive dari tanggal, ABAIKAN nama shift dari ERPNext
+// karena ERPNext hanya punya shift Senin-Kamis, sedangkan Jumat di-override manual
+const getShiftLabel = (tanggal: string): string => {
   const tglDate = new Date(tanggal);
-  const isFriday = tglDate.getDay() === 5;
+  const hari = tglDate.getDay();
+  if (hari === 0 || hari === 6) return 'Libur';
+  const isFriday = hari === 5;
   const ramadhan = isRamadhan();
   const hariLabel = isFriday ? 'Jumat' : 'Senin - Kamis';
   const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
@@ -78,10 +82,14 @@ const getJamShift = (
   tanggal: string,
   masterShifts: Record<string, { in: string; out: string }>
 ): { in: string; out: string } => {
-  if (shiftNameFromRecord && masterShifts[shiftNameFromRecord]) return masterShifts[shiftNameFromRecord];
   const tglDate = new Date(tanggal);
   const isFriday = tglDate.getDay() === 5;
   const ramadhan = isRamadhan();
+  // Kalau Jumat: pakai jam override, JANGAN pakai shift ERPNext (yang isinya Senin-Kamis)
+  // Kalau bukan Jumat: coba lookup dari masterShifts dulu
+  if (!isFriday && shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
+    return masterShifts[shiftNameFromRecord];
+  }
   if (ramadhan) return isFriday ? { in: '07:00', out: '16:00' } : { in: '07:00', out: '15:30' };
   return isFriday ? { in: '07:30', out: '17:00' } : { in: '07:30', out: '16:30' };
 };
@@ -211,7 +219,7 @@ const DashboardHR = () => {
         const inJam = log.in ? formatJamLokal(log.in.time) : '-';
         const outJam = log.out ? formatJamLokal(log.out.time) : '-';
         const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
-        const shiftLabel = getShiftLabel(date, log.in?.shift || log.out?.shift);
+        const shiftLabel = getShiftLabel(date);
         let telat = '-';
         if (log.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) telat = formatDurasi(s); }
         let pulangCepat = '-';
@@ -266,8 +274,8 @@ const DashboardHR = () => {
       <div className="bg-[#3e2723] pt-8 pb-8 px-6 md:px-12 shadow-lg sticky top-0 z-20 w-full rounded-b-[2.5rem]">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <button onClick={handleLogout} className="w-12 h-12 bg-red-500/20 hover:bg-red-500/40 rounded-full flex items-center justify-center text-red-400 active:scale-95 transition-all shadow-inner border border-red-500/30">
-              <i className="fa-solid fa-power-off text-xl" />
+            <button onClick={handleLogout} className="flex items-center gap-2 bg-white/10 hover:bg-red-500/20 border border-white/20 hover:border-red-400/40 text-white/70 hover:text-red-300 px-4 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-95 transition-all">
+              <i className="fa-solid fa-arrow-right-from-bracket" /> Logout
             </button>
             <div>
               <h1 className="text-2xl font-black text-[#fbc02d]">HR Command Center</h1>
@@ -323,7 +331,7 @@ const DashboardHR = () => {
               const inJam = todayLog?.in ? formatJamLokal(todayLog.in.time) : '-';
               const outJam = todayLog?.out ? formatJamLokal(todayLog.out.time) : '-';
               const shiftInfo = getJamShift(todayLog?.in?.shift || todayLog?.out?.shift, tanggalAktif, masterShifts);
-              const shiftLabel = getShiftLabel(tanggalAktif, todayLog?.in?.shift || todayLog?.out?.shift);
+              const shiftLabel = getShiftLabel(tanggalAktif);
               const isTelat = todayLog?.in && toMenit(inJam) > toMenit(shiftInfo.in);
 
               let avatarSrc = null;
@@ -419,7 +427,7 @@ const DashboardHR = () => {
         if (filterMode === 'harian') {
           const todayLog = emp.logsByDate[tanggalAktif] || { in: null, out: null };
           const shiftInfo = getJamShift(todayLog.in?.shift || todayLog.out?.shift, tanggalAktif, masterShifts);
-          const shiftLabel = getShiftLabel(tanggalAktif, todayLog.in?.shift || todayLog.out?.shift);
+          const shiftLabel = getShiftLabel(tanggalAktif);
           const inJam = todayLog.in ? formatJamLokal(todayLog.in.time) : '-';
           const outJam = todayLog.out ? formatJamLokal(todayLog.out.time) : '-';
 
@@ -563,7 +571,7 @@ const DashboardHR = () => {
                           const inJam = log.in ? formatJamLokal(log.in.time) : '-';
                           const outJam = log.out ? formatJamLokal(log.out.time) : '-';
                           const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
-                          const shiftLabel = getShiftLabel(date, log.in?.shift || log.out?.shift);
+                          const shiftLabel = getShiftLabel(date);
                           const isTelat = log.in && toMenit(inJam) > toMenit(shiftInfo.in);
                           return (
                             <tr key={date} className="hover:bg-gray-50 transition-colors">
