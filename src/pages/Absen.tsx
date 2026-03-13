@@ -35,6 +35,12 @@ interface LeaveRecord {
   status: string;
 }
 
+// ── FIX ZONA WAKTU WIB (Mencegah Hari Jumat tidak terdeteksi) ──
+const getWibDate = (date: Date | string = new Date()) => {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+};
+
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
@@ -55,25 +61,27 @@ const toMenit = (jam: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
-const isRamadhan = (): boolean => {
-  const now = new Date();
-  const tahun = now.getFullYear();
-  const bulan = now.getMonth() + 1;
-  const tgl = now.getDate();
+const isRamadhan = (dateParam?: Date | string): boolean => {
+  const d = getWibDate(dateParam);
+  const tahun = d.getFullYear();
+  const bulan = d.getMonth() + 1;
+  const tgl = d.getDate();
   if (tahun === 2025 && bulan === 3 && tgl >= 1 && tgl <= 30) return true;
   if (tahun === 2026 && bulan === 2 && tgl >= 18) return true;
   if (tahun === 2026 && bulan === 3 && tgl <= 19) return true;
   return false;
 };
 
+// ── LOGIKA 4 SHIFT CUSTOM ──
 const getShiftKantor = (
-  tanggal: Date,
-  masterShifts: Record<string, { in: string; out: string }>,
+  tanggal: Date | string,
   branch?: string
 ): string => {
-  const hari = tanggal.getDay();
+  const d = getWibDate(tanggal);
+  const hari = d.getDay();
   const isFriday = hari === 5;
-  const ramadhan = isRamadhan();
+  const ramadhan = isRamadhan(d);
+  
   const branchLabel = branch?.includes('Jakarta') ? 'Jakarta' : 'PH Klaten';
   const hariLabel = isFriday ? 'Jumat' : 'Senin - Kamis';
   const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
@@ -81,18 +89,19 @@ const getShiftKantor = (
 };
 
 const getJamShift = (
-  shiftNameFromRecord: string,
+  shiftNameFromRecord: string | undefined,
   tanggal: string,
   branchUser: string | undefined,
   masterShifts: Record<string, { in: string; out: string }>
 ): { in: string; out: string } => {
   if (shiftNameFromRecord && masterShifts[shiftNameFromRecord]) return masterShifts[shiftNameFromRecord];
-  const tglDate = new Date(tanggal);
-  const namaShift = getShiftKantor(tglDate, masterShifts, branchUser);
+  
+  const namaShift = getShiftKantor(tanggal, branchUser);
   if (namaShift && masterShifts[namaShift]) return masterShifts[namaShift];
-  const hari = tglDate.getDay();
-  const isFriday = hari === 5;
-  const ramadhan = isRamadhan();
+  
+  const d = getWibDate(tanggal);
+  const isFriday = d.getDay() === 5;
+  const ramadhan = isRamadhan(d);
   if (ramadhan) return isFriday ? { in: '07:00', out: '16:00' } : { in: '07:00', out: '15:30' };
   return isFriday ? { in: '07:30', out: '17:00' } : { in: '07:30', out: '16:30' };
 };
@@ -156,8 +165,10 @@ const Absen = () => {
   const [gpsStatus, setGpsStatus] = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
+  
+  // State untuk deteksi fisik cabang saat absen
+  const [detectedBranch, setDetectedBranch] = useState<string>('');
 
-  // Step: 1=selfie wajah, 2=foto fingerprint, 3=TTD canvas, 4=preview & kirim
   const [cameraStep, setCameraStep] = useState(1);
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
   const [fotoMesinBase64, setFotoMesinBase64] = useState<string | null>(null);
@@ -211,7 +222,6 @@ const Absen = () => {
 
   useEffect(() => { return () => matikanKamera(); }, []);
 
-  // ── TTD CANVAS: setup event saat step 3 aktif ──
   useEffect(() => {
     if (cameraStep !== 3) return;
 
@@ -439,6 +449,7 @@ const Absen = () => {
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
             const namaLokasiTampil = cek.nama !== '?' ? cek.nama : LOKASI_FALLBACK[0].nama;
+            setDetectedBranch(namaLokasiTampil); // Simpan deteksi cabang
             const pesanValid = isIpValid
               ? `Valid: ${namaLokasiTampil} (via Wi-Fi) ✓`
               : `Valid: ${cek.nama} (Akurasi: ${Math.round(akurasi)}m) ✓`;
@@ -457,6 +468,7 @@ const Absen = () => {
       async () => {
         if (isIpValid) {
           setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng });
+          setDetectedBranch(LOKASI_FALLBACK[0].nama);
           setGpsStatus({ tipe: 'ok', pesan: `Valid: ${LOKASI_FALLBACK[0].nama} (via Wi-Fi) ✓` });
           setJepretState({ aktif: false, teks: 'Buka Kamera...' });
           await nyalakanKamera('user');
@@ -561,6 +573,9 @@ const Absen = () => {
     if (!fotoBase64 || !fotoMesinBase64 || !ttdBase64 || !user) return;
     setIsKirimLoading(true);
     try {
+      const branchFisik = detectedBranch || user?.branch || 'PH Klaten';
+      const shiftYangDikirim = getShiftKantor(new Date(), branchFisik);
+
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -569,11 +584,11 @@ const Absen = () => {
           tipe: modeAbsen === 'MASUK' ? 'IN' : 'OUT',
           latitude: koordinatGPS?.lat || LOKASI_FALLBACK[0].lat,
           longitude: koordinatGPS?.lng || LOKASI_FALLBACK[0].lng,
-          branch: user.branch || '',
+          branch: branchFisik,
           image_verification: fotoBase64,
           custom_verification_image: fotoMesinBase64,
-          custom_signature: ttdBase64,        // ← field TTD ke ERPNext
-          shift: getShiftKantor(new Date(), masterShifts, user?.branch),
+          custom_signature: ttdBase64,
+          shift: shiftYangDikirim,
         }),
       });
       if (res.ok) {
@@ -839,11 +854,10 @@ const Absen = () => {
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
                 <div className="bg-white w-full max-w-sm mx-auto md:max-w-lg md:rounded-[2rem] rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden mt-auto mb-auto md:mt-0" style={{ maxHeight: '90vh' }}>
 
-                  {/* ── HEADER MODAL KAMERA (Sudah Dirapikan) ── */}
+                  {/* ── HEADER MODAL KAMERA ── */}
                   <div className="bg-[#3e2723] px-5 pt-4 pb-4 shrink-0 relative flex flex-col gap-2">
                     <div className="flex items-center justify-between w-full">
                       <p className="text-white text-2xl font-black leading-none">{jamModal}</p>
-                      {/* 🔥 REVISI POSISI LABEL KELUAR AGAR TIDAK MENUMPUK 🔥 */}
                       <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 ${modeAbsen === 'MASUK' ? 'bg-green-500/30 border border-green-400/40' : 'bg-orange-500/30 border border-orange-400/40'}`}>
                         <div className={`w-2 h-2 rounded-full ${modeAbsen === 'MASUK' ? 'bg-green-400' : 'bg-orange-400'} animate-pulse`}></div>
                         <p className={`font-black text-xs uppercase tracking-wider ${modeAbsen === 'MASUK' ? 'text-green-300' : 'text-orange-300'}`}>
