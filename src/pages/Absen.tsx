@@ -110,6 +110,43 @@ const getJamShift = (
   return isFriday ? { in: '07:30', out: '17:00' } : { in: '07:30', out: '16:30' };
 };
 
+// ── HELPER: Validasi nama shift dari ERPNext vs tanggal sebenarnya
+// Kalau shift tersimpan salah di ERPNext (misal "Senin - Kamis" tapi harinya Jumat),
+// override dengan hasil kalkulasi lokal agar tampilan tetap benar
+const validasiShiftName = (
+  shiftFromRecord: string | undefined,
+  tgl: string,
+  branch: string | undefined,
+  masterShifts: Record<string, { in: string; out: string }>
+): string => {
+  const tglDate      = parseLokalDate(tgl);
+  const hari         = tglDate.getDay();
+  const isFriday     = hari === 5;
+  const isWeekend    = hari === 0 || hari === 6;
+  const shiftLokal   = getShiftKantor(tglDate, masterShifts, branch);
+
+  // Kalau weekend atau tidak ada shift dari record, pakai kalkulasi lokal
+  if (isWeekend || !shiftFromRecord) return shiftLokal;
+
+  // Deteksi inkonsistensi: hari Jumat tapi shift menyebut "Senin - Kamis", atau sebaliknya
+  const recordIsFriday   = shiftFromRecord.toLowerCase().includes('jumat');
+  const recordIsSenKam   = shiftFromRecord.toLowerCase().includes('senin');
+
+  if (isFriday && recordIsSenKam) {
+    // Shift tersimpan salah → pakai kalkulasi lokal
+    console.warn(`[ShiftValidasi] Override: record="${shiftFromRecord}" tapi hari=${hari} (Jumat). Pakai: "${shiftLokal}"`);
+    return shiftLokal;
+  }
+  if (!isFriday && !isWeekend && recordIsFriday) {
+    // Shift Jumat tapi harinya bukan Jumat → override
+    console.warn(`[ShiftValidasi] Override: record="${shiftFromRecord}" tapi hari=${hari}. Pakai: "${shiftLokal}"`);
+    return shiftLokal;
+  }
+
+  // Konsisten, pakai dari record
+  return shiftFromRecord;
+};
+
 const hitungHariKerjaDalamBulan = (
   records: LeaveRecord[],
   filterFn: (r: LeaveRecord) => boolean,
@@ -622,8 +659,10 @@ const Absen = () => {
   let rekapTelat = 0;
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
     if (d.in?.time) {
-      const jamAbsen = formatJamLokal(d.in.time);
-      const shiftInfo = getJamShift(d.in.shift || '', tgl, user?.branch, masterShifts);
+      const jamAbsen  = formatJamLokal(d.in.time);
+      const shiftRaw  = d.in.shift;
+      const shiftNama = validasiShiftName(shiftRaw, tgl, user?.branch, masterShifts);
+      const shiftInfo = getJamShift(shiftNama, tgl, user?.branch, masterShifts);
       if (toMenit(jamAbsen) > toMenit(shiftInfo.in)) rekapTelat++;
     }
   });
@@ -655,7 +694,10 @@ const Absen = () => {
         kelas += 'bg-blue-100 text-blue-600 font-bold';
         dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />;
       } else if (checkin) {
-        const shiftInfo = getJamShift(dataIn?.shift || '', strTgl, user?.branch, masterShifts);
+        const shiftInfo = getJamShift(
+          validasiShiftName(dataIn?.shift, strTgl, user?.branch, masterShifts),
+          strTgl, user?.branch, masterShifts
+        );
         const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in);
         kelas += isTelat ? 'bg-red-100 text-red-600 font-bold' : 'bg-green-100 text-green-700 font-bold';
         dot = <span className={`absolute -bottom-0.5 w-1 h-1 rounded-full ${isTelat ? 'bg-red-400' : 'bg-green-400'}`} />;
@@ -795,9 +837,10 @@ const Absen = () => {
                         const d = groupedRiwayat[tgl];
                         const jamIn = formatJamLokal(d.in?.time);
                         const jamOut = formatJamLokal(d.out?.time);
-                        // ── FIX: pakai parseLokalDate + fallback nama shift via getShiftKantor ──
+                        // ── Validasi shift dari ERPNext vs hari sebenarnya (auto-correct kalau salah simpan) ──
                         const tglDate = parseLokalDate(tgl);
-                        const shiftName = d.in?.shift || d.out?.shift || getShiftKantor(tglDate, masterShifts, user?.branch);
+                        const shiftRaw = d.in?.shift || d.out?.shift;
+                        const shiftName = validasiShiftName(shiftRaw, tgl, user?.branch, masterShifts);
                         const shiftInfo = getJamShift(shiftName, tgl, user?.branch, masterShifts);
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
                         const dateLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -1015,9 +1058,10 @@ const Absen = () => {
 
             {/* MODAL DETAIL RIWAYAT */}
             {detailModal.show && (() => {
-              // ── FIX: pakai parseLokalDate + fallback nama shift ──
-              const tglDate = parseLokalDate(detailModal.tgl);
-              const shiftName = detailModal.inData?.shift || detailModal.outData?.shift || getShiftKantor(tglDate, masterShifts, user?.branch);
+              // ── Validasi shift dari ERPNext vs hari sebenarnya (auto-correct kalau salah simpan) ──
+              const tglDate   = parseLokalDate(detailModal.tgl);
+              const shiftRaw  = detailModal.inData?.shift || detailModal.outData?.shift;
+              const shiftName = validasiShiftName(shiftRaw, detailModal.tgl, user?.branch, masterShifts);
               const shiftInfo = getJamShift(shiftName, detailModal.tgl, user?.branch, masterShifts);
               const hariLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'long' });
               const tglLabel = tglDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
