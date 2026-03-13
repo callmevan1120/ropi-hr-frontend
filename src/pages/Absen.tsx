@@ -35,12 +35,6 @@ interface LeaveRecord {
   status: string;
 }
 
-// ── FIX ZONA WAKTU WIB (Mencegah Hari Jumat tidak terdeteksi) ──
-const getWibDate = (date: Date | string = new Date()) => {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-};
-
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
@@ -61,47 +55,57 @@ const toMenit = (jam: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
-const isRamadhan = (dateParam?: Date | string): boolean => {
-  const d = getWibDate(dateParam);
-  const tahun = d.getFullYear();
-  const bulan = d.getMonth() + 1;
-  const tgl = d.getDate();
+// ── FIX 1: parseLokalDate — parse 'YYYY-MM-DD' sebagai local timezone, bukan UTC midnight
+// Tanpa ini, new Date('2026-03-13') = UTC 00:00 → bisa geser getDay() di timezone tertentu
+const parseLokalDate = (tglStr: string): Date => {
+  const [y, m, d] = tglStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+// ── FIX 2: isRamadhan menerima parameter tanggal opsional
+// Sebelumnya selalu pakai new Date() (hari ini), sehingga data historis
+// pra-Ramadhan ikut terhitung sebagai Ramadhan karena dicek dengan waktu sekarang
+const isRamadhan = (tanggal?: Date): boolean => {
+  const now = tanggal || new Date();
+  const tahun = now.getFullYear();
+  const bulan = now.getMonth() + 1; // 1-indexed
+  const tgl = now.getDate();
   if (tahun === 2025 && bulan === 3 && tgl >= 1 && tgl <= 30) return true;
   if (tahun === 2026 && bulan === 2 && tgl >= 18) return true;
   if (tahun === 2026 && bulan === 3 && tgl <= 19) return true;
   return false;
 };
 
-// ── LOGIKA 4 SHIFT CUSTOM ──
+// ── FIX 3: getShiftKantor pakai isRamadhan(tanggal) bukan isRamadhan()
+// Agar shift dihitung berdasarkan tanggal record, bukan hari ini
 const getShiftKantor = (
-  tanggal: Date | string,
+  tanggal: Date,
+  masterShifts: Record<string, { in: string; out: string }>,
   branch?: string
 ): string => {
-  const d = getWibDate(tanggal);
-  const hari = d.getDay();
+  const hari = tanggal.getDay();
   const isFriday = hari === 5;
-  const ramadhan = isRamadhan(d);
-  
+  const ramadhan = isRamadhan(tanggal); // ← kirim tanggal yang bersangkutan
   const branchLabel = branch?.includes('Jakarta') ? 'Jakarta' : 'PH Klaten';
   const hariLabel = isFriday ? 'Jumat' : 'Senin - Kamis';
   const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
   return `${hariLabel} (${branchLabel} ${periodeLabel})`;
 };
 
+// ── FIX 4: getJamShift pakai parseLokalDate agar getDay() tidak geser timezone
 const getJamShift = (
-  shiftNameFromRecord: string | undefined,
+  shiftNameFromRecord: string,
   tanggal: string,
   branchUser: string | undefined,
   masterShifts: Record<string, { in: string; out: string }>
 ): { in: string; out: string } => {
   if (shiftNameFromRecord && masterShifts[shiftNameFromRecord]) return masterShifts[shiftNameFromRecord];
-  
-  const namaShift = getShiftKantor(tanggal, branchUser);
+  const tglDate = parseLokalDate(tanggal); // ← local parse, bukan UTC
+  const namaShift = getShiftKantor(tglDate, masterShifts, branchUser);
   if (namaShift && masterShifts[namaShift]) return masterShifts[namaShift];
-  
-  const d = getWibDate(tanggal);
-  const isFriday = d.getDay() === 5;
-  const ramadhan = isRamadhan(d);
+  const hari = tglDate.getDay();
+  const isFriday = hari === 5;
+  const ramadhan = isRamadhan(tglDate); // ← kirim tanggal
   if (ramadhan) return isFriday ? { in: '07:00', out: '16:00' } : { in: '07:00', out: '15:30' };
   return isFriday ? { in: '07:30', out: '17:00' } : { in: '07:30', out: '16:30' };
 };
@@ -115,8 +119,8 @@ const hitungHariKerjaDalamBulan = (
   const bulanMulai = new Date(tahunAktif, bulanAktif, 1);
   const bulanAkhir = new Date(tahunAktif, bulanAktif + 1, 0);
   return records.filter(filterFn).reduce((acc, r) => {
-    const from = new Date(r.from_date);
-    const to = new Date(r.to_date);
+    const from = parseLokalDate(r.from_date);
+    const to = parseLokalDate(r.to_date);
     const start = from < bulanMulai ? bulanMulai : from;
     const end = to > bulanAkhir ? bulanAkhir : to;
     let hari = 0;
@@ -165,9 +169,6 @@ const Absen = () => {
   const [gpsStatus, setGpsStatus] = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
   const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
   const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
-  
-  // State untuk deteksi fisik cabang saat absen
-  const [detectedBranch, setDetectedBranch] = useState<string>('');
 
   const [cameraStep, setCameraStep] = useState(1);
   const [fotoBase64, setFotoBase64] = useState<string | null>(null);
@@ -349,7 +350,7 @@ const Absen = () => {
     try {
       const dari = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
       const akhir = new Date(tahunAktif, bulanAktif + 1, 0);
-      const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '00')}-${String(akhir.getDate()).padStart(2, '0')}`;
+      const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}`);
       const data = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
@@ -363,8 +364,8 @@ const Absen = () => {
       const data = await res.json();
       if (data.success && data.data) {
         const filtered = data.data.filter((item: LeaveRecord) => {
-          const from = new Date(item.from_date);
-          const to = new Date(item.to_date);
+          const from = parseLokalDate(item.from_date);
+          const to = parseLokalDate(item.to_date);
           const bulanMulai = new Date(tahunAktif, bulanAktif, 1);
           const bulanAkhir = new Date(tahunAktif, bulanAktif + 1, 0);
           return from <= bulanAkhir && to >= bulanMulai;
@@ -377,10 +378,14 @@ const Absen = () => {
   const getTanggalIzin = (): Set<string> => {
     const set = new Set<string>();
     leaveRecords.forEach(r => {
-      const from = new Date(r.from_date);
-      const to = new Date(r.to_date);
+      const from = parseLokalDate(r.from_date);
+      const to = parseLokalDate(r.to_date);
       for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-        set.add(d.toISOString().substring(0, 10));
+        // format manual YYYY-MM-DD agar konsisten
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        set.add(`${y}-${m}-${dd}`);
       }
     });
     return set;
@@ -449,7 +454,6 @@ const Absen = () => {
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
             const namaLokasiTampil = cek.nama !== '?' ? cek.nama : LOKASI_FALLBACK[0].nama;
-            setDetectedBranch(namaLokasiTampil); // Simpan deteksi cabang
             const pesanValid = isIpValid
               ? `Valid: ${namaLokasiTampil} (via Wi-Fi) ✓`
               : `Valid: ${cek.nama} (Akurasi: ${Math.round(akurasi)}m) ✓`;
@@ -468,7 +472,6 @@ const Absen = () => {
       async () => {
         if (isIpValid) {
           setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng });
-          setDetectedBranch(LOKASI_FALLBACK[0].nama);
           setGpsStatus({ tipe: 'ok', pesan: `Valid: ${LOKASI_FALLBACK[0].nama} (via Wi-Fi) ✓` });
           setJepretState({ aktif: false, teks: 'Buka Kamera...' });
           await nyalakanKamera('user');
@@ -564,7 +567,7 @@ const Absen = () => {
       setFotoMesinBase64(base64Data);
       matikanKamera();
       setIsTtdEmpty(true);
-      setCameraStep(3); // → TTD
+      setCameraStep(3);
       setKameraBorder('border-purple-400');
     }
   };
@@ -573,9 +576,6 @@ const Absen = () => {
     if (!fotoBase64 || !fotoMesinBase64 || !ttdBase64 || !user) return;
     setIsKirimLoading(true);
     try {
-      const branchFisik = detectedBranch || user?.branch || 'PH Klaten';
-      const shiftYangDikirim = getShiftKantor(new Date(), branchFisik);
-
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -584,11 +584,11 @@ const Absen = () => {
           tipe: modeAbsen === 'MASUK' ? 'IN' : 'OUT',
           latitude: koordinatGPS?.lat || LOKASI_FALLBACK[0].lat,
           longitude: koordinatGPS?.lng || LOKASI_FALLBACK[0].lng,
-          branch: branchFisik,
+          branch: user.branch || '',
           image_verification: fotoBase64,
           custom_verification_image: fotoMesinBase64,
           custom_signature: ttdBase64,
-          shift: shiftYangDikirim,
+          shift: getShiftKantor(new Date(), masterShifts, user?.branch),
         }),
       });
       if (res.ok) {
@@ -635,6 +635,7 @@ const Absen = () => {
   const sortedTglKeys = Object.keys(groupedRiwayat).sort((a, b) => b.localeCompare(a));
   const tampilKeys = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
 
+  // ── FIX 5: renderKalender pakai parseLokalDate ──
   const renderKalender = () => {
     const hariPertama = new Date(tahunAktif, bulanAktif, 1).getDay();
     const totalHari = new Date(tahunAktif, bulanAktif + 1, 0).getDate();
@@ -681,10 +682,9 @@ const Absen = () => {
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
       <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
       
-      {/* ── BUNGKUS UTAMA RESPONSIVE (SPLIT SCREEN) ── */}
       <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
         
-        {/* BAGIAN KIRI: ILLUSTRASI PC */}
+        {/* BAGIAN KIRI */}
         <div className="hidden md:flex flex-col w-1/2 bg-[#3e2723] relative p-12 lg:p-16 justify-between overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
             <div className="absolute -top-20 -left-20 w-96 h-96 bg-[#fbc02d] rounded-full blur-3xl"></div>
@@ -714,7 +714,7 @@ const Absen = () => {
           </div>
         </div>
 
-        {/* BAGIAN KANAN: APLIKASI MOBILE */}
+        {/* BAGIAN KANAN */}
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
           <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
             
@@ -749,8 +749,8 @@ const Absen = () => {
                 <div className="px-6 mb-3 flex flex-wrap gap-1.5">
                   {leaveRecords.map(r => {
                     const statusColor = r.status?.toLowerCase() === 'approved' ? 'bg-blue-100 text-blue-700 border-blue-200' : r.status?.toLowerCase() === 'rejected' ? 'bg-red-100 text-red-600 border-red-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200';
-                    const fromLabel = new Date(r.from_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-                    const toLabel = new Date(r.to_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+                    const fromLabel = parseLokalDate(r.from_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+                    const toLabel = parseLokalDate(r.to_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
                     return (
                       <div key={r.name} className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full border ${statusColor}`}>
                         <i className="fa-solid fa-envelope-open-text text-[8px]" />
@@ -795,10 +795,13 @@ const Absen = () => {
                         const d = groupedRiwayat[tgl];
                         const jamIn = formatJamLokal(d.in?.time);
                         const jamOut = formatJamLokal(d.out?.time);
-                        const dateLabel = new Date(tgl).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
-                        const shiftName = d.in?.shift || d.out?.shift || '';
+                        // ── FIX: pakai parseLokalDate + fallback nama shift via getShiftKantor ──
+                        const tglDate = parseLokalDate(tgl);
+                        const shiftName = d.in?.shift || d.out?.shift || getShiftKantor(tglDate, masterShifts, user?.branch);
                         const shiftInfo = getJamShift(shiftName, tgl, user?.branch, masterShifts);
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
+                        const dateLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+
                         let badgeEl = null;
                         if (jamIn !== '-') {
                           const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
@@ -821,7 +824,11 @@ const Absen = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
-                              <p className="text-[10px] text-gray-400">{jamIn} → {jamOut === '-' && badgeBelumKeluar ? <span className="text-red-400 italic mx-1">?</span> : jamOut} <span className="ml-1 text-[#fbc02d]">· {shiftInfo.in}–{shiftInfo.out}</span></p>
+                              {/* ── FIX: tampilkan nama shift + jam ── */}
+                              <p className="text-[10px] text-gray-400 truncate">
+                                {jamIn} → {jamOut === '-' && badgeBelumKeluar ? <span className="text-red-400 italic mx-1">?</span> : jamOut}
+                                <span className="ml-1 text-[#fbc02d]">· {shiftName} ({shiftInfo.in}–{shiftInfo.out})</span>
+                              </p>
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">{badgeEl}{badgeCepat}{badgeBelumKeluar}</div>
                           </div>
@@ -847,25 +854,19 @@ const Absen = () => {
               <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-calendar-minus text-xl mb-1" /><span className="text-[10px] font-black uppercase">Cuti</span></Link>
             </nav>
 
-            {/* ══════════════════════════════════════════════════
-                MODAL ABSEN (KAMERA & TTD)
-                ══════════════════════════════════════════════════ */}
+            {/* MODAL ABSEN */}
             {isModalAbsenOpen && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
                 <div className="bg-white w-full max-w-sm mx-auto md:max-w-lg md:rounded-[2rem] rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden mt-auto mb-auto md:mt-0" style={{ maxHeight: '90vh' }}>
 
-                  {/* ── HEADER MODAL KAMERA ── */}
                   <div className="bg-[#3e2723] px-5 pt-4 pb-4 shrink-0 relative flex flex-col gap-2">
                     <div className="flex items-center justify-between w-full">
                       <p className="text-white text-2xl font-black leading-none">{jamModal}</p>
                       <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 ${modeAbsen === 'MASUK' ? 'bg-green-500/30 border border-green-400/40' : 'bg-orange-500/30 border border-orange-400/40'}`}>
                         <div className={`w-2 h-2 rounded-full ${modeAbsen === 'MASUK' ? 'bg-green-400' : 'bg-orange-400'} animate-pulse`}></div>
-                        <p className={`font-black text-xs uppercase tracking-wider ${modeAbsen === 'MASUK' ? 'text-green-300' : 'text-orange-300'}`}>
-                          {modeAbsen}
-                        </p>
+                        <p className={`font-black text-xs uppercase tracking-wider ${modeAbsen === 'MASUK' ? 'text-green-300' : 'text-orange-300'}`}>{modeAbsen}</p>
                       </div>
                     </div>
-
                     <div className="flex items-center justify-between w-full mt-1">
                       {(cameraStep === 1 || cameraStep === 2) ? (
                         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold ${gpsStatus.tipe === 'error' ? 'bg-red-900/50 text-red-300' : gpsStatus.tipe === 'ok' ? 'bg-green-900/40 text-green-300' : 'bg-white/10 text-white/70'}`}>
@@ -875,7 +876,6 @@ const Absen = () => {
                       ) : (
                         <div className="flex-1"></div>
                       )}
-                      
                       <div className="flex items-center gap-1">
                         {[{ n: 1, icon: 'fa-camera' }, { n: 2, icon: 'fa-fingerprint' }, { n: 3, icon: 'fa-pen-nib' }, { n: 4, icon: 'fa-paper-plane' }].map((s, i) => (
                           <div key={s.n} className="flex items-center gap-1">
@@ -889,17 +889,12 @@ const Absen = () => {
                     </div>
                   </div>
 
-                  {/* ── KONTEN KAMERA/TTD ── */}
                   <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-
-                    {/* STEP 1 & 2: KAMERA */}
                     {(cameraStep === 1 || cameraStep === 2) && (
                       <>
                         {cameraStep === 1 && (
                           <div className="bg-red-50 border border-red-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm">
-                            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0">
-                              <i className="fa-solid fa-camera-rotate"></i>
-                            </div>
+                            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0"><i className="fa-solid fa-camera-rotate"></i></div>
                             <div>
                               <p className="text-red-700 text-xs font-black leading-tight">Selfie Wajah!</p>
                               <p className="text-red-500 text-[10px] font-bold leading-snug">Pastikan mesin fingerprint terlihat di belakangmu.</p>
@@ -908,22 +903,17 @@ const Absen = () => {
                         )}
                         {cameraStep === 2 && (
                           <div className="bg-blue-50 border border-blue-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0">
-                              <i className="fa-solid fa-fingerprint"></i>
-                            </div>
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0"><i className="fa-solid fa-fingerprint"></i></div>
                             <div>
                               <p className="text-blue-700 text-xs font-black leading-tight">Foto Mesin!</p>
                               <p className="text-blue-500 text-[10px] font-bold leading-snug">Hari, tanggal & jam di layar mesin wajib terbaca.</p>
                             </div>
                           </div>
                         )}
-                        {/* Viewfinder 4:3 */}
                         <div className={`w-full rounded-2xl overflow-hidden border-[3px] ${kameraBorder} bg-gray-900 relative transition-colors shadow-inner`} style={{ aspectRatio: '3/4' }}>
                           {cameraStep === 2 && (
                             <div className="absolute top-4 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
-                              <span className="bg-white/90 text-[#3e2723] text-[10px] font-black px-4 py-2 rounded-full shadow-lg border border-gray-200">
-                                Arahkan kamera ke layar mesin
-                              </span>
+                              <span className="bg-white/90 text-[#3e2723] text-[10px] font-black px-4 py-2 rounded-full shadow-lg border border-gray-200">Arahkan kamera ke layar mesin</span>
                             </div>
                           )}
                           <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: cameraStep === 1 ? 'scaleX(-1)' : 'none' }} />
@@ -931,13 +921,10 @@ const Absen = () => {
                       </>
                     )}
 
-                    {/* STEP 3: TTD */}
                     {cameraStep === 3 && (
                       <>
                         <div className="bg-purple-50 border border-purple-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm">
-                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-500 shrink-0">
-                            <i className="fa-solid fa-pen-nib"></i>
-                          </div>
+                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-500 shrink-0"><i className="fa-solid fa-pen-nib"></i></div>
                           <div>
                             <p className="text-purple-800 text-xs font-black leading-tight">Tanda Tangan</p>
                             <p className="text-purple-500 text-[10px] font-bold mt-0.5">Goreskan jari di dalam kotak putih di bawah ini.</p>
@@ -961,13 +948,10 @@ const Absen = () => {
                       </>
                     )}
 
-                    {/* STEP 4: PREVIEW */}
                     {cameraStep === 4 && (
                       <>
                         <div className="bg-blue-50 border border-blue-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm mb-1">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0">
-                            <i className="fa-solid fa-eye"></i>
-                          </div>
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0"><i className="fa-solid fa-eye"></i></div>
                           <div>
                             <p className="text-blue-800 text-xs font-black leading-tight">Review Bukti Absen</p>
                             <p className="text-blue-500 text-[10px] font-bold mt-0.5">Pastikan semua foto jelas sebelum dikirim.</p>
@@ -995,27 +979,20 @@ const Absen = () => {
                         </div>
                       </>
                     )}
-
                   </div>
 
-                  {/* ── FOOTER TOMBOL MODAL ── */}
                   <div className="px-5 pb-6 pt-3 shrink-0 border-t border-gray-100 bg-gray-50">
                     {(cameraStep === 1 || cameraStep === 2) && (
                       <div className="grid grid-cols-2 gap-3">
-                        <button onClick={tutupModal} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2 shadow-sm">
-                          <i className="fa-solid fa-xmark" /> Batal
-                        </button>
+                        <button onClick={tutupModal} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2 shadow-sm"><i className="fa-solid fa-xmark" /> Batal</button>
                         <button disabled={!jepretState.aktif} onClick={jepretFoto} className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all shadow-md ${jepretState.aktif ? (cameraStep === 1 ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white') : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-                          <i className="fa-solid fa-camera shrink-0" />
-                          <span>{jepretState.teks}</span>
+                          <i className="fa-solid fa-camera shrink-0" /><span>{jepretState.teks}</span>
                         </button>
                       </div>
                     )}
                     {cameraStep === 3 && (
                       <div className="grid grid-cols-2 gap-3">
-                        <button onClick={tutupModal} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2 shadow-sm">
-                          <i className="fa-solid fa-xmark" /> Batal
-                        </button>
+                        <button onClick={tutupModal} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2 shadow-sm"><i className="fa-solid fa-xmark" /> Batal</button>
                         <button onClick={simpanTTD} disabled={isTtdEmpty} className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all shadow-md ${!isTtdEmpty ? 'bg-purple-500 hover:bg-purple-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                           <i className="fa-solid fa-check shrink-0" /> Lanjut
                         </button>
@@ -1023,9 +1000,7 @@ const Absen = () => {
                     )}
                     {cameraStep === 4 && (
                       <div className="grid grid-cols-2 gap-3">
-                        <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm shadow-sm">
-                          <i className="fa-solid fa-rotate-right shrink-0" /> Ulangi
-                        </button>
+                        <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm shadow-sm"><i className="fa-solid fa-rotate-right shrink-0" /> Ulangi</button>
                         <button onClick={kirimAbsen} disabled={isKirimLoading} className="bg-[#3e2723] hover:bg-[#4e342e] text-[#fbc02d] font-black py-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2 active:scale-95 text-sm transition-colors">
                           {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin shrink-0" /> : <i className="fa-solid fa-paper-plane shrink-0" />}
                           {isKirimLoading ? 'Mengirim...' : 'Kirim Absen'}
@@ -1038,16 +1013,14 @@ const Absen = () => {
               </div>
             )}
 
-            {/* ══════════════════════════════
-                MODAL DETAIL RIWAYAT
-                ══════════════════════════════ */}
+            {/* MODAL DETAIL RIWAYAT */}
             {detailModal.show && (() => {
-              const shiftName = detailModal.inData?.shift || detailModal.outData?.shift || '';
+              // ── FIX: pakai parseLokalDate + fallback nama shift ──
+              const tglDate = parseLokalDate(detailModal.tgl);
+              const shiftName = detailModal.inData?.shift || detailModal.outData?.shift || getShiftKantor(tglDate, masterShifts, user?.branch);
               const shiftInfo = getJamShift(shiftName, detailModal.tgl, user?.branch, masterShifts);
-              const tglDate = new Date(detailModal.tgl);
               const hariLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'long' });
               const tglLabel = tglDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-
               const inJam = detailModal.inData?.time ? formatJamLokal(detailModal.inData.time) : null;
               const outJam = detailModal.outData?.time ? formatJamLokal(detailModal.outData.time) : null;
 
@@ -1057,12 +1030,7 @@ const Absen = () => {
                   <div className="relative rounded-2xl overflow-hidden bg-gray-50 border border-gray-200 shadow-sm" style={{ aspectRatio: '3/4' }}>
                     {src
                       ? <img src={prosesUrlFoto(src)} className="w-full h-full object-cover" alt={label} />
-                      : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-                          <i className="fa-solid fa-image-slash text-2xl text-gray-300" />
-                          <p className="text-[10px] text-gray-300 font-bold">Tidak ada foto</p>
-                        </div>
-                      )
+                      : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-300" /><p className="text-[10px] text-gray-300 font-bold">Tidak ada foto</p></div>
                     }
                     <div className={`absolute top-2 left-2 ${badgeColor} text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20`}>{badge}</div>
                   </div>
@@ -1073,7 +1041,6 @@ const Absen = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
                   <div className="bg-white w-full max-w-sm mx-auto md:max-w-2xl md:rounded-[2rem] rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden mt-auto mb-auto md:mt-0" style={{ maxHeight: '90vh' }}>
 
-                    {/* ── HEADER MODAL ── */}
                     <div className="bg-[#3e2723] px-5 pt-5 pb-5 shrink-0 relative">
                       <button onClick={() => setDetailModal({ show: false, tgl: '' })} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/50 hover:text-white hover:bg-red-500 transition-colors">
                         <i className="fa-solid fa-xmark"></i>
@@ -1084,8 +1051,6 @@ const Absen = () => {
                           <h2 className="text-white text-xl font-black leading-tight">{tglLabel}</h2>
                         </div>
                       </div>
-
-                      {/* Ringkasan jam masuk & keluar */}
                       <div className="mt-5 grid grid-cols-2 gap-3">
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col justify-center relative overflow-hidden">
                           <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/10 rounded-full -mr-6 -mt-6 blur-md"></div>
@@ -1104,21 +1069,19 @@ const Absen = () => {
                           <p className="text-white font-black text-2xl leading-none relative z-10">{outJam ?? <span className="text-white/20">–</span>}</p>
                         </div>
                       </div>
-                      
-                      <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-white/50 bg-black/20 rounded-xl py-1.5">
-                        <i className="fa-solid fa-clock"></i> Jadwal: <span className="text-white/80 font-bold">{shiftInfo.in} – {shiftInfo.out}</span>
+                      {/* ── FIX: tampilkan nama shift + jam di modal detail ── */}
+                      <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-white/50 bg-black/20 rounded-xl py-1.5 px-3 flex-wrap text-center">
+                        <i className="fa-solid fa-clock"></i>
+                        <span>Jadwal: <span className="text-white/80 font-bold">{shiftName}</span></span>
+                        <span className="text-white/30">·</span>
+                        <span className="text-white/80 font-bold">{shiftInfo.in} – {shiftInfo.out}</span>
                       </div>
                     </div>
 
-                    {/* ── KONTEN FOTO ── */}
                     <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 md:grid md:grid-cols-3 md:gap-5 md:items-start bg-gray-50">
-
-                      {/* Selfie: Masuk | Keluar */}
                       <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
                         <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                            <i className="fa-solid fa-camera text-gray-500 text-[10px]" />
-                          </div>
+                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-gray-500 text-[10px]" /></div>
                           <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Selfie Wajah</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -1126,13 +1089,9 @@ const Absen = () => {
                           <FotoSlot src={detailModal.outData?.custom_foto_absen} label="Keluar" badge="Keluar" badgeColor="bg-orange-500" />
                         </div>
                       </div>
-
-                      {/* Mesin fingerprint: Masuk | Keluar */}
                       <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
                         <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                          <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-                            <i className="fa-solid fa-fingerprint text-blue-500 text-[10px]" />
-                          </div>
+                          <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-fingerprint text-blue-500 text-[10px]" /></div>
                           <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Mesin Finger</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -1140,31 +1099,19 @@ const Absen = () => {
                           <FotoSlot src={detailModal.outData?.custom_verification_image} label="Keluar" badge="Keluar" badgeColor="bg-orange-500" />
                         </div>
                       </div>
-
-                      {/* Tanda tangan: Masuk | Keluar */}
                       <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 md:col-span-3">
                         <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                          <div className="w-6 h-6 rounded-full bg-purple-50 flex items-center justify-center shrink-0">
-                            <i className="fa-solid fa-pen-nib text-purple-500 text-[10px]" />
-                          </div>
+                          <div className="w-6 h-6 rounded-full bg-purple-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-pen-nib text-purple-500 text-[10px]" /></div>
                           <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Tanda Tangan</p>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                          {[
-                            { label: 'Masuk', data: detailModal.inData },
-                            { label: 'Keluar', data: detailModal.outData },
-                          ].map(({ label, data }) => (
+                          {[{ label: 'Masuk', data: detailModal.inData }, { label: 'Keluar', data: detailModal.outData }].map(({ label, data }) => (
                             <div key={label} className="flex flex-col gap-1.5">
                               <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
                               <div className="rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center relative shadow-inner" style={{ height: '80px' }}>
                                 {data?.custom_signature
                                   ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt={`TTD ${label}`} />
-                                  : (
-                                    <div className="flex items-center gap-2">
-                                      <i className="fa-solid fa-pen-slash text-gray-300" />
-                                      <p className="text-[10px] text-gray-400 font-bold">Belum ada TTD</p>
-                                    </div>
-                                  )
+                                  : <div className="flex items-center gap-2"><i className="fa-solid fa-pen-slash text-gray-300" /><p className="text-[10px] text-gray-400 font-bold">Belum ada TTD</p></div>
                                 }
                                 <div className="absolute top-1/2 left-0 w-full border-t border-dashed border-gray-200 -z-10"></div>
                               </div>
@@ -1172,15 +1119,10 @@ const Absen = () => {
                           ))}
                         </div>
                       </div>
-
                     </div>
 
-                    {/* ── FOOTER ── */}
                     <div className="p-4 shrink-0 bg-white border-t border-gray-100">
-                      <button
-                        onClick={() => setDetailModal({ show: false, tgl: '' })}
-                        className="w-full bg-gray-100 hover:bg-gray-200 text-[#3e2723] font-black py-4 rounded-2xl active:scale-95 transition-colors flex items-center justify-center gap-2"
-                      >
+                      <button onClick={() => setDetailModal({ show: false, tgl: '' })} className="w-full bg-gray-100 hover:bg-gray-200 text-[#3e2723] font-black py-4 rounded-2xl active:scale-95 transition-colors flex items-center justify-center gap-2">
                         <i className="fa-solid fa-check text-[#fbc02d]" /> Mengerti & Tutup
                       </button>
                     </div>
