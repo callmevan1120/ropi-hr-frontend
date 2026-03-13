@@ -387,7 +387,7 @@ const Absen = () => {
     try {
       const dari = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
       const akhir = new Date(tahunAktif, bulanAktif + 1, 0);
-      const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
+      const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '00')}-${String(akhir.getDate()).padStart(2, '0')}`;
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}`);
       const data = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
@@ -418,7 +418,6 @@ const Absen = () => {
       const from = parseLokalDate(r.from_date);
       const to = parseLokalDate(r.to_date);
       for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-        // format manual YYYY-MM-DD agar konsisten
         const y = d.getFullYear();
         const m = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
@@ -579,20 +578,48 @@ const Absen = () => {
     }, 600);
   };
 
+  // 🔥 FIX IPHONE DATA TOO LONG: Hard-Resize Resolusi Kamera & Kompresi Maksimal 🔥
   const jepretFoto = () => {
     const video = videoRef.current;
     if (!video) return;
+
     const canvas = document.createElement('canvas');
-    const MAX_HEIGHT = 640;
-    const scaleSize = video.videoHeight > MAX_HEIGHT ? MAX_HEIGHT / video.videoHeight : 1;
-    canvas.width = video.videoWidth * scaleSize;
-    canvas.height = video.videoHeight * scaleSize;
+
+    // Batasi ukuran mutlak agar aman untuk database (terutama untuk iPhone yang resolusinya 4K)
+    const MAX_WIDTH = 320;
+    const MAX_HEIGHT = 320;
+
+    let targetWidth = video.videoWidth;
+    let targetHeight = video.videoHeight;
+
+    // Jika iOS telat membaca ukuran video (menghasilkan angka 0), beri fallback
+    if (!targetWidth || !targetHeight) {
+      targetWidth = 480;
+      targetHeight = 640;
+    }
+
+    // Hitung rasio untuk kompresi ukuran dengan ketat
+    if (targetWidth > MAX_WIDTH || targetHeight > MAX_HEIGHT) {
+      const ratio = Math.min(MAX_WIDTH / targetWidth, MAX_HEIGHT / targetHeight);
+      targetWidth = targetWidth * ratio;
+      targetHeight = targetHeight * ratio;
+    }
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      if (cameraStep === 1) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+      if (cameraStep === 1) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      // Gambar secara paksa ke ukuran canvas kecil
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     }
-    const base64Data = canvas.toDataURL('image/jpeg', 0.6);
+
+    // Kompres kualitas gambar menjadi 30% (0.3) agar ukuran teks Base64 sangat kecil
+    const base64Data = canvas.toDataURL('image/jpeg', 0.3);
 
     if (cameraStep === 1) {
       if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
@@ -640,7 +667,6 @@ const Absen = () => {
     setIsKirimLoading(false);
   };
 
-  // ── GROUP RIWAYAT per tanggal ──
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
     const tgl = item.time?.substring(0, 10) || item.attendance_date || '';
@@ -674,7 +700,6 @@ const Absen = () => {
   const sortedTglKeys = Object.keys(groupedRiwayat).sort((a, b) => b.localeCompare(a));
   const tampilKeys = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
 
-  // ── FIX 5: renderKalender pakai parseLokalDate ──
   const renderKalender = () => {
     const hariPertama = new Date(tahunAktif, bulanAktif, 1).getDay();
     const totalHari = new Date(tahunAktif, bulanAktif + 1, 0).getDate();
@@ -837,7 +862,6 @@ const Absen = () => {
                         const d = groupedRiwayat[tgl];
                         const jamIn = formatJamLokal(d.in?.time);
                         const jamOut = formatJamLokal(d.out?.time);
-                        // ── Validasi shift dari ERPNext vs hari sebenarnya (auto-correct kalau salah simpan) ──
                         const tglDate = parseLokalDate(tgl);
                         const shiftRaw = d.in?.shift || d.out?.shift;
                         const shiftName = validasiShiftName(shiftRaw, tgl, user?.branch, masterShifts);
@@ -867,11 +891,8 @@ const Absen = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
-                              {/* ── FIX: tampilkan nama shift + jam ── */}
-                              <p className="text-[10px] text-gray-400 truncate">
-                                {jamIn} → {jamOut === '-' && badgeBelumKeluar ? <span className="text-red-400 italic mx-1">?</span> : jamOut}
-                                <span className="ml-1 text-[#fbc02d]">· {shiftName} ({shiftInfo.in}–{shiftInfo.out})</span>
-                              </p>
+                              <p className="text-[9px] font-bold text-gray-400 mb-0.5 truncate">{shiftName}</p>
+                              <p className="text-[10px] text-gray-400">{jamIn} → {jamOut === '-' && badgeBelumKeluar ? <span className="text-red-400 italic mx-1">?</span> : jamOut} <span className="ml-1 text-[#fbc02d]">· {shiftInfo.in}–{shiftInfo.out}</span></p>
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">{badgeEl}{badgeCepat}{badgeBelumKeluar}</div>
                           </div>
@@ -1058,7 +1079,6 @@ const Absen = () => {
 
             {/* MODAL DETAIL RIWAYAT */}
             {detailModal.show && (() => {
-              // ── Validasi shift dari ERPNext vs hari sebenarnya (auto-correct kalau salah simpan) ──
               const tglDate   = parseLokalDate(detailModal.tgl);
               const shiftRaw  = detailModal.inData?.shift || detailModal.outData?.shift;
               const shiftName = validasiShiftName(shiftRaw, detailModal.tgl, user?.branch, masterShifts);
@@ -1113,7 +1133,6 @@ const Absen = () => {
                           <p className="text-white font-black text-2xl leading-none relative z-10">{outJam ?? <span className="text-white/20">–</span>}</p>
                         </div>
                       </div>
-                      {/* ── FIX: tampilkan nama shift + jam di modal detail ── */}
                       <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-white/50 bg-black/20 rounded-xl py-1.5 px-3 flex-wrap text-center">
                         <i className="fa-solid fa-clock"></i>
                         <span>Jadwal: <span className="text-white/80 font-bold">{shiftName}</span></span>
