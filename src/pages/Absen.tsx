@@ -137,7 +137,7 @@ const drawOverlay = (ctx: CanvasRenderingContext2D, w: number, h: number, lokasi
   const tw2      = ctx.measureText(baris2).width;
   const bw       = Math.max(tw1, tw2) + pad * 2;
   const bh       = fs * 2 + pad * 3; // 2 baris + spacing antar baris
-  const x        = w - bw - 8, y = h - bh - 8;
+  const x        = 8, y = h - bh - 8;  // kiri bawah — aman dari crop object-cover
   ctx.fillStyle  = 'rgba(0,0,0,0.6)';
   ctx.beginPath(); ctx.roundRect(x, y, bw, bh, 5); ctx.fill();
   ctx.fillStyle  = '#fff'; ctx.textBaseline = 'top';
@@ -862,8 +862,8 @@ const Absen = () => {
                               {wajahStatus.ok ? 'Wajah Terdeteksi' : 'Cari Wajah...'}
                             </div>
                           )}
-                          {/* Live overlay preview — sama persis dengan yang dicetak ke foto */}
-                          <div className="absolute bottom-3 right-3 z-20 bg-black/60 rounded-md px-2 py-1.5 pointer-events-none select-none text-right">
+                          {/* Live overlay preview — posisi kiri bawah, sama dengan yang dicetak ke foto */}
+                          <div className="absolute bottom-3 left-3 z-20 bg-black/60 rounded-md px-2 py-1.5 pointer-events-none select-none">
                             <p className="text-white text-[9px] font-mono leading-tight">{jamModal}</p>
                             <p className="text-yellow-200 text-[9px] font-mono leading-tight">📍 {namaLokasi}</p>
                           </div>
@@ -904,8 +904,10 @@ const Absen = () => {
                         </div>
                         <div>
                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-wide mb-1.5 text-center">Foto Selfie + Timestamp</p>
-                          <div className="relative rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-gray-50 w-full" style={{ aspectRatio: '3/4' }}>
-                            {fotoBase64 ? <img src={fotoBase64} className="w-full h-full object-cover" alt="Selfie" /> : <div className="absolute inset-0 flex items-center justify-center"><i className="fa-solid fa-image-slash text-gray-300 text-2xl" /></div>}
+                          <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-gray-900 w-full">
+                            {fotoBase64
+                              ? <img src={fotoBase64} className="w-full h-auto block" alt="Selfie" />
+                              : <div className="h-48 flex items-center justify-center"><i className="fa-solid fa-image-slash text-gray-500 text-2xl" /></div>}
                           </div>
                         </div>
                         {ttdBase64 && (
