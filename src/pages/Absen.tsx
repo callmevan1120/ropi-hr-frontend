@@ -453,7 +453,7 @@ const Absen = () => {
   const nyalakanKamera = async () => {
     matikanKamera();
     try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 640 } } });
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } } });
       if (videoRef.current) { videoRef.current.srcObject = streamRef.current; await videoRef.current.play(); }
       setJepretState({ aktif: false, teks: 'Muat AI...' }); muatFaceAPI();
     } catch { setJepretState({ aktif: false, teks: 'Kamera Error' }); }
@@ -478,21 +478,33 @@ const Absen = () => {
   };
 
   // Jepret selfie + timestamp overlay
+  // Strategi 2 canvas:
+  //   canvasDisplay → resolusi penuh (max 720px), kualitas tinggi, untuk preview
+  //   saat kirim    → kompres dari canvasDisplay ke resolusi lebih kecil
   const jepretFoto = () => {
     const video = videoRef.current; if (!video) return;
-    const MAX = 480;
-    let w = video.videoWidth || 480, h = video.videoHeight || 640;
-    if (w > MAX || h > MAX) { const r = Math.min(MAX / w, MAX / h); w = Math.round(w * r); h = Math.round(h * r); }
+
+    // Resolusi penuh untuk preview — max 720px agar foto tajam di layar HP
+    const MAX_DISPLAY = 720;
+    let w = video.videoWidth || 720, h = video.videoHeight || 960;
+    if (w > MAX_DISPLAY || h > MAX_DISPLAY) {
+      const r = Math.min(MAX_DISPLAY / w, MAX_DISPLAY / h);
+      w = Math.round(w * r); h = Math.round(h * r);
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext('2d')!;
-    ctx.translate(w, 0); ctx.scale(-1, 1);        // mirror selfie
+    ctx.translate(w, 0); ctx.scale(-1, 1);       // mirror selfie
     ctx.drawImage(video, 0, 0, w, h);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);           // reset transform
+    ctx.setTransform(1, 0, 0, 1, 0, 0);          // reset transform
     drawOverlay(ctx, w, h, namaLokasi);           // timestamp + lokasi overlay
+
     if (deteksiRef.current) window.clearInterval(deteksiRef.current);
     matikanKamera();
-    setFotoBase64(canvas.toDataURL('image/jpeg', 0.55));
+
+    // Simpan sebagai display quality (kualitas tinggi untuk preview)
+    setFotoBase64(canvas.toDataURL('image/jpeg', 0.85));
     setIsTtdEmpty(true); setCameraStep(2); setKameraBorder('border-purple-400');
   };
 
@@ -502,10 +514,35 @@ const Absen = () => {
   };
   const simpanTTD = () => { const c = ttdCanvasRef.current; if (!c) return; setTtdBase64(c.toDataURL('image/png')); setCameraStep(3); };
 
+  // Kompres foto dari resolusi display (720px) ke resolusi kirim (400px) saat submit
+  // Ini memastikan preview tajam tapi payload ke server tetap kecil
+  const kompresUntukKirim = (base64Display: string): Promise<string> => {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_KIRIM = 400;
+        let w = img.width, h = img.height;
+        if (w > MAX_KIRIM || h > MAX_KIRIM) {
+          const r = Math.min(MAX_KIRIM / w, MAX_KIRIM / h);
+          w = Math.round(w * r); h = Math.round(h * r);
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.45));
+      };
+      img.src = base64Display;
+    });
+  };
+
   const kirimAbsen = async () => {
     if (!fotoBase64 || !ttdBase64 || !user) return;
     setIsKirimLoad(true);
     try {
+      // Kompres foto untuk pengiriman — preview tetap tajam di layar
+      const fotoKirim = await kompresUntukKirim(fotoBase64);
+
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -514,7 +551,7 @@ const Absen = () => {
           latitude:    koordinatGPS?.lat ?? LOK_FALLBACK[0].lat,
           longitude:   koordinatGPS?.lng ?? LOK_FALLBACK[0].lng,
           branch:      user.branch || '',
-          image_verification: fotoBase64,   // selfie + timestamp
+          image_verification: fotoKirim,    // selfie terkompresi untuk backend
           custom_signature:   ttdBase64,
         }),
       });
