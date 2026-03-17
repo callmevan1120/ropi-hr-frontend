@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import BottomNav from '../components/BottomNav';
 
 interface User {
   name: string;
@@ -33,10 +34,7 @@ const Cuti = () => {
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
-    if (!userData) {
-      navigate('/');
-      return;
-    }
+    if (!userData) { navigate('/'); return; }
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
     fetchDataCuti(parsedUser.employee_id);
@@ -48,7 +46,6 @@ const Cuti = () => {
     try {
       const res = await fetch(`${BACKEND}/api/leaves?employee_id=${encodeURIComponent(employeeId)}`);
       const data = await res.json();
-
       if (data.success) {
         const cutiOnly = (data.history || []).filter((item: LeaveHistory) => isCuti(item.leave_type));
         setLeaveHistory(cutiOnly);
@@ -72,20 +69,16 @@ const Cuti = () => {
 
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase();
-    if (s === 'approved') {
-      return (
-        <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">
-          <i className="fa-solid fa-circle-check text-[9px]"></i> Disetujui
-        </span>
-      );
-    }
-    if (s === 'rejected') {
-      return (
-        <span className="flex items-center gap-1 bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">
-          <i className="fa-solid fa-circle-xmark text-[9px]"></i> Ditolak
-        </span>
-      );
-    }
+    if (s === 'approved') return (
+      <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+        <i className="fa-solid fa-circle-check text-[9px]"></i> Disetujui
+      </span>
+    );
+    if (s === 'rejected') return (
+      <span className="flex items-center gap-1 bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+        <i className="fa-solid fa-circle-xmark text-[9px]"></i> Ditolak
+      </span>
+    );
     return (
       <span className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-[10px] font-black px-2 py-0.5 rounded-full">
         <i className="fa-solid fa-clock text-[9px]"></i> Menunggu
@@ -96,10 +89,10 @@ const Cuti = () => {
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
       <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
-      
+
       <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
-        
-        {/* BAGIAN KIRI: ILLUSTRASI PC */}
+
+        {/* BAGIAN KIRI */}
         <div className="hidden md:flex flex-col w-1/2 bg-[#3e2723] relative p-12 lg:p-16 justify-between overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
             <div className="absolute -top-20 -left-20 w-96 h-96 bg-[#fbc02d] rounded-full blur-3xl"></div>
@@ -129,7 +122,7 @@ const Cuti = () => {
           </div>
         </div>
 
-        {/* BAGIAN KANAN: APLIKASI MOBILE */}
+        {/* BAGIAN KANAN */}
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
           <div className="w-full max-w-sm bg-white h-full flex flex-col relative mx-auto">
 
@@ -181,10 +174,7 @@ const Cuti = () => {
                     <div className="text-center text-red-400 text-xs font-bold py-10">{errorMsg}</div>
                   ) : leaveHistory.length > 0 ? (
                     leaveHistory.map((item, index) => (
-                      <div
-                        key={index}
-                        className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-[#fbc02d]/40 transition-colors"
-                      >
+                      <div key={index} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-[#fbc02d]/40 transition-colors">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-[#fff8e1] rounded-full flex items-center justify-center shrink-0 border border-[#fbc02d]/20">
@@ -195,7 +185,7 @@ const Cuti = () => {
                               <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold mt-0.5">
                                 <span>{formatDate(item.from_date)}</span>
                                 {item.from_date !== item.to_date && (
-                                  <> <i className="fa-solid fa-arrow-right text-[8px] text-[#fbc02d]"></i> <span>{formatDate(item.to_date)}</span></>
+                                  <><i className="fa-solid fa-arrow-right text-[8px] text-[#fbc02d]"></i><span>{formatDate(item.to_date)}</span></>
                                 )}
                               </div>
                             </div>
@@ -204,9 +194,7 @@ const Cuti = () => {
                         </div>
                         {item.reason && (
                           <div className="mt-3 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-                            <p className="text-[10px] text-gray-500 leading-relaxed font-medium">
-                              "{item.reason}"
-                            </p>
+                            <p className="text-[10px] text-gray-500 leading-relaxed font-medium">"{item.reason}"</p>
                           </div>
                         )}
                       </div>
@@ -225,25 +213,8 @@ const Cuti = () => {
 
             </div>
 
-            {/* Navigation Bottom */}
-            <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
-              <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-                <i className="fa-solid fa-house text-xl mb-1"></i>
-                <span className="text-[10px] font-black uppercase">Home</span>
-              </Link>
-              <Link to="/absen" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-                <i className="fa-solid fa-clipboard-user text-xl mb-1"></i>
-                <span className="text-[10px] font-black uppercase">Absen</span>
-              </Link>
-              <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-                <i className="fa-solid fa-envelope-open-text text-xl mb-1"></i>
-                <span className="text-[10px] font-black uppercase">Izin</span>
-              </Link>
-              <div className="flex flex-col items-center text-[#3e2723] w-1/4">
-                <i className="fa-solid fa-calendar-minus text-xl mb-1 drop-shadow-md"></i>
-                <span className="text-[10px] font-black uppercase">Cuti</span>
-              </div>
-            </nav>
+            {/* BottomNav component */}
+            <BottomNav />
 
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import BottomNav from '../components/BottomNav';
 
 interface User {
   name: string;
@@ -18,10 +19,8 @@ interface BtnConfig {
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
-  if (parts.length > 1) {
-    return parts[1].substring(0, 5); 
-  }
-  return timeString.substring(0, 5); 
+  if (parts.length > 1) return parts[1].substring(0, 5);
+  return timeString.substring(0, 5);
 };
 
 const Home = () => {
@@ -41,11 +40,7 @@ const Home = () => {
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
-    if (!userData) {
-      navigate('/');
-      return;
-    }
-    
+    if (!userData) { navigate('/'); return; }
     const parsedUser: User = JSON.parse(userData);
     setUser(parsedUser);
 
@@ -63,7 +58,7 @@ const Home = () => {
       const yyyy = now.getFullYear();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
-      const tglHariIni = `${yyyy}-${mm}-${dd}`; 
+      const tglHariIni = `${yyyy}-${mm}-${dd}`;
 
       const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(employeeId)}&from=${tglHariIni}&to=${tglHariIni}`);
       const data = await res.json();
@@ -138,10 +133,9 @@ const Home = () => {
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
       <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
-      
-      {/* ── BUNGKUS UTAMA RESPONSIVE (SPLIT SCREEN) ── */}
+
       <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
-        
+
         {/* BAGIAN KIRI: ILLUSTRASI PC */}
         <div className="hidden md:flex flex-col w-1/2 bg-[#3e2723] relative p-12 lg:p-16 justify-between overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
@@ -175,8 +169,8 @@ const Home = () => {
         {/* BAGIAN KANAN: APLIKASI MOBILE */}
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
           <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto">
-            
-            {/* ── HEADER MELENGKUNG ── */}
+
+            {/* HEADER */}
             <div className="bg-[#3e2723] pt-12 pb-24 px-6 rounded-b-[2.5rem] shrink-0 shadow-sm relative z-0">
               <div className="flex justify-between items-center">
                 <div>
@@ -191,9 +185,9 @@ const Home = () => {
               </div>
             </div>
 
-            {/* ── CONTENT AREA ── */}
+            {/* CONTENT AREA */}
             <div className="flex-1 px-6 -mt-16 relative z-10 overflow-y-auto no-scrollbar pb-24">
-              
+
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300"></div>
                 <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
@@ -255,81 +249,65 @@ const Home = () => {
                 </Link>
               </div>
 
-              {/* SECTION BUKU PANDUAN */}
+              {/* BUKU PANDUAN */}
               <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide flex items-center gap-2">
                 <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
               </h3>
               <div className="flex flex-col gap-2">
-                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                  <button onClick={() => togglePanduan('absen')} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
-                    <span className="font-bold text-[#3e2723] text-sm">1. Cara Absen Harian</span>
-                    <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'absen' ? 'rotate-180' : ''}`}></i>
-                  </button>
-                  {bukaPanduan === 'absen' && (
-                    <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                {[
+                  {
+                    id: 'absen', title: '1. Cara Absen Harian',
+                    content: (
                       <ul className="list-decimal pl-4 space-y-1.5">
                         <li>Pastikan Anda berada di area kantor/outlet.</li>
                         <li>Klik tombol warna hijau/merah di atas (Absen Masuk/Keluar).</li>
                         <li>Izinkan akses lokasi (GPS) dan Kamera jika diminta browser.</li>
                         <li>Posisikan wajah Anda hingga kotak kamera berwarna hijau dan muncul teks "Jepret!".</li>
-                        <li><strong>Penting:</strong> Pastikan Anda memegang mesin fingerprint/area sekitar sesuai instruksi HR.</li>
+                        <li><strong>Penting:</strong> Pastikan Anda memegang mesin fingerprint sesuai instruksi HR.</li>
                         <li>Klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
                       </ul>
-                    </div>
-                  )}
-                </div>
-                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                  <button onClick={() => togglePanduan('izin')} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
-                    <span className="font-bold text-[#3e2723] text-sm">2. Pengajuan Izin & Cuti</span>
-                    <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'izin' ? 'rotate-180' : ''}`}></i>
-                  </button>
-                  {bukaPanduan === 'izin' && (
-                    <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
-                      <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
-                      <ul className="list-disc pl-4 space-y-1.5 mb-2">
-                        <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak/Penting. Wajib melampirkan bukti (Surat Dokter, dll).</li>
-                        <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan.</li>
-                      </ul>
-                    </div>
-                  )}
-                </div>
-                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                  <button onClick={() => togglePanduan('error')} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
-                    <span className="font-bold text-[#3e2723] text-sm">3. Solusi Jika Error</span>
-                    <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === 'error' ? 'rotate-180' : ''}`}></i>
-                  </button>
-                  {bukaPanduan === 'error' && (
-                    <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                    )
+                  },
+                  {
+                    id: 'izin', title: '2. Pengajuan Izin & Cuti',
+                    content: (
+                      <>
+                        <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
+                        <ul className="list-disc pl-4 space-y-1.5">
+                          <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan bukti.</li>
+                          <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan.</li>
+                        </ul>
+                      </>
+                    )
+                  },
+                  {
+                    id: 'error', title: '3. Solusi Jika Error',
+                    content: (
                       <ul className="list-disc pl-4 space-y-2">
-                        <li><strong>Lokasi Jauh/Tidak Sesuai:</strong> Pastikan GPS HP Anda menyala dan di-setting "Akurasi Tinggi". Buka Google Maps sebentar untuk memancing sinyal GPS, lalu coba absen lagi.</li>
-                        <li><strong>Kamera Error:</strong> Pastikan Anda menggunakan browser Chrome/Safari terbaru dan sudah memberikan izin kamera.</li>
-                        <li><strong>Layar Putih/Blank:</strong> Keluar dari akun (Logout) atau hapus cache browser Anda.</li>
+                        <li><strong>Lokasi Jauh:</strong> Pastikan GPS di-setting "Akurasi Tinggi". Buka Google Maps sebentar, lalu coba lagi.</li>
+                        <li><strong>Kamera Error:</strong> Gunakan browser Chrome/Safari terbaru dan izinkan akses kamera.</li>
+                        <li><strong>Layar Putih/Blank:</strong> Logout atau hapus cache browser Anda.</li>
                       </ul>
-                    </div>
-                  )}
-                </div>
+                    )
+                  },
+                ].map(({ id, title, content }) => (
+                  <div key={id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                    <button onClick={() => togglePanduan(id)} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
+                      <span className="font-bold text-[#3e2723] text-sm">{title}</span>
+                      <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === id ? 'rotate-180' : ''}`}></i>
+                    </button>
+                    {bukaPanduan === id && (
+                      <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                        {content}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* NAVIGATION BOTTOM */}
-            <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
-              <div className="flex flex-col items-center text-[#3e2723] w-1/4">
-                <i className="fa-solid fa-house text-xl mb-1"></i>
-                <span className="text-[10px] font-black uppercase">Home</span>
-              </div>
-              <Link to="/absen" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-                <i className="fa-solid fa-clipboard-user text-xl mb-1"></i>
-                <span className="text-[10px] font-black uppercase">Absen</span>
-              </Link>
-              <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-                <i className="fa-solid fa-envelope-open-text text-xl mb-1"></i>
-                <span className="text-[10px] font-black uppercase">Izin</span>
-              </Link>
-              <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors">
-                <i className="fa-solid fa-calendar-minus text-xl mb-1"></i>
-                <span className="text-[10px] font-black uppercase">Cuti</span>
-              </Link>
-            </nav>
+            {/* BottomNav component */}
+            <BottomNav />
 
           </div>
         </div>
