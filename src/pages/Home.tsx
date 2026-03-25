@@ -139,6 +139,95 @@ const Home = () => {
 
   const outlet = isKaryawanOutlet(user.branch);
 
+  // ─────────────────────────────────────────────────────────────────
+  // DATA BUKU PANDUAN (DIBEDAKAN ANTARA OUTLET DAN KANTOR/SATPAM)
+  // ─────────────────────────────────────────────────────────────────
+  const panduanOutlet = [
+    {
+      id: 'shift', title: '1. Aturan Pengajuan Shift (Wajib)',
+      content: (
+        <ul className="list-decimal pl-4 space-y-1.5">
+          <li>Anda <strong>tidak bisa absen</strong> jika belum memiliki jadwal shift yang di-ACC HRD untuk hari ini.</li>
+          <li>Masuk ke menu <strong>Pengajuan Shift</strong> untuk mengatur jadwal 1 hari atau beberapa hari ke depan.</li>
+          <li>Jika ingin bertukar shift dengan teman, wajib mengajukan dari aplikasi agar HRD bisa mengubah jadwal resmi Anda di sistem.</li>
+          <li>Tunggu hingga HRD melakukan <em>Approval</em>. Setelah di-ACC, Anda baru bisa membuka kamera absen.</li>
+        </ul>
+      )
+    },
+    {
+      id: 'absen', title: '2. Cara Absen Harian',
+      content: (
+        <ul className="list-decimal pl-4 space-y-1.5">
+          <li><strong>Validasi GPS:</strong> Klik tombol absen. Pastikan Anda berada di area Outlet.</li>
+          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah (muncul teks "Jepret!").</li>
+          <li><strong>Foto Pertama:</strong> Jepret foto <strong>Wajah + Tangan Kanan</strong> Anda (pastikan terlihat jelas sesuai instruksi).</li>
+          <li><strong>Foto Kedua:</strong> Setelah itu, jepret foto tambahan untuk <strong>Wajah + Tangan Kiri</strong> Anda.</li>
+          <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
+          <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu notifikasi berhasil.</li>
+        </ul>
+      )
+    },
+    {
+      id: 'izin', title: '3. Pengajuan Izin & Cuti',
+      content: (
+        <>
+          <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
+          <ul className="list-disc pl-4 space-y-1.5">
+            <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti.</li>
+            <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.</li>
+          </ul>
+        </>
+      )
+    },
+    {
+      id: 'error', title: '4. Solusi Jika Error',
+      content: (
+        <ul className="list-disc pl-4 space-y-2">
+          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba lagi.</li>
+          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.</li>
+        </ul>
+      )
+    }
+  ];
+
+  const panduanKantor = [
+    {
+      id: 'absen', title: '1. Cara Absen Harian',
+      content: (
+        <ul className="list-decimal pl-4 space-y-1.5">
+          <li><strong>Validasi GPS:</strong> Klik tombol absen (Masuk/Keluar). Pastikan Anda berada di area kantor (PH Klaten / Jakarta).</li>
+          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah (muncul teks "Jepret!").</li>
+          <li><strong>Foto Selfie:</strong> Jepret foto Selfie Wajah Anda dengan jelas.</li>
+          <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
+          <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
+        </ul>
+      )
+    },
+    {
+      id: 'izin', title: '2. Pengajuan Izin & Cuti',
+      content: (
+        <>
+          <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
+          <ul className="list-disc pl-4 space-y-1.5">
+            <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti.</li>
+            <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.</li>
+          </ul>
+        </>
+      )
+    },
+    {
+      id: 'error', title: '3. Solusi Jika Error',
+      content: (
+        <ul className="list-disc pl-4 space-y-2">
+          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba absen lagi.</li>
+          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.</li>
+        </ul>
+      )
+    }
+  ];
+
+  const listBukuPanduan = outlet ? panduanOutlet : panduanKantor;
+
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
       <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
@@ -281,63 +370,10 @@ const Home = () => {
                 <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
               </h3>
               <div className="flex flex-col gap-2">
-                {[
-                  {
-                    id: 'absen', title: '1. Cara Absen Harian',
-                    content: (
-                      <ul className="list-decimal pl-4 space-y-1.5">
-                        <li><strong>Validasi GPS:</strong> Klik tombol absen. Sistem akan mengecek lokasi Anda terlebih dahulu. Pastikan Anda berada di area kantor/outlet.</li>
-                        <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah (muncul teks "Jepret!").</li>
-                        <li><strong>Foto Pertama:</strong> Jepret foto Wajah + Tangan Kanan (sesuai instruksi HR/pegang mesin kasir).</li>
-                        {outlet && (
-                          <li><strong>Foto Kedua (Khusus Outlet):</strong> Jepret foto tambahan untuk Wajah + Tangan Kiri.</li>
-                        )}
-                        <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
-                        <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik tombol "Kirim" dan tunggu hingga berhasil.</li>
-                      </ul>
-                    )
-                  },
-                  // PANDUAN KHUSUS KARYAWAN OUTLET DITAMBAHKAN DI SINI
-                  ...(outlet ? [{
-                    id: 'shift', title: '2. Aturan Pengajuan Shift (Outlet)',
-                    content: (
-                      <>
-                        <p className="mb-2"><strong>Wajib bagi karyawan Outlet:</strong></p>
-                        <ul className="list-disc pl-4 space-y-1.5">
-                          <li>Anda <strong>tidak bisa absen</strong> jika belum memiliki jadwal shift yang di-ACC HRD.</li>
-                          <li>Masuk ke menu <strong>Pengajuan Shift</strong> untuk mengatur jadwal 1 hari atau beberapa hari ke depan.</li>
-                          <li>Jika ingin tukar shift dengan teman, wajib mengajukan dari aplikasi agar HRD bisa mengubah jadwal resmi Anda di sistem.</li>
-                          <li>Tunggu hingga HRD melakukan <em>Approval</em>. Setelah di-ACC, Anda baru bisa membuka kamera absen.</li>
-                        </ul>
-                      </>
-                    )
-                  }] : []),
-                  {
-                    id: 'izin', title: outlet ? '3. Pengajuan Izin & Cuti' : '2. Pengajuan Izin & Cuti',
-                    content: (
-                      <>
-                        <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
-                        <ul className="list-disc pl-4 space-y-1.5">
-                          <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan bukti.</li>
-                          <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan.</li>
-                        </ul>
-                      </>
-                    )
-                  },
-                  {
-                    id: 'error', title: outlet ? '4. Solusi Jika Error' : '3. Solusi Jika Error',
-                    content: (
-                      <ul className="list-disc pl-4 space-y-2">
-                        <li><strong>Lokasi Jauh:</strong> Pastikan GPS di-setting "Akurasi Tinggi". Buka Google Maps sebentar, lalu coba lagi.</li>
-                        <li><strong>Kamera Error:</strong> Gunakan browser Chrome/Safari terbaru dan izinkan akses kamera.</li>
-                        <li><strong>Layar Putih/Blank:</strong> Logout atau hapus cache browser Anda.</li>
-                      </ul>
-                    )
-                  },
-                ].map(({ id, title, content }) => (
+                {listBukuPanduan.map(({ id, title, content }) => (
                   <div key={id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                     <button onClick={() => togglePanduan(id)} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
-                      <span className="font-bold text-[#3e2723] text-sm">{title}</span>
+                      <span className="font-bold text-[#3e2723] text-sm text-left">{title}</span>
                       <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === id ? 'rotate-180' : ''}`}></i>
                     </button>
                     {bukaPanduan === id && (
