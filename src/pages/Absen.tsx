@@ -123,19 +123,22 @@ const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: s
   return { in: jamMasuk, out: jamKeluar };
 };
 
-// 🔥 PERBAIKAN: FORMAT NAMA SHIFT HARUS SAMA PERSIS DENGAN ERPNEXT (TANPA TANDA KURUNG)
-const getNamaShiftKantor = (tglDate: Date, branchUser: string | undefined, satpamFlag: boolean): string => {
+// FORMAT NAMA SHIFT HARUS SAMA PERSIS DENGAN ERPNEXT
+// Contoh Shift Type di ERPNext (dari Shift_Type.xlsx):
+//   "Senin - Kamis (PH Klaten Non Ramadhan)"
+//   "Jumat (Jakarta Ramadhan)"
+// Satpam tidak memiliki shift terpisah → gunakan shift yang sama dengan kantor biasa
+const getNamaShiftKantor = (tglDate: Date, branchUser: string | undefined, _satpamFlag: boolean): string => {
   const hari     = tglDate.getDay();
   const isFriday = hari === 5;
   const ramadhan = isRamadhan(tglDate);
-  
-  const branchLabel = (branchUser || '').toLowerCase().includes('jakarta') ? 'Jakarta' : 'PH Klaten';
-  const hariLabel   = isFriday ? 'Jumat' : 'Senin - Kamis';
-  const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
-  const satpamLabel  = satpamFlag ? ' Satpam' : ''; 
 
-  // Output: "Senin - Kamis PH Klaten Non Ramadhan" 
-  return `${hariLabel} ${branchLabel} ${periodeLabel}${satpamLabel}`;
+  const branchLabel  = (branchUser || '').toLowerCase().includes('jakarta') ? 'Jakarta' : 'PH Klaten';
+  const hariLabel    = isFriday ? 'Jumat' : 'Senin - Kamis';
+  const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
+
+  // Format ERPNext: "Senin - Kamis (PH Klaten Non Ramadhan)"
+  return `${hariLabel} (${branchLabel} ${periodeLabel})`;
 };
 
 const getJamShift = (
@@ -190,6 +193,11 @@ const validasiShiftName = (
 
   if (isFriday && recordIsSenKam) return shiftLokal;
   if (!isFriday && !isWeekend && recordIsFriday) return shiftLokal;
+
+  // Jika record dari ERPNext sudah dalam format lama (tanpa kurung), normalisasi
+  if (shiftFromRecord && !shiftFromRecord.includes('(') && !shiftFromRecord.includes(')')) {
+    return shiftLokal; // gunakan format lokal yang sudah benar
+  }
 
   return shiftFromRecord;
 };
