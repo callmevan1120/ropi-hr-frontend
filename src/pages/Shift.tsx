@@ -239,12 +239,6 @@ const Shift = () => {
                       (Ramadhan: Senin–Kamis 07:00–15:30 &nbsp;|&nbsp; Jumat 07:00–16:00)
                     </p>
                   </div>
-                  <Link
-                    to="/home"
-                    className="w-full py-4 bg-[#3e2723] text-[#fbc02d] font-black rounded-2xl text-center text-sm active:scale-95 transition-transform"
-                  >
-                    <i className="fa-solid fa-arrow-left mr-2" />Kembali ke Beranda
-                  </Link>
                 </div>
               )}
 
