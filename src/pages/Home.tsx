@@ -23,6 +23,13 @@ const formatJamLokal = (timeString?: string): string => {
   return timeString.substring(0, 5);
 };
 
+// HELPER: Cek apakah user karyawan outlet
+const isKaryawanOutlet = (branch?: string): boolean => {
+  if (!branch) return true; // Default to true if no branch
+  const b = branch.toLowerCase();
+  return !(b.includes('klaten') || b.includes('ph') || b.includes('jakarta'));
+};
+
 const Home = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
@@ -129,6 +136,8 @@ const Home = () => {
   const togglePanduan = (id: string) => {
     setBukaPanduan(bukaPanduan === id ? null : id);
   };
+
+  const outlet = isKaryawanOutlet(user.branch);
 
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
@@ -247,6 +256,24 @@ const Home = () => {
                     <i className="fa-solid fa-chevron-right text-xs"></i>
                   </div>
                 </Link>
+
+                {/* Menu Pengajuan Shift hanya muncul untuk Outlet */}
+                {outlet && (
+                  <Link to="/shift" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-purple-400/50 group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center text-purple-500 text-xl shrink-0 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                        <i className="fa-solid fa-calendar-days"></i>
+                      </div>
+                      <div>
+                        <p className="font-black text-[#3e2723] text-sm">Pengajuan Shift</p>
+                        <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Ubah / Tukar Shift</p>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-purple-50 group-hover:text-purple-500 transition-colors">
+                      <i className="fa-solid fa-chevron-right text-xs"></i>
+                    </div>
+                  </Link>
+                )}
               </div>
 
               {/* BUKU PANDUAN */}
@@ -268,8 +295,23 @@ const Home = () => {
                       </ul>
                     )
                   },
+                  // PANDUAN KHUSUS KARYAWAN OUTLET DITAMBAHKAN DI SINI
+                  ...(outlet ? [{
+                    id: 'shift', title: '2. Aturan Pengajuan Shift (Outlet)',
+                    content: (
+                      <>
+                        <p className="mb-2"><strong>Wajib bagi karyawan Outlet:</strong></p>
+                        <ul className="list-disc pl-4 space-y-1.5">
+                          <li>Anda <strong>tidak bisa absen</strong> jika belum memiliki jadwal shift yang di-ACC HRD.</li>
+                          <li>Masuk ke menu <strong>Pengajuan Shift</strong> untuk mengatur jadwal 1 hari atau beberapa hari ke depan.</li>
+                          <li>Jika ingin tukar shift dengan teman, wajib mengajukan dari aplikasi agar HRD bisa mengubah jadwal resmi Anda di sistem.</li>
+                          <li>Tunggu hingga HRD melakukan <em>Approval</em>. Setelah di-ACC, Anda baru bisa membuka kamera absen.</li>
+                        </ul>
+                      </>
+                    )
+                  }] : []),
                   {
-                    id: 'izin', title: '2. Pengajuan Izin & Cuti',
+                    id: 'izin', title: outlet ? '3. Pengajuan Izin & Cuti' : '2. Pengajuan Izin & Cuti',
                     content: (
                       <>
                         <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
@@ -281,7 +323,7 @@ const Home = () => {
                     )
                   },
                   {
-                    id: 'error', title: '3. Solusi Jika Error',
+                    id: 'error', title: outlet ? '4. Solusi Jika Error' : '3. Solusi Jika Error',
                     content: (
                       <ul className="list-disc pl-4 space-y-2">
                         <li><strong>Lokasi Jauh:</strong> Pastikan GPS di-setting "Akurasi Tinggi". Buka Google Maps sebentar, lalu coba lagi.</li>
