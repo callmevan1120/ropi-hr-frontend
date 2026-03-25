@@ -71,6 +71,9 @@ const parseLokalDate = (tglStr: string): Date => {
   return new Date(y, m - 1, d);
 };
 
+// ─────────────────────────────────────────────
+// HELPER: cek Ramadhan
+// ─────────────────────────────────────────────
 const isRamadhan = (tanggal?: Date): boolean => {
   const now = tanggal || new Date();
   const tahun = now.getFullYear();
@@ -105,7 +108,7 @@ const getJamShiftKantor = (
   tglDate: Date,
   satpam: boolean
 ): { in: string; out: string } => {
-  const hari = tglDate.getDay(); 
+  const hari = tglDate.getDay(); // 0=Min,5=Jum
   const isFriday = hari === 5;
   const ramadhan = isRamadhan(tglDate);
 
@@ -225,6 +228,7 @@ const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): 
   const isBranchKlaten  = branch.includes('klaten') || branch.includes('ph');
   const isBranchJakarta = branch.includes('jakarta');
 
+  // Tolak jika branch tidak sesuai dengan lokasi
   if (isLokasiKlaten  && !isBranchKlaten)  return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
   if (isLokasiJakarta && !isBranchJakarta) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
   return null;
@@ -367,7 +371,6 @@ const Absen = () => {
   const isDrawingRef       = useRef(false);
   const lastPosRef         = useRef<{ x: number; y: number } | null>(null);
   const cameraStepRef      = useRef(cameraStep);
-
   useEffect(() => { cameraStepRef.current = cameraStep; }, [cameraStep]);
 
   // ── derived ──
@@ -433,7 +436,7 @@ const Absen = () => {
       const rect  = canvas.getBoundingClientRect();
       // Bikin TTD kotak (aspect-square) biar proporsional di HP
       canvas.width  = rect.width || 300;
-      canvas.height = rect.width || 300; 
+      canvas.height = rect.height || 300; 
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.strokeStyle = '#1e293b';
@@ -610,7 +613,7 @@ const Absen = () => {
 
     // Murni GPS! Bypass IP Wifi sudah dicabut.
     const MAX_AKURASI = 300; 
-    const RADIUS_MIN = 500;  
+    const RADIUS_MIN = 150;  // Rentang radius 150m - 300m sangat aman.
 
     navigator.geolocation.getCurrentPosition(
       async pos => {
@@ -725,7 +728,7 @@ const Absen = () => {
     if (!video) return;
 
     const canvas = document.createElement('canvas');
-    // Maksa aspect ratio jadi 3:4 
+    // Maksa aspect ratio jadi 3:4 dengan resolusi standar
     const TARGET_W = 480;
     const TARGET_H = 640;
     canvas.width = TARGET_W;
@@ -756,7 +759,7 @@ const Absen = () => {
       ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, TARGET_W, TARGET_H);
       ctx.restore();
 
-      // Tambah Watermark Estetik dengan 3 Baris & Logo Ropi
+      // Tambah Watermark Estetik
       await drawOverlay(ctx, TARGET_W, TARGET_H, namaLokasi);
     }
 
@@ -765,6 +768,7 @@ const Absen = () => {
     if (cameraStep === 1) {
       setFotoBase64(base64);
       if (outlet) {
+        // Lanjut ke foto kiri (kamera gak dimatikan)
         setCameraStep(2);
         setKameraBorder('border-blue-400');
         setJepretState({ aktif: false, teks: 'Cari Wajah...' });
@@ -1143,7 +1147,7 @@ const Absen = () => {
                         <p className="text-[#fbc02d] text-[9px] font-bold tracking-wide">
                           <i className="fa-solid fa-clock mr-1"></i>
                           {outlet 
-                            ? 'Shift Outlet (Auto)' 
+                            ? 'Shift Outlet (Sesuai Jadwal)' 
                             : `${getNamaShiftKantor(new Date(), user?.branch, satpam)} • ${getJamShiftKantor(new Date(), satpam).in}-${getJamShiftKantor(new Date(), satpam).out}`
                           }
                         </p>
@@ -1459,11 +1463,12 @@ const Absen = () => {
                       </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 bg-gray-50">
+                    <div className={`flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 md:grid ${hasVerifImage ? 'md:grid-cols-3' : 'md:grid-cols-2'} md:gap-5 md:items-start bg-gray-50`}>
                       
                       {/* Kalau Outlet (Punya Foto Kiri), pakai carousel biar rapi di HP */}
                       {hasVerifImage ? (
-                        <div className="flex flex-col gap-6">
+                        <div className="flex flex-col gap-6 md:col-span-3">
+                           {/* CONTAINER MASUK */}
                            <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
                               <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
                                 <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-blue-500 text-[10px]" /></div>
@@ -1483,6 +1488,7 @@ const Absen = () => {
                               <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Masuk →</p>
                            </div>
 
+                           {/* CONTAINER KELUAR */}
                            {detailModal.outData && (
                              <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
                                 <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
