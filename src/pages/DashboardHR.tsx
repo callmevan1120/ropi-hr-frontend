@@ -65,6 +65,9 @@ const isRamadhan = (): boolean => {
 };
 
 // Derive nama label shift dari tanggal (tanpa info branch per karyawan, default PH Klaten)
+// Sama persis dengan getShiftKantor di Absen.tsx —
+// selalu derive dari tanggal, ABAIKAN nama shift dari ERPNext
+// karena ERPNext hanya punya shift Senin-Kamis, sedangkan Jumat di-override manual
 const getShiftLabel = (tanggal: string): string => {
   const tglDate = new Date(tanggal);
   const hari = tglDate.getDay();
@@ -84,6 +87,8 @@ const getJamShift = (
   const tglDate = new Date(tanggal);
   const isFriday = tglDate.getDay() === 5;
   const ramadhan = isRamadhan();
+  // Kalau Jumat: pakai jam override, JANGAN pakai shift ERPNext (yang isinya Senin-Kamis)
+  // Kalau bukan Jumat: coba lookup dari masterShifts dulu
   if (!isFriday && shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
     return masterShifts[shiftNameFromRecord];
   }
@@ -251,12 +256,14 @@ const DashboardHR = () => {
           setLeaveRawMap(newLeaveRawMap);
         } else {
           // Harian: fetch leave dari seluruh bulan aktif agar dapat semua karyawan
+          // (termasuk yang hanya izin tapi tidak absen hari ini)
           const bulanRef = tanggalAktif.substring(0, 7); // "YYYY-MM"
           const [yr, mo] = bulanRef.split('-').map(Number);
           const lastDay = new Date(yr, mo, 0).getDate();
           const fromBulan = `${bulanRef}-01`;
           const toBulan = `${bulanRef}-${lastDay}`;
 
+          // Fetch all-history sebulan untuk dapat semua employee_id
           let allEmployeeIds: { employee: string; employee_name: string; branch: string }[] = [...arrData];
           try {
             const resBulan = await fetch(`${BACKEND}/api/attendance/all-history?from=${fromBulan}&to=${toBulan}`);
@@ -271,6 +278,7 @@ const DashboardHR = () => {
                   empMap[item.employee] = { name: item.employee_name || item.employee, branch: branchAsumsi };
                 }
               });
+              // Merge — pastikan semua karyawan ada
               Object.entries(empMap).forEach(([id, info]) => {
                 if (!allEmployeeIds.find(e => e.employee === id)) {
                   allEmployeeIds.push({ employee: id, employee_name: info.name, branch: info.branch });
@@ -279,6 +287,7 @@ const DashboardHR = () => {
             }
           } catch { /* pakai arrData saja */ }
 
+          // Fetch leave semua karyawan
           const leaveResults = await Promise.allSettled(
             allEmployeeIds.map(emp =>
               fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}`)
@@ -304,6 +313,7 @@ const DashboardHR = () => {
               newLeaveMap[employee] = izinHariIni ? 1 : 0;
               newLeaveRawMap[employee] = data as any[];
 
+              // Kalau karyawan ini izin tapi tidak ada di arrData (tidak absen hari ini)
               if (izinHariIni && !arrData.find(e => e.employee === employee)) {
                 extraEmployees.push({
                   employee,
@@ -316,6 +326,7 @@ const DashboardHR = () => {
             }
           });
 
+          // Merge karyawan izin-only ke arrData
           if (extraEmployees.length > 0) {
             const merged = [...arrData, ...extraEmployees].sort((a, b) => a.employee_name.localeCompare(b.employee_name));
             setDataAbsen(merged);
@@ -342,6 +353,7 @@ const DashboardHR = () => {
     if (filteredDataAbsen.length === 0) { alert('Tidak ada data untuk di-download!'); return; }
     const dataExcel: any[] = [];
     filteredDataAbsen.forEach((emp) => {
+      // Expand izin per hari untuk Excel
       const empIzinDates: Record<string, string> = {};
       const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
       if (filterMode === 'bulanan') {
@@ -361,6 +373,7 @@ const DashboardHR = () => {
           }
         });
       } else {
+        // Harian: cek apakah tanggalAktif masuk izin
         const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
           const from = new Date(r.from_date);
           const to = new Date(r.to_date);
@@ -370,6 +383,7 @@ const DashboardHR = () => {
         if (izinHariIni) empIzinDates[tanggalAktif] = izinHariIni.leave_type;
       }
 
+      // Semua tanggal: absen + izin
       const allDates = Array.from(new Set([
         ...Object.keys(emp.logsByDate),
         ...Object.keys(empIzinDates),
@@ -387,6 +401,7 @@ const DashboardHR = () => {
         let pulangCepat = '-';
         if (log.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) pulangCepat = formatDurasi(s); }
 
+        // Baris izin tanpa absen
         if (izinType && !log.in && !log.out) {
           dataExcel.push({
             'Tanggal': date,
@@ -418,8 +433,8 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude ? `https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude ? `https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude ? `https://maps.google.com/?q=$${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude ? `https://maps.google.com/?q=$${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
@@ -428,6 +443,7 @@ const DashboardHR = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
+    // Sheet ringkasan per karyawan (bulanan saja)
     if (filterMode === 'bulanan') {
       const ringkasan = filteredDataAbsen.map(emp => ({
         'ID Karyawan': emp.employee,
@@ -452,9 +468,11 @@ const DashboardHR = () => {
 
   // 🔥 FILTER PENCARIAN DAN BRANCH 🔥
   const filteredDataAbsen = dataAbsen.filter(emp => {
+    // 1. Filter Pencarian Nama / ID
     const searchMatch = emp.employee_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                         emp.employee.toLowerCase().includes(searchQuery.toLowerCase());
     
+    // 2. Filter Branch
     let branchMatch = true;
     if (activeTab === 'PH Klaten') branchMatch = emp.branch === 'PH Klaten';
     else if (activeTab === 'Jakarta') branchMatch = emp.branch === 'Jakarta';
@@ -502,75 +520,78 @@ const DashboardHR = () => {
   return (
     <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
 
-      {/* ── HEADER ── */}
-      <div className="bg-[#3e2723] pt-8 pb-8 px-6 md:px-12 shadow-lg sticky top-0 z-20 w-full rounded-b-[2.5rem]">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
-            <div className="flex items-center gap-4">
+      {/* ── HEADER DIREVISI AGAR TIDAK MENUMPUK ── */}
+      <div className="bg-[#3e2723] pt-6 pb-6 px-5 md:px-10 shadow-lg sticky top-0 z-20 w-full rounded-b-[2rem]">
+        <div className="max-w-7xl mx-auto flex flex-col gap-4 md:gap-5">
+          
+          {/* BARIS 1: Title, Logout & Tombol Export */}
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
               <button onClick={handleLogout} title="Logout" className="w-10 h-10 bg-white/10 hover:bg-red-500/30 border border-white/20 hover:border-red-400/50 text-white/60 hover:text-red-300 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0">
                 <i className="fa-solid fa-arrow-right-from-bracket text-base" />
               </button>
               <div>
-                <h1 className="text-2xl font-black text-[#fbc02d]">HR Command Center</h1>
-                <p className="text-xs text-white/70 font-bold uppercase tracking-widest mt-1">Laporan Kehadiran Karyawan</p>
+                <h1 className="text-xl md:text-2xl font-black text-[#fbc02d] leading-tight">HR Command Center</h1>
+                <p className="text-[10px] md:text-xs text-white/70 font-bold uppercase tracking-widest mt-0.5">Laporan Kehadiran</p>
               </div>
             </div>
             
-            {/* Filter Hari/Bulan untuk versi mobile */}
-            <div className="flex md:hidden bg-white/10 rounded-xl p-1 border border-white/10">
-              <button onClick={() => setFilterMode('harian')} className={`px-3 py-1.5 text-[10px] font-black rounded-lg ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723]' : 'text-white'}`}>Harian</button>
-              <button onClick={() => setFilterMode('bulanan')} className={`px-3 py-1.5 text-[10px] font-black rounded-lg ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723]' : 'text-white'}`}>Bulan</button>
+            {/* Tombol Export - Geser ke Kanan Atas */}
+            <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-4 py-2 rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 text-xs md:text-sm">
+              <i className="fa-solid fa-file-excel" /> <span className="hidden sm:inline">Export Excel</span>
+            </button>
+          </div>
+
+          {/* BARIS 2: KOTAK STATISTIK (Hadir, Telat, Izin) */}
+          <div className="grid grid-cols-3 gap-2 md:gap-4 w-full">
+            <div className="bg-green-500/20 rounded-xl px-2 py-2 md:py-3 border border-green-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
+              <p className="text-[9px] md:text-xs text-green-300 font-bold uppercase tracking-wide">Hadir</p>
+              <p className="font-black text-xl md:text-3xl leading-none mt-1">{globalHadir}</p>
+            </div>
+            <div className="bg-red-500/20 rounded-xl px-2 py-2 md:py-3 border border-red-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
+              <p className="text-[9px] md:text-xs text-red-300 font-bold uppercase tracking-wide">Telat</p>
+              <p className="font-black text-xl md:text-3xl leading-none mt-1">{globalTelat}</p>
+            </div>
+            <div className="bg-blue-500/20 rounded-xl px-2 py-2 md:py-3 border border-blue-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
+              <p className="text-[9px] md:text-xs text-blue-300 font-bold uppercase tracking-wide">Izin</p>
+              <p className="font-black text-xl md:text-3xl leading-none mt-1">{globalIzin}</p>
             </div>
           </div>
-          
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="hidden md:flex bg-white/10 rounded-2xl p-1.5 w-full md:w-auto border border-white/10 shadow-inner">
-              <button onClick={() => setFilterMode('harian')} className={`px-5 py-2 text-xs font-black rounded-xl transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white hover:bg-white/20'}`}>Harian</button>
-              <button onClick={() => setFilterMode('bulanan')} className={`px-5 py-2 text-xs font-black rounded-xl transition-all ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white hover:bg-white/20'}`}>Bulanan</button>
+
+          {/* BARIS 3: TOOLBAR (Toggle Harian/Bulanan, Input Tanggal, Pencarian) */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full">
+            {/* Toggle Harian/Bulanan */}
+            <div className="flex bg-white/10 rounded-xl p-1 border border-white/10 shadow-inner md:w-auto shrink-0">
+              <button onClick={() => setFilterMode('harian')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Harian</button>
+              <button onClick={() => setFilterMode('bulanan')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Bulanan</button>
             </div>
-            <div className="flex flex-1 items-center bg-white/10 rounded-2xl px-4 py-2 border border-white/10 shadow-sm min-w-[150px]">
+
+            {/* Input Tanggal / Bulan */}
+            <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 md:py-2.5 border border-white/10 shadow-sm w-full md:w-auto shrink-0">
               {filterMode === 'harian'
-                ? <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer w-full" style={{ colorScheme: 'dark' }} />
-                : <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer w-full" style={{ colorScheme: 'dark' }} />
+                ? <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
+                : <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
               }
             </div>
 
-            {/* Input Pencarian Nama */}
-            <div className="flex items-center bg-white/10 rounded-2xl px-4 py-2 w-full md:w-64 border border-white/10 shadow-sm relative">
-              <i className="fa-solid fa-search text-white/50 mr-2" />
+            {/* Pencarian Nama Karyawan */}
+            <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 md:py-2.5 w-full border border-white/10 shadow-sm relative group focus-within:bg-white/20 transition-colors">
+              <i className="fa-solid fa-search text-white/50 group-focus-within:text-white transition-colors mr-3" />
               <input 
                 type="text" 
-                placeholder="Cari karyawan..." 
+                placeholder="Cari nama / ID karyawan..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent text-white placeholder-white/40 font-bold text-sm outline-none w-full" 
+                className="bg-transparent text-white placeholder-white/40 font-bold text-xs md:text-sm outline-none w-full" 
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery('')} className="absolute right-3 text-white/50 hover:text-white">
-                  <i className="fa-solid fa-xmark text-xs" />
+                  <i className="fa-solid fa-circle-xmark text-sm" />
                 </button>
               )}
             </div>
-
-            <div className="flex gap-2 w-full md:w-auto">
-              <div className="bg-green-500/20 rounded-2xl px-4 py-2 flex flex-col items-center justify-center flex-1 md:flex-none border border-green-500/30 text-white min-w-[70px]">
-                <p className="text-[9px] text-green-300 font-bold uppercase tracking-wide">Hadir</p>
-                <p className="font-black text-xl leading-none mt-1">{globalHadir}</p>
-              </div>
-              <div className="bg-red-500/20 rounded-2xl px-4 py-2 flex flex-col items-center justify-center flex-1 md:flex-none border border-red-500/30 text-white min-w-[70px]">
-                <p className="text-[9px] text-red-300 font-bold uppercase tracking-wide">Telat</p>
-                <p className="font-black text-xl leading-none mt-1">{globalTelat}</p>
-              </div>
-              <div className="bg-blue-500/20 rounded-2xl px-4 py-2 flex flex-col items-center justify-center flex-1 md:flex-none border border-blue-500/30 text-white min-w-[70px]">
-                <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wide">Izin</p>
-                <p className="font-black text-xl leading-none mt-1">{globalIzin}</p>
-              </div>
-            </div>
-
-            <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-6 py-3.5 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 w-full md:w-auto mt-2 md:mt-0">
-              <i className="fa-solid fa-file-excel text-lg" /> <span className="md:hidden lg:inline">Export</span>
-            </button>
           </div>
+
         </div>
       </div>
 
@@ -842,13 +863,13 @@ const DashboardHR = () => {
 
                     <div className="flex flex-col gap-2">
                       {todayLog.in?.latitude && (
-                        <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                        <a href={`https://maps.google.com/?q=$${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                           <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                           <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                         </a>
                       )}
                       {todayLog.out?.latitude && (
-                        <a href={`https://maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                        <a href={`https://maps.google.com/?q=$${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                           <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                           <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                         </a>
