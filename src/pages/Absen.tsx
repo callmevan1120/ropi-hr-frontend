@@ -88,9 +88,6 @@ const isRamadhan = (tanggal?: Date): boolean => {
   return false;
 };
 
-// ─────────────────────────────────────────────
-// HELPER: klasifikasi karyawan
-// ─────────────────────────────────────────────
 const isKaryawanKantor = (branch?: string): boolean => {
   if (!branch) return false;
   const b = branch.toLowerCase();
@@ -104,9 +101,6 @@ const isSatpam = (role?: string): boolean => {
   return des.includes('satpam') || des.includes('security') || des.includes('sekuriti');
 };
 
-// ─────────────────────────────────────────────
-// HELPER: jam & nama shift
-// ─────────────────────────────────────────────
 const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: string } => {
   const hari = tglDate.getDay(); 
   const isFriday = hari === 5;
@@ -129,15 +123,19 @@ const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: s
   return { in: jamMasuk, out: jamKeluar };
 };
 
+// 🔥 PERBAIKAN: FORMAT NAMA SHIFT HARUS SAMA PERSIS DENGAN ERPNEXT (TANPA TANDA KURUNG)
 const getNamaShiftKantor = (tglDate: Date, branchUser: string | undefined, satpamFlag: boolean): string => {
   const hari     = tglDate.getDay();
   const isFriday = hari === 5;
   const ramadhan = isRamadhan(tglDate);
+  
   const branchLabel = (branchUser || '').toLowerCase().includes('jakarta') ? 'Jakarta' : 'PH Klaten';
   const hariLabel   = isFriday ? 'Jumat' : 'Senin - Kamis';
   const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
-  const satpamLabel  = satpamFlag ? ' (Satpam)' : '';
-  return `${hariLabel} (${branchLabel} ${periodeLabel})${satpamLabel}`;
+  const satpamLabel  = satpamFlag ? ' Satpam' : ''; 
+
+  // Output: "Senin - Kamis PH Klaten Non Ramadhan" 
+  return `${hariLabel} ${branchLabel} ${periodeLabel}${satpamLabel}`;
 };
 
 const getJamShift = (
@@ -145,16 +143,20 @@ const getJamShift = (
   tgl: string,
   branchUser: string | undefined,
   roleUser: string | undefined,
-  masterShifts: Record<string, { in: string; out: string }>
+  masterShifts: Record<string, { in: string; out: string }>,
+  activeShift: ActiveShift | null
 ): { in: string; out: string } => {
   const tglDate = parseLokalDate(tgl);
   const kantor  = isKaryawanKantor(branchUser);
 
   if (!kantor) {
+    if (activeShift && shiftNameFromRecord === activeShift.shift_name) {
+      return { in: activeShift.start_time, out: activeShift.end_time };
+    }
     if (shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
       return masterShifts[shiftNameFromRecord];
     }
-    return { in: '06:00', out: '14:00' }; 
+    return { in: '06:00', out: '14:00' };
   }
 
   const satpamFlag = isSatpam(roleUser);
@@ -165,7 +167,8 @@ const validasiShiftName = (
   shiftFromRecord: string | undefined,
   tgl: string,
   branch: string | undefined,
-  role: string | undefined
+  role: string | undefined,
+  activeShift: ActiveShift | null
 ): string => {
   const tglDate   = parseLokalDate(tgl);
   const hari      = tglDate.getDay();
@@ -174,7 +177,9 @@ const validasiShiftName = (
   const kantor    = isKaryawanKantor(branch);
   const satpamFlag = isSatpam(role);
 
-  if (!kantor) return shiftFromRecord || 'Shift Outlet';
+  if (!kantor) {
+    return shiftFromRecord || activeShift?.shift_name || 'Shift Outlet';
+  }
 
   const shiftLokal = getNamaShiftKantor(tglDate, branch, satpamFlag);
 
@@ -308,7 +313,6 @@ const Absen = () => {
   const ERPNEXT_URL  = 'http://103.187.147.240';
   const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
 
-  // ── state data ──
   const [user,          setUser]          = useState<User | null>(null);
   const [lokasiKantor,  setLokasiKantor]  = useState<Lokasi[]>(LOKASI_FALLBACK);
   const [dataRiwayat,   setDataRiwayat]   = useState<RiwayatAbsen[]>([]);
@@ -318,12 +322,10 @@ const Absen = () => {
   const [leaveRecords,  setLeaveRecords]  = useState<LeaveRecord[]>([]);
   const [lihatSemua,    setLihatSemua]    = useState(false);
 
-  // ── active shift (khusus outlet) ──
   const [activeShift,   setActiveShift]   = useState<ActiveShift | null>(null);
   const [shiftLoading,  setShiftLoading]  = useState(false);
   const [shiftError,    setShiftError]    = useState<string | null>(null);
 
-  // ── state modal absen ──
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
   const [modeAbsen,        setModeAbsen]        = useState('MASUK');
   const [jamModal,         setJamModal]         = useState('--:--');
@@ -341,13 +343,11 @@ const Absen = () => {
   const [isKirimLoading,    setIsKirimLoading]    = useState(false);
   const [koordinatGPS,      setKoordinatGPS]      = useState<{ lat: number; lng: number } | null>(null);
 
-  // ── state modal detail ──
   const [detailModal, setDetailModal] = useState<{
     show: boolean; tgl: string;
     inData?: RiwayatAbsen; outData?: RiwayatAbsen;
   }>({ show: false, tgl: '' });
 
-  // ── refs ──
   const videoRef           = useRef<HTMLVideoElement>(null);
   const streamRef          = useRef<MediaStream | null>(null);
   const intervalDeteksiRef = useRef<number | null>(null);
@@ -358,7 +358,6 @@ const Absen = () => {
   const cameraStepRef      = useRef(cameraStep);
   useEffect(() => { cameraStepRef.current = cameraStep; }, [cameraStep]);
 
-  // ── derived ──
   const outlet  = isKaryawanOutlet(user?.branch);
   const satpam  = isSatpam(user?.role);
 
@@ -375,9 +374,6 @@ const Absen = () => {
         { n: 4, icon: 'fa-paper-plane', label: 'Kirim' },
       ];
 
-  // ─────────────────────────────────────────
-  // Init
-  // ─────────────────────────────────────────
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) { navigate('/'); return; }
@@ -410,9 +406,6 @@ const Absen = () => {
 
   useEffect(() => { return () => matikanKamera(); }, []);
 
-  // ─────────────────────────────────────────
-  // Canvas TTD – setup event listener
-  // ─────────────────────────────────────────
   useEffect(() => {
     if (cameraStep !== 3) return;
 
@@ -424,7 +417,7 @@ const Absen = () => {
 
       const rect  = canvas.getBoundingClientRect();
       canvas.width  = rect.width || 300;
-      canvas.height = rect.width || 300; 
+      canvas.height = rect.height || 300; 
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.strokeStyle = '#1e293b';
@@ -509,9 +502,6 @@ const Absen = () => {
     setCameraStep(4);
   };
 
-  // ─────────────────────────────────────────
-  // API calls
-  // ─────────────────────────────────────────
   const ambilActiveShift = async (empId: string) => {
     setShiftLoading(true);
     setShiftError(null);
@@ -596,14 +586,6 @@ const Absen = () => {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
   };
 
-  // 🔥 FUNGSI TUTUP MODAL DITAMBAHKAN KEMBALI 🔥
-  const tutupModal = () => {
-    matikanKamera();
-    setIsModalAbsenOpen(false);
-    setCameraStep(1);
-    if (searchParams.has('auto')) setSearchParams({});
-  };
-
   const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
     try {
       const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`);
@@ -664,7 +646,9 @@ const Absen = () => {
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
             let nm = terdekat.nama;
-            if (outlet) nm = user?.branch || await reverseGeocode(coords.lat, coords.lng);
+            if (outlet) {
+               nm = user?.branch || await reverseGeocode(coords.lat, coords.lng);
+            }
             
             setNamaLokasi(nm);
             setGpsStatus({ tipe: 'ok', pesan: `Valid: ${nm} (Akurasi: ${Math.round(akurasi)}m) ✓` });
@@ -687,6 +671,13 @@ const Absen = () => {
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
+  };
+
+  const tutupModal = () => {
+    matikanKamera();
+    setIsModalAbsenOpen(false);
+    setCameraStep(1);
+    if (searchParams.has('auto')) setSearchParams({});
   };
 
   const nyalakanKamera = async () => {
@@ -750,6 +741,7 @@ const Absen = () => {
     if (ctx) {
       const videoRatio = video.videoWidth / video.videoHeight;
       const targetRatio = TARGET_W / TARGET_H;
+
       let sourceX = 0, sourceY = 0, sourceW = video.videoWidth, sourceH = video.videoHeight;
 
       if (videoRatio > targetRatio) {
@@ -858,7 +850,7 @@ const Absen = () => {
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
     if (d.in?.time) {
       const jamAbsen  = formatJamLokal(d.in.time);
-      const shiftInfo = getJamShift(d.in.shift, tgl, user?.branch, user?.role, masterShifts);
+      const shiftInfo = getJamShift(d.in.shift, tgl, user?.branch, user?.role, masterShifts, activeShift);
       if (toMenit(jamAbsen) > toMenit(shiftInfo.in)) rekapTelat++;
     }
   });
@@ -901,7 +893,7 @@ const Absen = () => {
         kelas += 'bg-blue-100 text-blue-600 font-bold';
         dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />;
       } else if (checkin) {
-        const shiftInfo = getJamShift(dataIn?.shift, strTgl, user?.branch, user?.role, masterShifts);
+        const shiftInfo = getJamShift(dataIn?.shift, strTgl, user?.branch, user?.role, masterShifts, activeShift);
         const isTelat   = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in);
         kelas += isTelat ? 'bg-red-100 text-red-600 font-bold' : 'bg-green-100 text-green-700 font-bold';
         dot = <span className={`absolute -bottom-0.5 w-1 h-1 rounded-full ${isTelat ? 'bg-red-400' : 'bg-green-400'}`} />;
@@ -979,7 +971,7 @@ const Absen = () => {
                   <button onClick={() => { if (bulanAktif === 11) { setBulanAktif(0); setTahunAktif(t => t + 1); } else setBulanAktif(b => b + 1); }} className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white text-xs hover:bg-white/30"><i className="fa-solid fa-chevron-right" /></button>
                 </div>
               </div>
-              
+
               {/* Status Badge Khusus Outlet (Menampilkan Jadwal Shift Hari Ini) */}
               {outlet && (
                 <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10 min-h-[32px]">
@@ -1071,9 +1063,8 @@ const Absen = () => {
                         const jamIn      = formatJamLokal(d.in?.time);
                         const jamOut     = formatJamLokal(d.out?.time);
                         const tglDate    = parseLokalDate(tgl);
-                        // 🔥 DIPERBAIKI: Hapus argumen ke-5 (masterShifts) dan ke-6
-                        const shiftInfo  = getJamShift(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, masterShifts);
-                        const shiftLabel = validasiShiftName(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role);
+                        const shiftInfo  = getJamShift(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, masterShifts, activeShift);
+                        const shiftLabel = validasiShiftName(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, activeShift);
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
@@ -1428,14 +1419,13 @@ const Absen = () => {
             ══════════════════════════════════ */}
             {detailModal.show && (() => {
               const tglDate   = parseLokalDate(detailModal.tgl);
-              // 🔥 DIPERBAIKI: Hapus argumen ke-5 (masterShifts) dan ke-6
               const shiftInfo = getJamShift(
                 detailModal.inData?.shift || detailModal.outData?.shift,
-                detailModal.tgl, user?.branch, user?.role, masterShifts
+                detailModal.tgl, user?.branch, user?.role, masterShifts, activeShift
               );
               const shiftLabel = validasiShiftName(
                 detailModal.inData?.shift || detailModal.outData?.shift,
-                detailModal.tgl, user?.branch, user?.role
+                detailModal.tgl, user?.branch, user?.role, activeShift
               );
               const hariLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'long' });
               const tglLabel  = tglDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -1506,8 +1496,8 @@ const Absen = () => {
                                  <FotoSlot src={detailModal.inData?.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />
                                  <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
-                                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-square">
-                                       {detailModal.inData?.custom_signature ? <img src={prosesUrlFoto(detailModal.inData.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
+                                       {detailModal.inData?.custom_signature ? <img src={prosesUrlFoto(detailModal.inData.custom_signature)} className="w-full h-auto object-contain mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
                                        <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
                                     </div>
                                  </div>
@@ -1527,7 +1517,7 @@ const Absen = () => {
                                    <FotoSlot src={detailModal.outData?.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />
                                    <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
                                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
-                                      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-square">
+                                      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
                                          {detailModal.outData?.custom_signature ? <img src={prosesUrlFoto(detailModal.outData.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Keluar" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
                                          <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
                                       </div>
