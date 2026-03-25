@@ -225,7 +225,6 @@ const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): 
   const isBranchKlaten  = branch.includes('klaten') || branch.includes('ph');
   const isBranchJakarta = branch.includes('jakarta');
 
-  // Strict Validation: Jika Branch vs Lokasi Absen tidak cocok, Tolak.
   if (isLokasiKlaten  && !isBranchKlaten)  return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
   if (isLokasiJakarta && !isBranchJakarta) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
   return null;
@@ -368,6 +367,7 @@ const Absen = () => {
   const isDrawingRef       = useRef(false);
   const lastPosRef         = useRef<{ x: number; y: number } | null>(null);
   const cameraStepRef      = useRef(cameraStep);
+
   useEffect(() => { cameraStepRef.current = cameraStep; }, [cameraStep]);
 
   // ── derived ──
@@ -387,6 +387,9 @@ const Absen = () => {
         { n: 4, icon: 'fa-paper-plane', label: 'Kirim' },
       ];
 
+  // ─────────────────────────────────────────
+  // Init
+  // ─────────────────────────────────────────
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) { navigate('/'); return; }
@@ -415,7 +418,9 @@ const Absen = () => {
 
   useEffect(() => { return () => matikanKamera(); }, []);
 
-  // Canvas TTD – setup event listener
+  // ─────────────────────────────────────────
+  // Canvas TTD – setup event listener (SQUARE RATIO)
+  // ─────────────────────────────────────────
   useEffect(() => {
     if (cameraStep !== 3) return;
 
@@ -426,8 +431,9 @@ const Absen = () => {
       if (!ctx) return;
 
       const rect  = canvas.getBoundingClientRect();
+      // Bikin TTD kotak (aspect-square) biar proporsional di HP
       canvas.width  = rect.width || 300;
-      canvas.height = rect.height || 200; 
+      canvas.height = rect.width || 300; 
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.strokeStyle = '#1e293b';
@@ -512,6 +518,9 @@ const Absen = () => {
     setCameraStep(4);
   };
 
+  // ─────────────────────────────────────────
+  // API calls
+  // ─────────────────────────────────────────
   const ambilMasterShift = async () => {
     try {
       const res  = await fetch(`${BACKEND}/api/attendance/shifts`);
@@ -599,10 +608,9 @@ const Absen = () => {
     
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
 
-    // KETATKAN KEMBALI: Bypass WIFI Dihapus Total!
-    // Rentang GPS dinaikkan menjadi 300m agar di dalam ruangan tetap aman.
+    // Murni GPS! Bypass IP Wifi sudah dicabut.
     const MAX_AKURASI = 300; 
-    const RADIUS_MIN = 150; // Jarak minimal radius yang diizinkan (150m)
+    const RADIUS_MIN = 500;  
 
     navigator.geolocation.getCurrentPosition(
       async pos => {
@@ -623,16 +631,13 @@ const Absen = () => {
           }
         }
 
-        // Tidak ada cek isIpValid lagi. Murni GPS!
         if (terdekat.valid && akurasi <= MAX_AKURASI) {
-          // CEK STRICT LOKASI KANTOR VS BRANCH
           let errorBranch = cekBranchVsLokasi(user?.branch, terdekat.nama);
           
           if (errorBranch) {
             setGpsStatus({ tipe: 'error', pesan: errorBranch });
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
-            // Jika outlet, lokasi pakai reverse geocode
             let nm = terdekat.nama;
             if (outlet) {
                nm = user?.branch || await reverseGeocode(coords.lat, coords.lng);
@@ -653,7 +658,6 @@ const Absen = () => {
         }
       },
       async () => {
-        // Jika tidak diizinkan akses lokasi browser
         setNamaLokasi('GPS Nonaktif');
         setGpsStatus({ tipe: 'error', pesan: 'Mohon izinkan akses GPS dari browser.' });
         setJepretState({ aktif: false, teks: 'Akses Ditolak' });
@@ -721,7 +725,7 @@ const Absen = () => {
     if (!video) return;
 
     const canvas = document.createElement('canvas');
-    // Maksa aspect ratio jadi 3:4 dengan resolusi standar
+    // Maksa aspect ratio jadi 3:4 
     const TARGET_W = 480;
     const TARGET_H = 640;
     canvas.width = TARGET_W;
@@ -752,7 +756,7 @@ const Absen = () => {
       ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, TARGET_W, TARGET_H);
       ctx.restore();
 
-      // Tambah Watermark Estetik
+      // Tambah Watermark Estetik dengan 3 Baris & Logo Ropi
       await drawOverlay(ctx, TARGET_W, TARGET_H, namaLokasi);
     }
 
@@ -761,7 +765,6 @@ const Absen = () => {
     if (cameraStep === 1) {
       setFotoBase64(base64);
       if (outlet) {
-        // Lanjut ke foto kiri (kamera gak dimatikan)
         setCameraStep(2);
         setKameraBorder('border-blue-400');
         setJepretState({ aktif: false, teks: 'Cari Wajah...' });
@@ -912,7 +915,7 @@ const Absen = () => {
 
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
-      <style>{`.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}`}</style>
+      <style>{`.hide-scrollbar::-webkit-scrollbar{display:none}.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}`}</style>
 
       <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
 
@@ -981,7 +984,7 @@ const Absen = () => {
             </div>
 
             {/* KONTEN */}
-            <div className="flex-1 overflow-y-auto pb-24 pt-4 no-scrollbar">
+            <div className="flex-1 overflow-y-auto pb-24 pt-4 hide-scrollbar">
 
               {/* Badge izin aktif */}
               {leaveRecords.length > 0 && (
@@ -1134,15 +1137,24 @@ const Absen = () => {
 
                   {/* Header modal */}
                   <div className="bg-[#3e2723] px-5 pt-4 pb-4 shrink-0">
-                    <div className="flex items-center justify-between w-full">
-                      <p className="text-white text-2xl font-black leading-none">{jamModal}</p>
-                      <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 ${modeAbsen === 'MASUK' ? 'bg-green-500/30 border border-green-400/40' : 'bg-orange-500/30 border border-orange-400/40'}`}>
+                    <div className="flex items-start justify-between w-full">
+                      <div className="flex flex-col gap-1">
+                        <p className="text-white text-2xl font-black leading-none">{jamModal}</p>
+                        <p className="text-[#fbc02d] text-[9px] font-bold tracking-wide">
+                          <i className="fa-solid fa-clock mr-1"></i>
+                          {outlet 
+                            ? 'Shift Outlet (Auto)' 
+                            : `${getNamaShiftKantor(new Date(), user?.branch, satpam)} • ${getJamShiftKantor(new Date(), satpam).in}-${getJamShiftKantor(new Date(), satpam).out}`
+                          }
+                        </p>
+                      </div>
+                      <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 h-fit ${modeAbsen === 'MASUK' ? 'bg-green-500/30 border border-green-400/40' : 'bg-orange-500/30 border border-orange-400/40'}`}>
                         <div className={`w-2 h-2 rounded-full ${modeAbsen === 'MASUK' ? 'bg-green-400' : 'bg-orange-400'} animate-pulse`} />
                         <p className={`font-black text-xs uppercase tracking-wider ${modeAbsen === 'MASUK' ? 'text-green-300' : 'text-orange-300'}`}>{modeAbsen}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between w-full mt-2">
+                    <div className="flex items-center justify-between w-full mt-3">
                       {/* Status GPS */}
                       {(cameraStep === 1 || cameraStep === 2) ? (
                         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold ${gpsStatus.tipe === 'error' ? 'bg-red-900/50 text-red-300' : gpsStatus.tipe === 'ok' ? 'bg-green-900/40 text-green-300' : 'bg-white/10 text-white/70'}`}>
@@ -1184,8 +1196,8 @@ const Absen = () => {
                             </p>
                             <p className={`text-${cameraStep === 1 ? 'red' : 'blue'}-500 text-[10px] font-bold leading-snug`}>
                               {cameraStep === 1 
-                                ? (outlet ? 'Perlihatkan wajah & kuku tangan kananmu.' : 'Pastikan wajah terlihat jelas di kamera.')
-                                : 'Perlihatkan wajah & kuku tangan kirimu.'
+                                ? (outlet ? 'Perlihatkan wajah & kuku tangan kananmu dengan jelas.' : 'Pastikan wajah terlihat jelas di kamera.')
+                                : 'Perlihatkan wajah & kuku tangan kirimu dengan jelas.'
                               }
                             </p>
                           </div>
@@ -1281,8 +1293,8 @@ const Absen = () => {
                               {/* TTD */}
                               <div className="shrink-0 w-[80%] snap-center flex flex-col gap-1.5">
                                 <p className="text-[10px] font-black text-gray-400 uppercase text-center">✍️ Tanda Tangan</p>
-                                <div className="rounded-2xl border-2 border-gray-200 bg-white p-2 shadow-sm aspect-[3/4] flex items-center justify-center">
-                                  <img src={ttdBase64 || ''} className="w-full h-auto object-contain mix-blend-multiply" alt="TTD" />
+                                <div className="rounded-2xl border-2 border-gray-200 bg-white p-2 shadow-sm aspect-square flex items-center justify-center">
+                                  <img src={ttdBase64 || ''} className="w-full h-full object-contain mix-blend-multiply" alt="TTD" />
                                 </div>
                               </div>
                             </div>
