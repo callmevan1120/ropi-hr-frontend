@@ -77,14 +77,20 @@ const parseLokalDate = (tglStr: string): Date => {
   return new Date(y, m - 1, d);
 };
 
+// Ramadhan 2025 : 1 Mar – 30 Mar 2025
+// Ramadhan 2026 : 18 Feb – 19 Mar 2026
+// Ramadhan 2027 : 9 Feb – 9 Mar 2027 (estimasi, perbarui jika perlu)
 const isRamadhan = (tanggal?: Date): boolean => {
-  const now = tanggal || new Date();
+  const now   = tanggal || new Date();
   const tahun = now.getFullYear();
-  const bulan = now.getMonth() + 1;
-  const tgl = now.getDate();
-  if (tahun === 2025 && bulan === 3 && tgl >= 1 && tgl <= 30) return true;
-  if (tahun === 2026 && bulan === 2 && tgl >= 18) return true;
-  if (tahun === 2026 && bulan === 3 && tgl <= 19) return true;
+  const bulan = now.getMonth() + 1; // 1–12
+  const tgl   = now.getDate();
+
+  // Encode sebagai angka MMDD untuk perbandingan rentang
+  const curr  = bulan * 100 + tgl;
+  if (tahun === 2025 && curr >= 301  && curr <= 330)  return true; // 1–30 Mar 2025
+  if (tahun === 2026 && curr >= 218  && curr <= 319)  return true; // 18 Feb – 19 Mar 2026
+  if (tahun === 2027 && curr >= 209  && curr <= 309)  return true; // 9 Feb – 9 Mar 2027
   return false;
 };
 
@@ -101,43 +107,50 @@ const isSatpam = (role?: string): boolean => {
   return des.includes('satpam') || des.includes('security') || des.includes('sekuriti');
 };
 
+// ─── Tabel jam kantor (PH Klaten & Jakarta sama) ───────────────────
+//  Periode        | Hari           | Masuk | Pulang | Satpam masuk | Satpam pulang
+//  Non Ramadhan   | Senin – Kamis  | 07:30 | 16:30  | 07:00        | 17:00
+//  Non Ramadhan   | Jumat          | 07:30 | 17:00  | 07:00        | 17:30
+//  Ramadhan       | Senin – Kamis  | 07:00 | 15:30  | 06:30        | 16:00
+//  Ramadhan       | Jumat          | 07:00 | 16:00  | 06:30        | 16:30
+// ───────────────────────────────────────────────────────────────────
 const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: string } => {
-  const hari = tglDate.getDay(); 
+  const hari     = tglDate.getDay(); // 0=Min,1=Sen,...,5=Jum,6=Sab
   const isFriday = hari === 5;
   const ramadhan = isRamadhan(tglDate);
 
-  let jamMasuk: string;
-  let jamKeluar: string;
+  // Jam dasar karyawan kantor
+  const jamMasuk  = '07:30'; // Non Ramadhan default
+  const jamKeluar = isFriday ? '17:00' : '16:30';
 
-  if (ramadhan) {
-    jamMasuk  = '07:00';
-    jamKeluar = isFriday ? '16:00' : '15:30';
-  } else {
-    jamMasuk  = '07:30';
-    jamKeluar = isFriday ? '17:00' : '16:30';
-  }
+  const jamMasukR  = '07:00'; // Ramadhan
+  const jamKeluarR = isFriday ? '16:00' : '15:30';
+
+  const baseIn  = ramadhan ? jamMasukR  : jamMasuk;
+  const baseOut = ramadhan ? jamKeluarR : jamKeluar;
 
   if (satpam) {
-    return { in: tambahMenit(jamMasuk, -30), out: tambahMenit(jamKeluar, 30) };
+    // Satpam: 30 menit lebih awal masuk, 30 menit lebih lambat pulang
+    return { in: tambahMenit(baseIn, -30), out: tambahMenit(baseOut, 30) };
   }
-  return { in: jamMasuk, out: jamKeluar };
+  return { in: baseIn, out: baseOut };
 };
 
-// FORMAT NAMA SHIFT HARUS SAMA PERSIS DENGAN ERPNEXT
-// Contoh Shift Type di ERPNext (dari Shift_Type.xlsx):
-//   "Senin - Kamis (PH Klaten Non Ramadhan)"
-//   "Jumat (Jakarta Ramadhan)"
-// Satpam tidak memiliki shift terpisah → gunakan shift yang sama dengan kantor biasa
+// Nama shift kantor harus SAMA PERSIS dengan Shift Type di ERPNext
+// Format: "{HariLabel} ({BranchLabel} {PeriodeLabel})"
+// Contoh : "Senin - Kamis (PH Klaten Non Ramadhan)"
+//          "Jumat (Jakarta Ramadhan)"
+// Catatan: Satpam TIDAK memiliki Shift Type terpisah di ERPNext →
+//          gunakan nama shift kantor biasa (jam ditangani di getJamShiftKantor)
 const getNamaShiftKantor = (tglDate: Date, branchUser: string | undefined, _satpamFlag: boolean): string => {
-  const hari     = tglDate.getDay();
-  const isFriday = hari === 5;
-  const ramadhan = isRamadhan(tglDate);
+  const hari         = tglDate.getDay();
+  const isFriday     = hari === 5;
+  const ramadhan     = isRamadhan(tglDate);
 
   const branchLabel  = (branchUser || '').toLowerCase().includes('jakarta') ? 'Jakarta' : 'PH Klaten';
   const hariLabel    = isFriday ? 'Jumat' : 'Senin - Kamis';
   const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
 
-  // Format ERPNext: "Senin - Kamis (PH Klaten Non Ramadhan)"
   return `${hariLabel} (${branchLabel} ${periodeLabel})`;
 };
 
