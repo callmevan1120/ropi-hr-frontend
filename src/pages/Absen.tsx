@@ -8,7 +8,6 @@ interface User {
   role?: string;       // = designation dari ERPNext (Security/Satpam/dll)
   employee_id: string;
   branch?: string;
-  designation?: string; // untuk deteksi satpam
 }
 
 interface Lokasi {
@@ -108,7 +107,7 @@ const getJamShiftKantor = (
   tglDate: Date,
   satpam: boolean
 ): { in: string; out: string } => {
-  const hari = tglDate.getDay(); // 0=Min,5=Jum
+  const hari = tglDate.getDay(); 
   const isFriday = hari === 5;
   const ramadhan = isRamadhan(tglDate);
 
@@ -204,11 +203,9 @@ const validasiShiftName = (
   const recordIsSenKam = shiftFromRecord.toLowerCase().includes('senin');
 
   if (isFriday && recordIsSenKam) {
-    console.warn(`[ShiftValidasi] Override: record="${shiftFromRecord}" tapi hari=${hari} (Jumat). Pakai: "${shiftLokal}"`);
     return shiftLokal;
   }
   if (!isFriday && !isWeekend && recordIsFriday) {
-    console.warn(`[ShiftValidasi] Override: record="${shiftFromRecord}" tapi hari=${hari}. Pakai: "${shiftLokal}"`);
     return shiftLokal;
   }
 
@@ -239,20 +236,42 @@ const hitungHariKerjaDalamBulan = (
   }, 0);
 };
 
+const hitungJarak = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const R    = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a    = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 // ─────────────────────────────────────────────
-// HELPER: cek branch vs lokasi absen
+// OVERLAY TEXT UNTUK FOTO WATERMARK
 // ─────────────────────────────────────────────
-const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): string | null => {
-  const branch = (branchUser || '').toLowerCase().trim();
-  const lokasi = namaLokasi.toLowerCase().trim();
-  if (!branch) return null;
-  const isLokasiKlaten  = lokasi.includes('klaten') || lokasi.includes('ph');
-  const isLokasiJakarta = lokasi.includes('jakarta');
-  const isBranchKlaten  = branch.includes('klaten') || branch.includes('ph');
-  const isBranchJakarta = branch.includes('jakarta');
-  if (isLokasiKlaten  && !isBranchKlaten)  return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
-  if (isLokasiJakarta && !isBranchJakarta) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
-  return null;
+const drawOverlay = (ctx: CanvasRenderingContext2D, w: number, h: number, lokasi: string) => {
+  const now      = new Date();
+  const baris1   = `${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}  ${now.toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}`;
+  const baris2   = `\u{1F4CD} ${lokasi}`;
+  const pad      = 8;
+  const fs       = Math.max(12, Math.round(w * 0.04));
+  ctx.font       = `bold ${fs}px monospace`;
+  
+  const tw1      = ctx.measureText(baris1).width;
+  const tw2      = ctx.measureText(baris2).width;
+  const bw       = Math.max(tw1, tw2) + pad * 2;
+  const bh       = fs * 2 + pad * 3;
+  const x        = 10;
+  const y        = h - bh - 10;
+
+  ctx.fillStyle  = 'rgba(0,0,0,0.6)';
+  ctx.beginPath(); 
+  ctx.roundRect(x, y, bw, bh, 6); 
+  ctx.fill();
+
+  ctx.fillStyle  = '#fff'; 
+  ctx.textBaseline = 'top';
+  ctx.fillText(baris1, x + pad, y + pad);
+  ctx.fillStyle  = '#fde68a';
+  ctx.fillText(baris2, x + pad, y + pad + fs + 4);
 };
 
 // ─────────────────────────────────────────────
@@ -265,7 +284,6 @@ const Absen = () => {
   const BACKEND      = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const ERPNEXT_URL  = 'http://103.187.147.240';
   const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
-  const DAFTAR_IP_KANTOR = ['103.144.170.15'];
 
   // ── state data ──
   const [user,          setUser]          = useState<User | null>(null);
@@ -281,13 +299,14 @@ const Absen = () => {
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
   const [modeAbsen,        setModeAbsen]        = useState('MASUK');
   const [jamModal,         setJamModal]         = useState('--:--');
-  const [gpsStatus,        setGpsStatus]        = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
+  const [gpsStatus,        setGpsStatus]        = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi GPS...' });
   const [wajahStatus,      setWajahStatus]      = useState({ show: false, ok: false });
   const [kameraBorder,     setKameraBorder]     = useState('border-[#fbc02d]');
+  const [namaLokasi,       setNamaLokasi]       = useState<string>('Mendeteksi...');
 
   const [cameraStep,        setCameraStep]        = useState(1);
   const [fotoBase64,        setFotoBase64]        = useState<string | null>(null);
-  const [fotoKiriBase64,    setFotoKiriBase64]    = useState<string | null>(null); // outlet step-2
+  const [fotoKiriBase64,    setFotoKiriBase64]    = useState<string | null>(null); 
   const [ttdBase64,         setTtdBase64]         = useState<string | null>(null);
   const [isTtdEmpty,        setIsTtdEmpty]        = useState(true);
   const [jepretState,       setJepretState]       = useState({ aktif: false, teks: 'Cek Sistem...' });
@@ -517,14 +536,6 @@ const Absen = () => {
   // ─────────────────────────────────────────
   // GPS & kamera
   // ─────────────────────────────────────────
-  const hitungJarak = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const R    = 6371000;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a    = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
-
   const matikanKamera = () => {
     if (intervalJamRef.current)     window.clearInterval(intervalJamRef.current);
     if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
@@ -541,37 +552,15 @@ const Absen = () => {
     setIsModalAbsenOpen(true);
     setKameraBorder('border-[#fbc02d]');
     setWajahStatus({ show: false, ok: false });
-    setGpsStatus({ tipe: 'loading', pesan: 'Cek Wi-Fi & GPS...' });
+    setGpsStatus({ tipe: 'loading', pesan: 'Mendeteksi koordinat GPS...' });
     setJepretState({ aktif: false, teks: 'Loading...' });
+    setNamaLokasi('Mendeteksi...');
+    
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
 
-    let currentIP = '';
-    try {
-      const resIp  = await fetch('https://api.ipify.org?format=json');
-      const dataIp = await resIp.json();
-      currentIP = dataIp.ip;
-    } catch { console.warn('Gagal cek IP'); }
-    const isIpValid = DAFTAR_IP_KANTOR.includes(currentIP);
-
-    // FIX: Pelonggaran syarat GPS
-    const MAX_AKURASI = outlet ? 200 : 100; // Akurasi GPS boleh sampai 100m (kantor) atau 200m (outlet)
-    const RADIUS_MIN_OUTLET = 250;          // Minimal radius untuk outlet 250 meter
-
-    // Timpa radius bawaan server dengan radius yg lebih longgar khusus outlet
-    const lokasiEfektif = lokasiKantor.map(k => ({
-      ...k,
-      radius: (outlet && k.radius < RADIUS_MIN_OUTLET) ? RADIUS_MIN_OUTLET : k.radius
-    }));
-
-    const cekRadiusEfektif = (lat: number, lng: number) => {
-      let terdekat = { valid: false, nama: '?', jarak: Infinity, radius: 100 };
-      for (const k of lokasiEfektif) {
-        const jarak = Math.round(hitungJarak(lat, lng, k.lat, k.lng));
-        if (jarak <= k.radius) return { valid: true, nama: k.nama, jarak, radius: k.radius };
-        if (jarak < terdekat.jarak) terdekat = { valid: false, nama: k.nama, jarak, radius: k.radius };
-      }
-      return terdekat;
-    };
+    // GPS Diperluas
+    const MAX_AKURASI = 300; 
+    const RADIUS_MIN = 500;  
 
     navigator.geolocation.getCurrentPosition(
       async pos => {
@@ -579,46 +568,39 @@ const Absen = () => {
         const akurasi = pos.coords.accuracy;
         setKoordinatGPS(coords);
         
-        const cek = cekRadiusEfektif(coords.lat, coords.lng);
-        const isGpsValid = cek.valid && akurasi <= MAX_AKURASI;
-
-        if (isGpsValid || isIpValid) {
-          let errorBranch = null;
-          if (!isIpValid) errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
-          
-          if (errorBranch) {
-            setGpsStatus({ tipe: 'error', pesan: errorBranch });
-            setJepretState({ aktif: false, teks: 'Akses Ditolak' });
-          } else {
-            const namaLokasiTampil = cek.nama !== '?' ? cek.nama : LOKASI_FALLBACK[0].nama;
-            const pesanValid = isIpValid
-              ? `Valid: ${namaLokasiTampil} (via Wi-Fi) ✓`
-              : `Valid: ${cek.nama} (Akurasi: ${Math.round(akurasi)}m) ✓`;
-            setGpsStatus({ tipe: 'ok', pesan: pesanValid });
-            setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-            await nyalakanKamera();
+        let terdekat = { valid: false, nama: '?', jarak: Infinity, radius: 100 };
+        for (const k of lokasiKantor) {
+          const r = Math.max(k.radius, RADIUS_MIN); // Radius minimum dilonggarkan
+          const jarak = Math.round(hitungJarak(coords.lat, coords.lng, k.lat, k.lng));
+          if (jarak <= r) {
+            terdekat = { valid: true, nama: k.nama, jarak, radius: r };
+            break;
           }
+          if (jarak < terdekat.jarak) {
+            terdekat = { valid: false, nama: k.nama, jarak, radius: r };
+          }
+        }
+
+        if (terdekat.valid && akurasi <= MAX_AKURASI) {
+          setNamaLokasi(terdekat.nama);
+          setGpsStatus({ tipe: 'ok', pesan: `Valid: ${terdekat.nama} (Akurasi: ${Math.round(akurasi)}m) ✓` });
+          setJepretState({ aktif: false, teks: 'Buka Kamera...' });
+          await nyalakanKamera();
         } else {
-          let pesanError = 'Lokasi Ditolak.';
-          if (!cek.valid) pesanError = `Jarak ${cek.jarak}m dari lokasi (Maks: ${cek.radius}m).`;
-          else if (akurasi > MAX_AKURASI) pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < ${MAX_AKURASI}m.`;
+          setNamaLokasi('Lokasi Ditolak');
+          let pesanError = `Jarak ${terdekat.jarak}m (Maks: ${terdekat.radius}m).`;
+          if (akurasi > MAX_AKURASI) pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < ${MAX_AKURASI}m.`;
           
-          setGpsStatus({ tipe: 'error', pesan: `${pesanError} (Bukan Wi-Fi)` });
+          setGpsStatus({ tipe: 'error', pesan: pesanError });
           setJepretState({ aktif: false, teks: 'Ditolak' });
         }
       },
       async () => {
-        if (isIpValid) {
-          setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng });
-          setGpsStatus({ tipe: 'ok', pesan: `Valid: ${LOKASI_FALLBACK[0].nama} (via Wi-Fi) ✓` });
-          setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-          await nyalakanKamera();
-        } else {
-          setGpsStatus({ tipe: 'error', pesan: 'GPS Ditolak & Bukan Wi-Fi Kantor' });
-          setJepretState({ aktif: false, teks: 'Akses Ditolak' });
-        }
+        setNamaLokasi('GPS Nonaktif');
+        setGpsStatus({ tipe: 'error', pesan: 'Mohon izinkan akses GPS dari browser.' });
+        setJepretState({ aktif: false, teks: 'Akses Ditolak' });
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
   };
 
@@ -681,7 +663,8 @@ const Absen = () => {
     if (!video) return;
 
     const canvas    = document.createElement('canvas');
-    const MAX_SIZE  = 320;
+    // Memperbesar canvas agar teks overlay tidak blur/terpotong
+    const MAX_SIZE  = 640; 
     let w = video.videoWidth  || 480;
     let h = video.videoHeight || 640;
     const ratio = Math.min(MAX_SIZE / w, MAX_SIZE / h);
@@ -697,9 +680,13 @@ const Absen = () => {
         ctx.scale(-1, 1);
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Kembalikan ke mode normal agar tulisan waktu & lokasi TIDAK terbalik!
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      drawOverlay(ctx, canvas.width, canvas.height, namaLokasi);
     }
 
-    const base64 = canvas.toDataURL('image/jpeg', 0.3);
+    const base64 = canvas.toDataURL('image/jpeg', 0.6);
 
     if (cameraStep === 1) {
       setFotoBase64(base64);
@@ -822,7 +809,7 @@ const Absen = () => {
       const adaIzin  = tanggalIzinSet.has(strTgl);
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
       
-      let dot: React.ReactNode = null;
+      let dot: any = null;
       if (isHariIni) {
         kelas += 'bg-[#3e2723] text-[#fbc02d] font-black';
       } else if (adaIzin && !checkin) {
@@ -988,7 +975,7 @@ const Absen = () => {
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
-                        let badgeEl: React.ReactNode = null;
+                        let badgeEl: any = null;
                         if (jamIn !== '-') {
                           const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
                           badgeEl = selisih > 0
@@ -999,7 +986,7 @@ const Absen = () => {
                           badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>;
                         }
 
-                        let badgeCepat: React.ReactNode = null;
+                        let badgeCepat: any = null;
                         if (jamOut !== '-') {
                           const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
                           if (selisih > 0) {
@@ -1007,7 +994,7 @@ const Absen = () => {
                           }
                         }
 
-                        let badgeBelumKeluar: React.ReactNode = null;
+                        let badgeBelumKeluar: any = null;
                         if (jamIn !== '-' && jamOut === '-') {
                           badgeBelumKeluar = <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">Belum Keluar</span>;
                         }
@@ -1133,8 +1120,14 @@ const Absen = () => {
                         </div>
                         <div className={`w-full rounded-2xl overflow-hidden border-[3px] ${kameraBorder} bg-gray-900 relative transition-colors shadow-inner`} style={{ aspectRatio: '3/4' }}>
                           <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
+                          {/* Live Overlay Kamera */}
+                          <div className="absolute bottom-3 left-3 z-20 bg-black/60 rounded-md px-2 py-1.5 pointer-events-none select-none">
+                            <p className="text-white text-[9px] font-mono leading-tight">{jamModal}</p>
+                            <p className="text-yellow-200 text-[9px] font-mono leading-tight">📍 {namaLokasi}</p>
+                          </div>
+
                           {wajahStatus.show && (
-                            <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black shadow-md ${wajahStatus.ok ? 'bg-green-500 text-white' : 'bg-orange-400 text-white'}`}>
+                            <div className={`absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black shadow-md ${wajahStatus.ok ? 'bg-green-500 text-white' : 'bg-orange-400 text-white'}`}>
                               <i className={`fa-solid ${wajahStatus.ok ? 'fa-face-smile' : 'fa-face-meh'} text-xs`} />
                               {wajahStatus.ok ? 'Wajah terdeteksi' : 'Cari wajah...'}
                             </div>
@@ -1154,16 +1147,14 @@ const Absen = () => {
                           </div>
                         </div>
                         <div className={`w-full rounded-2xl overflow-hidden border-[3px] ${kameraBorder} bg-gray-900 relative transition-colors shadow-inner`} style={{ aspectRatio: '3/4' }}>
+                          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
                           <div className="absolute top-3 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
                             <span className="bg-white/90 text-[#3e2723] text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg border border-gray-200">Arahkan tangan kiri ke kamera</span>
                           </div>
-                          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
-                          {wajahStatus.show && (
-                            <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black shadow-md ${wajahStatus.ok ? 'bg-blue-500 text-white' : 'bg-orange-400 text-white'}`}>
-                              <i className={`fa-solid ${wajahStatus.ok ? 'fa-face-smile' : 'fa-face-meh'} text-xs`} />
-                              {wajahStatus.ok ? 'Wajah terdeteksi' : 'Cari wajah...'}
-                            </div>
-                          )}
+                          <div className="absolute bottom-3 left-3 z-20 bg-black/60 rounded-md px-2 py-1.5 pointer-events-none select-none">
+                            <p className="text-white text-[9px] font-mono leading-tight">{jamModal}</p>
+                            <p className="text-yellow-200 text-[9px] font-mono leading-tight">📍 {namaLokasi}</p>
+                          </div>
                         </div>
                       </>
                     )}
@@ -1207,21 +1198,21 @@ const Absen = () => {
                           </div>
                         </div>
 
-                        {/* Foto selfie */}
+                        {/* Foto selfie preview: Pakai object-contain agar teks jepretan tidak kepotong */}
                         <div className={`grid ${outlet ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
                           <div className="flex flex-col gap-1">
                             <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">
                               {outlet ? '📸 Wajah + Kanan' : '📸 Selfie Wajah'}
                             </p>
-                            <div className={`rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-50 ${outlet ? '' : 'w-1/2 mx-auto'}`} style={{ aspectRatio: '3/4' }}>
-                              <img src={fotoBase64 || ''} className="w-full h-full object-cover" alt="Selfie" />
+                            <div className={`rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-900 ${outlet ? '' : 'w-2/3 mx-auto'}`} style={{ aspectRatio: '3/4' }}>
+                              <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Selfie" />
                             </div>
                           </div>
                           {outlet && (
                             <div className="flex flex-col gap-1">
                               <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">📸 Wajah + Kiri</p>
-                              <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-50" style={{ aspectRatio: '3/4' }}>
-                                <img src={fotoKiriBase64 || ''} className="w-full h-full object-cover" alt="Kiri" />
+                              <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-900" style={{ aspectRatio: '3/4' }}>
+                                <img src={fotoKiriBase64 || ''} className="w-full h-full object-contain" alt="Kiri" />
                               </div>
                             </div>
                           )}
