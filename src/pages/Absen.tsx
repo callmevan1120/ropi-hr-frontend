@@ -202,19 +202,12 @@ const validasiShiftName = (
   const recordIsFriday = shiftFromRecord.toLowerCase().includes('jumat');
   const recordIsSenKam = shiftFromRecord.toLowerCase().includes('senin');
 
-  if (isFriday && recordIsSenKam) {
-    return shiftLokal;
-  }
-  if (!isFriday && !isWeekend && recordIsFriday) {
-    return shiftLokal;
-  }
+  if (isFriday && recordIsSenKam) return shiftLokal;
+  if (!isFriday && !isWeekend && recordIsFriday) return shiftLokal;
 
   return shiftFromRecord;
 };
 
-// ─────────────────────────────────────────────
-// HELPER: hitung hari kerja izin/cuti dalam bulan
-// ─────────────────────────────────────────────
 const hitungHariKerjaDalamBulan = (
   records: LeaveRecord[],
   filterFn: (r: LeaveRecord) => boolean,
@@ -245,33 +238,77 @@ const hitungJarak = (lat1: number, lng1: number, lat2: number, lng2: number) => 
 };
 
 // ─────────────────────────────────────────────
-// OVERLAY TEXT UNTUK FOTO WATERMARK
+// WATERMARK ESTETIK: Waktu (Terpisah baris), Lokasi & Logo Ropi
 // ─────────────────────────────────────────────
-const drawOverlay = (ctx: CanvasRenderingContext2D, w: number, h: number, lokasi: string) => {
-  const now      = new Date();
-  const baris1   = `${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}  ${now.toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}`;
-  const baris2   = `\u{1F4CD} ${lokasi}`;
-  const pad      = 8;
-  const fs       = Math.max(12, Math.round(w * 0.04));
-  ctx.font       = `bold ${fs}px monospace`;
-  
-  const tw1      = ctx.measureText(baris1).width;
-  const tw2      = ctx.measureText(baris2).width;
-  const bw       = Math.max(tw1, tw2) + pad * 2;
-  const bh       = fs * 2 + pad * 3;
-  const x        = 10;
-  const y        = h - bh - 10;
+const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, lokasi: string) => {
+  const now = new Date();
+  const jam = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+  const tgl = now.toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' });
+  const loc = `\u{1F4CD} ${lokasi}`;
 
-  ctx.fillStyle  = 'rgba(0,0,0,0.6)';
-  ctx.beginPath(); 
-  ctx.roundRect(x, y, bw, bh, 6); 
+  const pad = Math.round(w * 0.03); // Padding responsif
+  const gap = Math.round(w * 0.03);
+  const logoSize = Math.max(40, Math.round(w * 0.1)); // Ukuran logo responsif
+
+  const fsJam = Math.max(16, Math.round(w * 0.055));
+  const fsTglLoc = Math.max(12, Math.round(w * 0.035));
+
+  ctx.font = `900 ${fsJam}px sans-serif`;
+  const twJam = ctx.measureText(jam).width;
+  ctx.font = `600 ${fsTglLoc}px sans-serif`;
+  const twTgl = ctx.measureText(tgl).width;
+  const twLoc = ctx.measureText(loc).width;
+
+  const textW = Math.max(twJam, twTgl, twLoc);
+  const bw = pad + logoSize + gap + textW + pad * 2; 
+  const bh = pad + fsJam + gap/2 + fsTglLoc + gap/2 + fsTglLoc + pad;
+
+  const x = pad;
+  const y = h - bh - pad;
+
+  // Background Gradient Estetik
+  const grad = ctx.createLinearGradient(x, y, x + bw, y + bh);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 0.8)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+  
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(x, y, bw, bh, 12); // Rounding estetik
   ctx.fill();
 
-  ctx.fillStyle  = '#fff'; 
+  const textX = x + pad + logoSize + gap;
+  let textY = y + pad + 2;
+
+  // Teks Jam (Kuning tebal)
+  ctx.fillStyle = '#fbc02d'; 
+  ctx.font = `900 ${fsJam}px sans-serif`;
   ctx.textBaseline = 'top';
-  ctx.fillText(baris1, x + pad, y + pad);
-  ctx.fillStyle  = '#fde68a';
-  ctx.fillText(baris2, x + pad, y + pad + fs + 4);
+  ctx.fillText(jam, textX, textY);
+  textY += fsJam + gap/2;
+
+  // Teks Tanggal (Putih)
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `600 ${fsTglLoc}px sans-serif`;
+  ctx.fillText(tgl, textX, textY);
+  textY += fsTglLoc + gap/2;
+
+  // Teks Lokasi (Putih abu-abu)
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillText(loc, textX, textY);
+
+  // Gambar Logo Roti Ropi
+  return new Promise<void>((resolve) => {
+    const img = new Image();
+    img.src = '/Logo-Roti-ropi.png';
+    img.onload = () => {
+      const logoY = y + (bh - logoSize) / 2;
+      ctx.drawImage(img, x + pad, logoY, logoSize, logoSize);
+      resolve();
+    };
+    img.onerror = () => {
+      resolve(); // Tetap jalan meskipun logo gagal dimuat
+    };
+  });
 };
 
 // ─────────────────────────────────────────────
@@ -285,7 +322,6 @@ const Absen = () => {
   const ERPNEXT_URL  = 'http://103.187.147.240';
   const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
 
-  // ── state data ──
   const [user,          setUser]          = useState<User | null>(null);
   const [lokasiKantor,  setLokasiKantor]  = useState<Lokasi[]>(LOKASI_FALLBACK);
   const [dataRiwayat,   setDataRiwayat]   = useState<RiwayatAbsen[]>([]);
@@ -295,11 +331,10 @@ const Absen = () => {
   const [leaveRecords,  setLeaveRecords]  = useState<LeaveRecord[]>([]);
   const [lihatSemua,    setLihatSemua]    = useState(false);
 
-  // ── state modal absen ──
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
   const [modeAbsen,        setModeAbsen]        = useState('MASUK');
   const [jamModal,         setJamModal]         = useState('--:--');
-  const [gpsStatus,        setGpsStatus]        = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi GPS...' });
+  const [gpsStatus,        setGpsStatus]        = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
   const [wajahStatus,      setWajahStatus]      = useState({ show: false, ok: false });
   const [kameraBorder,     setKameraBorder]     = useState('border-[#fbc02d]');
   const [namaLokasi,       setNamaLokasi]       = useState<string>('Mendeteksi...');
@@ -313,13 +348,11 @@ const Absen = () => {
   const [isKirimLoading,    setIsKirimLoading]    = useState(false);
   const [koordinatGPS,      setKoordinatGPS]      = useState<{ lat: number; lng: number } | null>(null);
 
-  // ── state modal detail ──
   const [detailModal, setDetailModal] = useState<{
     show: boolean; tgl: string;
     inData?: RiwayatAbsen; outData?: RiwayatAbsen;
   }>({ show: false, tgl: '' });
 
-  // ── refs ──
   const videoRef           = useRef<HTMLVideoElement>(null);
   const streamRef          = useRef<MediaStream | null>(null);
   const intervalDeteksiRef = useRef<number | null>(null);
@@ -330,7 +363,6 @@ const Absen = () => {
   const cameraStepRef      = useRef(cameraStep);
   useEffect(() => { cameraStepRef.current = cameraStep; }, [cameraStep]);
 
-  // ── derived ──
   const outlet  = isKaryawanOutlet(user?.branch);
   const satpam  = isSatpam(user?.role);
 
@@ -347,9 +379,6 @@ const Absen = () => {
         { n: 4, icon: 'fa-paper-plane', label: 'Kirim' },
       ];
 
-  // ─────────────────────────────────────────
-  // Init
-  // ─────────────────────────────────────────
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) { navigate('/'); return; }
@@ -378,9 +407,6 @@ const Absen = () => {
 
   useEffect(() => { return () => matikanKamera(); }, []);
 
-  // ─────────────────────────────────────────
-  // Canvas TTD – setup event listener
-  // ─────────────────────────────────────────
   useEffect(() => {
     if (cameraStep !== 3) return;
 
@@ -533,13 +559,19 @@ const Absen = () => {
     } catch { setLeaveRecords([]); }
   };
 
-  // ─────────────────────────────────────────
-  // GPS & kamera
-  // ─────────────────────────────────────────
   const matikanKamera = () => {
     if (intervalJamRef.current)     window.clearInterval(intervalJamRef.current);
     if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+  };
+
+  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`);
+      const d = await r.json();
+      const a = d.address || {};
+      return a.building || a.amenity || a.road || a.suburb || a.village || d.display_name?.split(',')[0] || 'Lokasi GPS';
+    } catch { return 'GPS Aktif'; }
   };
 
   const bukaModalAbsen = async (mode: string) => {
@@ -570,7 +602,7 @@ const Absen = () => {
         
         let terdekat = { valid: false, nama: '?', jarak: Infinity, radius: 100 };
         for (const k of lokasiKantor) {
-          const r = Math.max(k.radius, RADIUS_MIN); // Radius minimum dilonggarkan
+          const r = Math.max(k.radius, RADIUS_MIN);
           const jarak = Math.round(hitungJarak(coords.lat, coords.lng, k.lat, k.lng));
           if (jarak <= r) {
             terdekat = { valid: true, nama: k.nama, jarak, radius: r };
@@ -582,7 +614,8 @@ const Absen = () => {
         }
 
         if (terdekat.valid && akurasi <= MAX_AKURASI) {
-          setNamaLokasi(terdekat.nama);
+          const nm = outlet ? await reverseGeocode(coords.lat, coords.lng) : terdekat.nama;
+          setNamaLokasi(nm);
           setGpsStatus({ tipe: 'ok', pesan: `Valid: ${terdekat.nama} (Akurasi: ${Math.round(akurasi)}m) ✓` });
           setJepretState({ aktif: false, teks: 'Buka Kamera...' });
           await nyalakanKamera();
@@ -658,13 +691,12 @@ const Absen = () => {
     }, 600);
   };
 
-  const jepretFoto = () => {
+  const jepretFoto = async () => {
     const video = videoRef.current;
     if (!video) return;
 
     const canvas    = document.createElement('canvas');
-    // Memperbesar canvas agar teks overlay tidak blur/terpotong
-    const MAX_SIZE  = 640; 
+    const MAX_SIZE  = 720; 
     let w = video.videoWidth  || 480;
     let h = video.videoHeight || 640;
     const ratio = Math.min(MAX_SIZE / w, MAX_SIZE / h);
@@ -681,12 +713,11 @@ const Absen = () => {
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Kembalikan ke mode normal agar tulisan waktu & lokasi TIDAK terbalik!
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      drawOverlay(ctx, canvas.width, canvas.height, namaLokasi);
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // Kembalikan posisi mirror sebelum cetak watermark
+      await drawOverlay(ctx, canvas.width, canvas.height, namaLokasi);
     }
 
-    const base64 = canvas.toDataURL('image/jpeg', 0.6);
+    const base64 = canvas.toDataURL('image/jpeg', 0.7);
 
     if (cameraStep === 1) {
       setFotoBase64(base64);
@@ -715,9 +746,7 @@ const Absen = () => {
     if (!fotoBase64 || (!fotoKiriBase64 && outlet) || !ttdBase64 || !user) return;
     setIsKirimLoading(true);
 
-    const namaShiftKirim = outlet
-      ? '' 
-      : getNamaShiftKantor(new Date(), user.branch, satpam);
+    const namaShiftKirim = outlet ? '' : getNamaShiftKantor(new Date(), user.branch, satpam);
 
     try {
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
@@ -1118,8 +1147,8 @@ const Absen = () => {
                             </p>
                           </div>
                         </div>
-                        <div className={`w-full rounded-2xl overflow-hidden border-[3px] ${kameraBorder} bg-gray-900 relative transition-colors shadow-inner`} style={{ aspectRatio: '3/4' }}>
-                          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
+                        <div className={`w-full rounded-2xl overflow-hidden border-[3px] ${kameraBorder} bg-black relative transition-colors shadow-inner`}>
+                          <video ref={videoRef} className="w-full h-auto max-h-[60vh] object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
                           {/* Live Overlay Kamera */}
                           <div className="absolute bottom-3 left-3 z-20 bg-black/60 rounded-md px-2 py-1.5 pointer-events-none select-none">
                             <p className="text-white text-[9px] font-mono leading-tight">{jamModal}</p>
@@ -1146,15 +1175,21 @@ const Absen = () => {
                             <p className="text-blue-500 text-[10px] font-bold leading-snug">Perlihatkan wajah & kuku tangan kirimu dengan jelas.</p>
                           </div>
                         </div>
-                        <div className={`w-full rounded-2xl overflow-hidden border-[3px] ${kameraBorder} bg-gray-900 relative transition-colors shadow-inner`} style={{ aspectRatio: '3/4' }}>
-                          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
+                        <div className={`w-full rounded-2xl overflow-hidden border-[3px] ${kameraBorder} bg-black relative transition-colors shadow-inner`}>
                           <div className="absolute top-3 left-0 w-full z-30 flex justify-center px-4 pointer-events-none">
                             <span className="bg-white/90 text-[#3e2723] text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg border border-gray-200">Arahkan tangan kiri ke kamera</span>
                           </div>
+                          <video ref={videoRef} className="w-full h-auto max-h-[60vh] object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
                           <div className="absolute bottom-3 left-3 z-20 bg-black/60 rounded-md px-2 py-1.5 pointer-events-none select-none">
                             <p className="text-white text-[9px] font-mono leading-tight">{jamModal}</p>
                             <p className="text-yellow-200 text-[9px] font-mono leading-tight">📍 {namaLokasi}</p>
                           </div>
+                          {wajahStatus.show && (
+                            <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black shadow-md ${wajahStatus.ok ? 'bg-blue-500 text-white' : 'bg-orange-400 text-white'}`}>
+                              <i className={`fa-solid ${wajahStatus.ok ? 'fa-face-smile' : 'fa-face-meh'} text-xs`} />
+                              {wajahStatus.ok ? 'Wajah terdeteksi' : 'Cari wajah...'}
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -1204,15 +1239,15 @@ const Absen = () => {
                             <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">
                               {outlet ? '📸 Wajah + Kanan' : '📸 Selfie Wajah'}
                             </p>
-                            <div className={`rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-900 ${outlet ? '' : 'w-2/3 mx-auto'}`} style={{ aspectRatio: '3/4' }}>
-                              <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Selfie" />
+                            <div className={`rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black flex items-center justify-center ${outlet ? '' : 'w-2/3 mx-auto'}`}>
+                              <img src={fotoBase64 || ''} className="w-full h-auto max-h-[60vh] object-contain" alt="Selfie" />
                             </div>
                           </div>
                           {outlet && (
                             <div className="flex flex-col gap-1">
                               <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">📸 Wajah + Kiri</p>
-                              <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-900" style={{ aspectRatio: '3/4' }}>
-                                <img src={fotoKiriBase64 || ''} className="w-full h-full object-contain" alt="Kiri" />
+                              <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black flex items-center justify-center">
+                                <img src={fotoKiriBase64 || ''} className="w-full h-auto max-h-[60vh] object-contain" alt="Kiri" />
                               </div>
                             </div>
                           )}
@@ -1318,10 +1353,10 @@ const Absen = () => {
               const FotoSlot = ({ src, label, badge, badgeColor }: { src?: string; label: string; badge: string; badgeColor: string }) => (
                 <div className="flex flex-col gap-1">
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-                  <div className="relative rounded-2xl overflow-hidden bg-gray-50 border border-gray-200 shadow-sm" style={{ aspectRatio: '3/4' }}>
+                  <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center">
                     {src
-                      ? <img src={prosesUrlFoto(src)} className="w-full h-full object-cover" alt={label} />
-                      : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-300" /><p className="text-[10px] text-gray-300 font-bold">Tidak ada foto</p></div>
+                      ? <img src={prosesUrlFoto(src)} className="w-full h-auto max-h-[300px] object-contain" alt={label} />
+                      : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
                     }
                     <div className={`absolute top-2 left-2 ${badgeColor} text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20`}>{badge}</div>
                   </div>
