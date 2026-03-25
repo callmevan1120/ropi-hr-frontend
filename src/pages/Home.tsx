@@ -286,12 +286,14 @@ const Home = () => {
                     id: 'absen', title: '1. Cara Absen Harian',
                     content: (
                       <ul className="list-decimal pl-4 space-y-1.5">
-                        <li>Pastikan Anda berada di area kantor/outlet.</li>
-                        <li>Klik tombol warna hijau/merah di atas (Absen Masuk/Keluar).</li>
-                        <li>Izinkan akses lokasi (GPS) dan Kamera jika diminta browser.</li>
-                        <li>Posisikan wajah Anda hingga kotak kamera berwarna hijau dan muncul teks "Jepret!".</li>
-                        <li><strong>Penting:</strong> Pastikan Anda memegang mesin fingerprint sesuai instruksi HR.</li>
-                        <li>Klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
+                        <li><strong>Validasi GPS:</strong> Klik tombol absen. Sistem akan mengecek lokasi Anda terlebih dahulu. Pastikan Anda berada di area kantor/outlet.</li>
+                        <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah (muncul teks "Jepret!").</li>
+                        <li><strong>Foto Pertama:</strong> Jepret foto Wajah + Tangan Kanan (sesuai instruksi HR/pegang mesin kasir).</li>
+                        {outlet && (
+                          <li><strong>Foto Kedua (Khusus Outlet):</strong> Jepret foto tambahan untuk Wajah + Tangan Kiri.</li>
+                        )}
+                        <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
+                        <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik tombol "Kirim" dan tunggu hingga berhasil.</li>
                       </ul>
                     )
                   },
