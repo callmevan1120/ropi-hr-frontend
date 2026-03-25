@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import BottomNav from '../components/BottomNav';
 
 declare global { interface Window { faceapi: any; } }
 
 interface User {
   name: string;
-  role?: string;
+  role?: string;       // = designation dari ERPNext (Security/Satpam/dll)
   employee_id: string;
   branch?: string;
 }
@@ -125,6 +126,7 @@ const getJamShiftKantor = (
       out: tambahMenit(jamKeluar,  30),
     };
   }
+
   return { in: jamMasuk, out: jamKeluar };
 };
 
@@ -222,6 +224,8 @@ const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): 
   const isLokasiJakarta = lokasi.includes('jakarta');
   const isBranchKlaten  = branch.includes('klaten') || branch.includes('ph');
   const isBranchJakarta = branch.includes('jakarta');
+
+  // Strict Validation: Jika Branch vs Lokasi Absen tidak cocok, Tolak.
   if (isLokasiKlaten  && !isBranchKlaten)  return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
   if (isLokasiJakarta && !isBranchJakarta) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
   return null;
@@ -236,35 +240,35 @@ const hitungJarak = (lat1: number, lng1: number, lat2: number, lng2: number) => 
 };
 
 // ─────────────────────────────────────────────
-// OVERLAY TEXT UNTUK FOTO WATERMARK (ESTETIK + LOGO)
+// OVERLAY WATERMARK: Logo + 3 Baris Estetik
 // ─────────────────────────────────────────────
 const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, lokasi: string) => {
   const now = new Date();
-  const jam = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const tgl = now.toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' });
-  const loc = `\u{1F4CD} ${lokasi}`;
+  const jam = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+  const tgl = now.toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  const loc = `📍 ${lokasi}`;
 
   const pad = 12;
-  const gap = 6;
-  const logoSize = 48; // Ukuran logo Ropi
+  const gap = 4;
+  const logoSize = 46;
 
-  const fsJam = 24; // Font size besar untuk jam
-  const fsTgl = 12; // Font size kecil untuk tanggal & lokasi
+  const fsJam = 22; 
+  const fsTglLoc = 12; 
 
   ctx.font = `900 ${fsJam}px sans-serif`;
   const twJam = ctx.measureText(jam).width;
-  ctx.font = `600 ${fsTgl}px sans-serif`;
+  ctx.font = `600 ${fsTglLoc}px sans-serif`;
   const twTgl = ctx.measureText(tgl).width;
   const twLoc = ctx.measureText(loc).width;
 
   const textW = Math.max(twJam, twTgl, twLoc);
-  const bw = pad + logoSize + gap + textW + pad;
-  const bh = pad + fsJam + gap + fsTgl + gap + fsTgl + pad;
+  const bw = pad + logoSize + 10 + textW + pad;
+  const bh = pad + fsJam + gap + fsTglLoc + gap + fsTglLoc + pad;
 
   const x = 12;
   const y = h - bh - 12;
 
-  // Background Gradient Semi Transparan
+  // Background Box Semi Transparan
   const grad = ctx.createLinearGradient(x, y, x + bw, y + bh);
   grad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
   grad.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
@@ -274,11 +278,11 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
   ctx.roundRect(x, y, bw, bh, 12);
   ctx.fill();
 
-  const textX = x + pad + logoSize + gap;
+  const textX = x + pad + logoSize + 10;
   let textY = y + pad;
 
   // Jam
-  ctx.fillStyle = '#fbc02d'; // Kuning ropi
+  ctx.fillStyle = '#fbc02d'; 
   ctx.font = `900 ${fsJam}px sans-serif`;
   ctx.textBaseline = 'top';
   ctx.fillText(jam, textX, textY);
@@ -286,15 +290,17 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
 
   // Tanggal
   ctx.fillStyle = '#ffffff';
-  ctx.font = `600 ${fsTgl}px sans-serif`;
+  ctx.font = `600 ${fsTglLoc}px sans-serif`;
   ctx.fillText(tgl, textX, textY);
-  textY += fsTgl + gap;
+  textY += fsTglLoc + gap;
 
-  // Lokasi
-  ctx.fillStyle = '#cbd5e1'; // Abu-abu terang
-  ctx.fillText(loc, textX, textY);
+  // Lokasi 
+  ctx.fillStyle = '#cbd5e1'; 
+  let finalLoc = loc;
+  if (finalLoc.length > 30) finalLoc = finalLoc.substring(0, 30) + '...';
+  ctx.fillText(finalLoc, textX, textY);
 
-  // Gambar Logo
+  // Gambar Logo Ropi
   return new Promise<void>((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -304,10 +310,7 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
       ctx.drawImage(img, x + pad, logoY, logoSize, logoSize);
       resolve();
     };
-    img.onerror = () => {
-      // Resolve walau logo gagal diload, agar absen tidak macet
-      resolve();
-    };
+    img.onerror = () => resolve(); 
   });
 };
 
@@ -321,7 +324,6 @@ const Absen = () => {
   const BACKEND      = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const ERPNEXT_URL  = 'http://103.187.147.240';
   const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
-  const DAFTAR_IP_KANTOR = ['103.144.170.15'];
 
   // ── state data ──
   const [user,          setUser]          = useState<User | null>(null);
@@ -366,7 +368,6 @@ const Absen = () => {
   const isDrawingRef       = useRef(false);
   const lastPosRef         = useRef<{ x: number; y: number } | null>(null);
   const cameraStepRef      = useRef(cameraStep);
-
   useEffect(() => { cameraStepRef.current = cameraStep; }, [cameraStep]);
 
   // ── derived ──
@@ -386,9 +387,6 @@ const Absen = () => {
         { n: 4, icon: 'fa-paper-plane', label: 'Kirim' },
       ];
 
-  // ─────────────────────────────────────────
-  // Init
-  // ─────────────────────────────────────────
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) { navigate('/'); return; }
@@ -417,9 +415,7 @@ const Absen = () => {
 
   useEffect(() => { return () => matikanKamera(); }, []);
 
-  // ─────────────────────────────────────────
-  // Canvas TTD – setup event listener (SQUARE RATIO)
-  // ─────────────────────────────────────────
+  // Canvas TTD – setup event listener
   useEffect(() => {
     if (cameraStep !== 3) return;
 
@@ -430,9 +426,8 @@ const Absen = () => {
       if (!ctx) return;
 
       const rect  = canvas.getBoundingClientRect();
-      // Bikin TTD kotak (aspect-square) biar proporsional di HP
       canvas.width  = rect.width || 300;
-      canvas.height = rect.width || 300; 
+      canvas.height = rect.height || 200; 
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.strokeStyle = '#1e293b';
@@ -517,9 +512,6 @@ const Absen = () => {
     setCameraStep(4);
   };
 
-  // ─────────────────────────────────────────
-  // API calls
-  // ─────────────────────────────────────────
   const ambilMasterShift = async () => {
     try {
       const res  = await fetch(`${BACKEND}/api/attendance/shifts`);
@@ -607,17 +599,10 @@ const Absen = () => {
     
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
 
-    let currentIP = '';
-    try {
-      const resIp  = await fetch('https://api.ipify.org?format=json');
-      const dataIp = await resIp.json();
-      currentIP = dataIp.ip;
-    } catch { console.warn('Gagal cek IP'); }
-    const isIpValid = DAFTAR_IP_KANTOR.includes(currentIP);
-
-    // Karyawan outlet radius dan akurasinya dilonggarkan
-    const MAX_AKURASI = outlet ? 300 : 100; 
-    const RADIUS_MIN = 500;  
+    // KETATKAN KEMBALI: Bypass WIFI Dihapus Total!
+    // Rentang GPS dinaikkan menjadi 300m agar di dalam ruangan tetap aman.
+    const MAX_AKURASI = 300; 
+    const RADIUS_MIN = 150; // Jarak minimal radius yang diizinkan (150m)
 
     navigator.geolocation.getCurrentPosition(
       async pos => {
@@ -638,28 +623,23 @@ const Absen = () => {
           }
         }
 
-        if ((terdekat.valid && akurasi <= MAX_AKURASI) || isIpValid) {
-          let errorBranch = null;
-          if (!isIpValid) errorBranch = cekBranchVsLokasi(user?.branch, terdekat.nama);
+        // Tidak ada cek isIpValid lagi. Murni GPS!
+        if (terdekat.valid && akurasi <= MAX_AKURASI) {
+          // CEK STRICT LOKASI KANTOR VS BRANCH
+          let errorBranch = cekBranchVsLokasi(user?.branch, terdekat.nama);
           
           if (errorBranch) {
             setGpsStatus({ tipe: 'error', pesan: errorBranch });
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
-            // Jika outlet, lokasi pakai nama cabang / reverse geocode. Jika IP valid, pakai cabang.
+            // Jika outlet, lokasi pakai reverse geocode
             let nm = terdekat.nama;
             if (outlet) {
                nm = user?.branch || await reverseGeocode(coords.lat, coords.lng);
-            } else if (isIpValid) {
-               nm = user?.branch || LOKASI_FALLBACK[0].nama;
             }
             
             setNamaLokasi(nm);
-            const pesanValid = isIpValid
-              ? `Valid: ${nm} (via Wi-Fi) ✓`
-              : `Valid: ${nm} (Akurasi: ${Math.round(akurasi)}m) ✓`;
-
-            setGpsStatus({ tipe: 'ok', pesan: pesanValid });
+            setGpsStatus({ tipe: 'ok', pesan: `Valid: ${nm} (Akurasi: ${Math.round(akurasi)}m) ✓` });
             setJepretState({ aktif: false, teks: 'Buka Kamera...' });
             await nyalakanKamera();
           }
@@ -673,17 +653,10 @@ const Absen = () => {
         }
       },
       async () => {
-        if (isIpValid) {
-          setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng });
-          setNamaLokasi(user?.branch || LOKASI_FALLBACK[0].nama);
-          setGpsStatus({ tipe: 'ok', pesan: `Valid: ${user?.branch || LOKASI_FALLBACK[0].nama} (via Wi-Fi) ✓` });
-          setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-          await nyalakanKamera();
-        } else {
-          setNamaLokasi('GPS Nonaktif');
-          setGpsStatus({ tipe: 'error', pesan: 'Mohon izinkan akses GPS dari browser.' });
-          setJepretState({ aktif: false, teks: 'Akses Ditolak' });
-        }
+        // Jika tidak diizinkan akses lokasi browser
+        setNamaLokasi('GPS Nonaktif');
+        setGpsStatus({ tipe: 'error', pesan: 'Mohon izinkan akses GPS dari browser.' });
+        setJepretState({ aktif: false, teks: 'Akses Ditolak' });
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
@@ -748,7 +721,7 @@ const Absen = () => {
     if (!video) return;
 
     const canvas = document.createElement('canvas');
-    // Resolusi tetap 3:4 (480x640)
+    // Maksa aspect ratio jadi 3:4 dengan resolusi standar
     const TARGET_W = 480;
     const TARGET_H = 640;
     canvas.width = TARGET_W;
@@ -756,7 +729,7 @@ const Absen = () => {
 
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      // Auto crop di tengah agar foto tidak gepeng
+      // Auto crop di tengah biar foto ga gepeng kalau resolusi kamera hp memanjang/landscape
       const videoRatio = video.videoWidth / video.videoHeight;
       const targetRatio = TARGET_W / TARGET_H;
 
@@ -771,7 +744,7 @@ const Absen = () => {
       }
 
       ctx.save();
-      // Selalu mode selfie (Mirror) untuk kamera wajah
+      // Mirror selalu untuk kamera depan
       if (cameraStep === 1 || cameraStep === 2) {
         ctx.translate(TARGET_W, 0);
         ctx.scale(-1, 1);
@@ -779,7 +752,7 @@ const Absen = () => {
       ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, TARGET_W, TARGET_H);
       ctx.restore();
 
-      // Tambah Watermark
+      // Tambah Watermark Estetik
       await drawOverlay(ctx, TARGET_W, TARGET_H, namaLokasi);
     }
 
@@ -788,6 +761,7 @@ const Absen = () => {
     if (cameraStep === 1) {
       setFotoBase64(base64);
       if (outlet) {
+        // Lanjut ke foto kiri (kamera gak dimatikan)
         setCameraStep(2);
         setKameraBorder('border-blue-400');
         setJepretState({ aktif: false, teks: 'Cari Wajah...' });
@@ -906,7 +880,7 @@ const Absen = () => {
       const adaIzin  = tanggalIzinSet.has(strTgl);
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
       
-      let dot: any = null;
+      let dot: React.ReactNode = null;
       if (isHariIni) {
         kelas += 'bg-[#3e2723] text-[#fbc02d] font-black';
       } else if (adaIzin && !checkin) {
@@ -1072,7 +1046,7 @@ const Absen = () => {
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
-                        let badgeEl: any = null;
+                        let badgeEl: React.ReactNode = null;
                         if (jamIn !== '-') {
                           const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
                           badgeEl = selisih > 0
@@ -1083,7 +1057,7 @@ const Absen = () => {
                           badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>;
                         }
 
-                        let badgeCepat: any = null;
+                        let badgeCepat: React.ReactNode = null;
                         if (jamOut !== '-') {
                           const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
                           if (selisih > 0) {
@@ -1091,7 +1065,7 @@ const Absen = () => {
                           }
                         }
 
-                        let badgeBelumKeluar: any = null;
+                        let badgeBelumKeluar: React.ReactNode = null;
                         if (jamIn !== '-' && jamOut === '-') {
                           badgeBelumKeluar = <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">Belum Keluar</span>;
                         }
@@ -1149,12 +1123,7 @@ const Absen = () => {
             </div>
 
             {/* BOTTOM NAV */}
-            <nav className="absolute bottom-0 left-0 right-0 w-full bg-white border-t border-gray-100 px-4 py-3 flex justify-between z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.02)]">
-              <Link to="/home" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-house text-xl mb-1" /><span className="text-[10px] font-black uppercase">Home</span></Link>
-              <div className="flex flex-col items-center text-[#3e2723] w-1/4"><i className="fa-solid fa-clipboard-user text-xl mb-1 drop-shadow-md" /><span className="text-[10px] font-black uppercase">Absen</span></div>
-              <Link to="/izin" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-envelope-open-text text-xl mb-1" /><span className="text-[10px] font-black uppercase">Izin</span></Link>
-              <Link to="/cuti" className="flex flex-col items-center text-gray-300 w-1/4 hover:text-[#3e2723] transition-colors"><i className="fa-solid fa-calendar-minus text-xl mb-1" /><span className="text-[10px] font-black uppercase">Cuti</span></Link>
-            </nav>
+            <BottomNav />
 
             {/* ══════════════════════════════════
                 MODAL ABSEN
@@ -1235,7 +1204,7 @@ const Absen = () => {
                           {/* Video */}
                           <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
                           
-                          {/* Live Overlay Info */}
+                          {/* Live Overlay Info (Tampilan di layar HP sebelum jepret) */}
                           <div className="absolute bottom-3 left-3 z-20 bg-black/60 rounded-md px-2 py-1.5 pointer-events-none select-none">
                             <p className="text-white text-[9px] font-mono leading-tight">{jamModal}</p>
                             <p className="text-yellow-200 text-[9px] font-mono leading-tight">📍 {namaLokasi}</p>
@@ -1282,7 +1251,7 @@ const Absen = () => {
 
                     {/* ── Step 4: Review & kirim ── */}
                     {cameraStep === 4 && (
-                      <>
+                      <div className="flex flex-col gap-4">
                         <div className="bg-blue-50 border border-blue-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm">
                           <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0"><i className="fa-solid fa-eye" /></div>
                           <div>
@@ -1291,34 +1260,58 @@ const Absen = () => {
                           </div>
                         </div>
 
-                        {/* Foto selfie preview (object-contain agar watermark utuh) */}
-                        <div className={`grid ${outlet ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
-                          <div className="flex flex-col gap-1">
-                            <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">
-                              {outlet ? '📸 Wajah + Kanan' : '📸 Selfie Wajah'}
-                            </p>
-                            <div className={`rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-gray-900 flex items-center justify-center aspect-[3/4] ${outlet ? 'w-full' : 'max-w-[240px] mx-auto w-full'}`}>
-                              <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Selfie" />
-                            </div>
-                          </div>
-                          {outlet && (
-                            <div className="flex flex-col gap-1">
-                              <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">📸 Wajah + Kiri</p>
-                              <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-gray-900 flex items-center justify-center aspect-[3/4] w-full">
-                                <img src={fotoKiriBase64 || ''} className="w-full h-full object-contain" alt="Kiri" />
+                        {/* CAROUSEL KHUSUS OUTLET ATAU KOTAK KANTOR */}
+                        {outlet ? (
+                          <div className="flex flex-col gap-2">
+                            <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory hide-scrollbar w-full">
+                              {/* Foto 1 */}
+                              <div className="shrink-0 w-[80%] snap-center flex flex-col gap-1.5">
+                                <p className="text-[10px] font-black text-gray-400 uppercase text-center">📸 Wajah + Kanan</p>
+                                <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black aspect-[3/4] flex items-center justify-center">
+                                  <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Kanan" />
+                                </div>
+                              </div>
+                              {/* Foto 2 */}
+                              <div className="shrink-0 w-[80%] snap-center flex flex-col gap-1.5">
+                                <p className="text-[10px] font-black text-gray-400 uppercase text-center">📸 Wajah + Kiri</p>
+                                <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black aspect-[3/4] flex items-center justify-center">
+                                  <img src={fotoKiriBase64 || ''} className="w-full h-full object-contain" alt="Kiri" />
+                                </div>
+                              </div>
+                              {/* TTD */}
+                              <div className="shrink-0 w-[80%] snap-center flex flex-col gap-1.5">
+                                <p className="text-[10px] font-black text-gray-400 uppercase text-center">✍️ Tanda Tangan</p>
+                                <div className="rounded-2xl border-2 border-gray-200 bg-white p-2 shadow-sm aspect-[3/4] flex items-center justify-center">
+                                  <img src={ttdBase64 || ''} className="w-full h-auto object-contain mix-blend-multiply" alt="TTD" />
+                                </div>
                               </div>
                             </div>
-                          )}
-                        </div>
-
-                        {/* TTD Review (Square) */}
-                        <div className="w-full max-w-[240px] mx-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-sm flex flex-col items-center">
-                          <p className="text-[10px] font-black text-gray-400 uppercase mb-2 border-b border-dashed border-gray-200 w-full text-center pb-1">✍️ Tanda Tangan</p>
-                          <div className="w-full aspect-square flex items-center justify-center">
-                            <img src={ttdBase64 || ''} className="max-w-full max-h-full object-contain mix-blend-multiply" alt="TTD" />
+                            <div className="flex justify-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-gray-300 animate-pulse"></span>
+                              <span className="w-2 h-2 rounded-full bg-gray-300 animate-pulse delay-75"></span>
+                              <span className="w-2 h-2 rounded-full bg-gray-300 animate-pulse delay-150"></span>
+                            </div>
+                            <p className="text-[9px] text-center text-gray-400 font-bold italic">Geser untuk melihat semua foto & TTD →</p>
                           </div>
-                        </div>
-                      </>
+                        ) : (
+                          // Layout Kantor biasa
+                          <>
+                            <div className="flex flex-col gap-1">
+                              <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">📸 Selfie Wajah</p>
+                              <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black flex items-center justify-center max-w-[240px] mx-auto w-full aspect-[3/4]">
+                                <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Selfie" />
+                              </div>
+                            </div>
+
+                            <div className="w-full max-w-[240px] mx-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-sm flex flex-col items-center">
+                              <p className="text-[10px] font-black text-gray-400 uppercase mb-2 border-b border-dashed border-gray-200 w-full text-center pb-1">✍️ Tanda Tangan</p>
+                              <div className="w-full aspect-square flex items-center justify-center">
+                                <img src={ttdBase64 || ''} className="max-w-full max-h-full object-contain mix-blend-multiply" alt="TTD" />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -1409,7 +1402,7 @@ const Absen = () => {
               const hasVerifImage = !!(detailModal.inData?.custom_verification_image || detailModal.outData?.custom_verification_image);
 
               const FotoSlot = ({ src, label, badge, badgeColor }: { src?: string; label: string; badge: string; badgeColor: string }) => (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
                     {src
@@ -1454,53 +1447,86 @@ const Absen = () => {
                       </div>
                     </div>
 
-                    <div className={`flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 md:grid ${hasVerifImage ? 'md:grid-cols-3' : 'md:grid-cols-2'} md:gap-5 md:items-start bg-gray-50`}>
-                      {/* Selfie utama */}
-                      <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-gray-500 text-[10px]" /></div>
-                          <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">{hasVerifImage ? 'Wajah + Kanan' : 'Selfie Wajah'}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <FotoSlot src={detailModal.inData?.custom_foto_absen}  label="Masuk"  badge="Masuk"  badgeColor="bg-green-500" />
-                          <FotoSlot src={detailModal.outData?.custom_foto_absen} label="Keluar" badge="Keluar" badgeColor="bg-orange-500" />
-                        </div>
-                      </div>
-
-                      {/* Foto verifikasi kiri (outlet) */}
-                      {hasVerifImage && (
-                        <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-                          <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-hand text-blue-500 text-[10px]" /></div>
-                            <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Wajah + Kiri</p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <FotoSlot src={detailModal.inData?.custom_verification_image}  label="Masuk"  badge="Masuk"  badgeColor="bg-green-500" />
-                            <FotoSlot src={detailModal.outData?.custom_verification_image} label="Keluar" badge="Keluar" badgeColor="bg-orange-500" />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Tanda tangan */}
-                      <div className={`bg-white p-4 rounded-3xl shadow-sm border border-gray-100 ${hasVerifImage ? 'md:col-span-3' : 'md:col-span-2'}`}>
-                        <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                          <div className="w-6 h-6 rounded-full bg-purple-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-pen-nib text-purple-500 text-[10px]" /></div>
-                          <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Tanda Tangan</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          {[{ label: 'Masuk', data: detailModal.inData }, { label: 'Keluar', data: detailModal.outData }].map(({ label, data }) => (
-                            <div key={label} className="flex flex-col gap-1.5">
-                              <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-                              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-square">
-                                {data?.custom_signature
-                                  ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt={`TTD ${label}`} />
-                                  : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
-                                }
+                    <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 bg-gray-50">
+                      
+                      {/* Kalau Outlet (Punya Foto Kiri), pakai carousel biar rapi di HP */}
+                      {hasVerifImage ? (
+                        <div className="flex flex-col gap-6">
+                           <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
+                              <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
+                                <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-blue-500 text-[10px]" /></div>
+                                <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Masuk</p>
                               </div>
-                            </div>
-                          ))}
+                              <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                                 <FotoSlot src={detailModal.inData?.custom_foto_absen} label="Wajah + Kanan" badge="Masuk" badgeColor="bg-green-500" />
+                                 <FotoSlot src={detailModal.inData?.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />
+                                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
+                                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-square">
+                                       {detailModal.inData?.custom_signature ? <img src={prosesUrlFoto(detailModal.inData.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                       <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
+                                    </div>
+                                 </div>
+                              </div>
+                              <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Masuk →</p>
+                           </div>
+
+                           {detailModal.outData && (
+                             <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
+                                <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
+                                  <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-orange-500 text-[10px]" /></div>
+                                  <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Keluar</p>
+                                </div>
+                                <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                                   <FotoSlot src={detailModal.outData?.custom_foto_absen} label="Wajah + Kanan" badge="Keluar" badgeColor="bg-orange-500" />
+                                   <FotoSlot src={detailModal.outData?.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />
+                                   <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
+                                      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-square">
+                                         {detailModal.outData?.custom_signature ? <img src={prosesUrlFoto(detailModal.outData.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Keluar" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                         <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
+                                      </div>
+                                   </div>
+                                </div>
+                                <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Keluar →</p>
+                             </div>
+                           )}
                         </div>
-                      </div>
+                      ) : (
+                        // Layout Kantor Biasa
+                        <>
+                          <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+                            <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
+                              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-gray-500 text-[10px]" /></div>
+                              <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Selfie Wajah</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <FotoSlot src={detailModal.inData?.custom_foto_absen}  label="Masuk"  badge="Masuk"  badgeColor="bg-green-500" />
+                              <FotoSlot src={detailModal.outData?.custom_foto_absen} label="Keluar" badge="Keluar" badgeColor="bg-orange-500" />
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+                            <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
+                              <div className="w-6 h-6 rounded-full bg-purple-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-pen-nib text-purple-500 text-[10px]" /></div>
+                              <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Tanda Tangan</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              {[{ label: 'Masuk', data: detailModal.inData }, { label: 'Keluar', data: detailModal.outData }].map(({ label, data }) => (
+                                <div key={label} className="flex flex-col gap-1.5">
+                                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
+                                  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-square">
+                                    {data?.custom_signature
+                                      ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt={`TTD ${label}`} />
+                                      : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
+                                    }
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div className="p-4 shrink-0 bg-white border-t border-gray-100">
