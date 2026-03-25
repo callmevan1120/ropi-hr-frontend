@@ -8,6 +8,7 @@ interface User {
   role?: string;       // = designation dari ERPNext (Security/Satpam/dll)
   employee_id: string;
   branch?: string;
+  designation?: string; // untuk deteksi satpam
 }
 
 interface Lokasi {
@@ -86,9 +87,6 @@ const isRamadhan = (tanggal?: Date): boolean => {
 
 // ─────────────────────────────────────────────
 // HELPER: klasifikasi karyawan
-// isKaryawanKantor  → PH Klaten atau Jakarta  (selfie + TTD)
-// isKaryawanOutlet  → cabang lain             (selfie kanan + selfie kiri + TTD)
-// isSatpam          → Satpam / Security di kantor (jam ±30 menit)
 // ─────────────────────────────────────────────
 const isKaryawanKantor = (branch?: string): boolean => {
   if (!branch) return false;
@@ -105,13 +103,6 @@ const isSatpam = (role?: string): boolean => {
 
 // ─────────────────────────────────────────────
 // HELPER: jam shift KANTOR (PH Klaten & Jakarta)
-// Jadwal:
-//   Senin–Kamis Ramadhan     07:00–15:30
-//   Jumat Ramadhan           07:00–16:00
-//   Senin–Kamis Non-Ramadhan 07:30–16:30
-//   Jumat Non-Ramadhan       07:30–17:00
-//
-// Satpam: masuk 30 menit lebih awal, pulang 30 menit lebih lambat
 // ─────────────────────────────────────────────
 const getJamShiftKantor = (
   tglDate: Date,
@@ -144,9 +135,6 @@ const getJamShiftKantor = (
 
 // ─────────────────────────────────────────────
 // HELPER: resolusi nama shift → jam { in, out }
-// Prioritas:
-//   1. Outlet → pakai masterShifts dari ERPNext (shiftNameFromRecord)
-//   2. Kantor/Satpam → hitung dari hari & Ramadhan
 // ─────────────────────────────────────────────
 const getJamShift = (
   shiftNameFromRecord: string | undefined,
@@ -158,16 +146,13 @@ const getJamShift = (
   const tglDate = parseLokalDate(tgl);
   const kantor  = isKaryawanKantor(branchUser);
 
-  // Karyawan outlet → ambil dari ERPNext shift
   if (!kantor) {
     if (shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
       return masterShifts[shiftNameFromRecord];
     }
-    // fallback jika shift tidak ketemu di master
     return { in: '08:00', out: '17:00' };
   }
 
-  // Karyawan/satpam kantor → hitung berdasarkan kalender
   const satpamFlag = isSatpam(roleUser);
   return getJamShiftKantor(tglDate, satpamFlag);
 };
@@ -192,7 +177,6 @@ const getNamaShiftKantor = (
 
 // ─────────────────────────────────────────────
 // HELPER: validasi nama shift dari record
-//   → deteksi mismatch Senin-Kamis vs Jumat
 // ─────────────────────────────────────────────
 const validasiShiftName = (
   shiftFromRecord: string | undefined,
@@ -208,12 +192,10 @@ const validasiShiftName = (
   const kantor    = isKaryawanKantor(branch);
   const satpamFlag = isSatpam(role);
 
-  // Outlet: pakai shift dari record (ERPNext)
   if (!kantor) {
     return shiftFromRecord || '';
   }
 
-  // Kantor: hitung dari kalender, abaikan shift dari record jika mismatch
   const shiftLokal = getNamaShiftKantor(tglDate, branch, satpamFlag);
 
   if (isWeekend || !shiftFromRecord) return shiftLokal;
@@ -303,11 +285,6 @@ const Absen = () => {
   const [wajahStatus,      setWajahStatus]      = useState({ show: false, ok: false });
   const [kameraBorder,     setKameraBorder]     = useState('border-[#fbc02d]');
 
-  /**
-   * cameraStep:
-   *  KANTOR / SATPAM  : 1 (selfie) → 3 (TTD) → 4 (review)
-   *  OUTLET           : 1 (selfie kanan) → 2 (selfie kiri) → 3 (TTD) → 4 (review)
-   */
   const [cameraStep,        setCameraStep]        = useState(1);
   const [fotoBase64,        setFotoBase64]        = useState<string | null>(null);
   const [fotoKiriBase64,    setFotoKiriBase64]    = useState<string | null>(null); // outlet step-2
@@ -338,11 +315,6 @@ const Absen = () => {
   const outlet  = isKaryawanOutlet(user?.branch);
   const satpam  = isSatpam(user?.role);
 
-  // ─────────────────────────────────────────
-  // Steps indicator
-  // Kantor/Satpam : step 1, 3, 4
-  // Outlet        : step 1, 2, 3, 4
-  // ─────────────────────────────────────────
   const stepsData = outlet
     ? [
         { n: 1, icon: 'fa-camera',    label: 'Wajah+Kanan' },
@@ -469,9 +441,23 @@ const Absen = () => {
     };
   }, [cameraStep]);
 
-  // ─────────────────────────────────────────
-  // API calls
-  // ─────────────────────────────────────────
+  const bersihkanTTD = () => {
+    const canvas = ttdCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setIsTtdEmpty(true);
+  };
+
+  const simpanTTD = () => {
+    const canvas = ttdCanvasRef.current;
+    if (!canvas) return;
+    setTtdBase64(canvas.toDataURL('image/png'));
+    setCameraStep(4);
+  };
+
   const ambilMasterShift = async () => {
     try {
       const res  = await fetch(`${BACKEND}/api/attendance/shifts`);
@@ -539,20 +525,108 @@ const Absen = () => {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  const cekRadius = (lat: number, lng: number) => {
-    let terdekat = { valid: false, nama: '?', jarak: Infinity, radius: 100 };
-    for (const k of lokasiKantor) {
-      const jarak = Math.round(hitungJarak(lat, lng, k.lat, k.lng));
-      if (jarak <= k.radius) return { valid: true, nama: k.nama, jarak, radius: k.radius };
-      if (jarak < terdekat.jarak) terdekat = { valid: false, nama: k.nama, jarak, radius: k.radius };
-    }
-    return terdekat;
-  };
-
   const matikanKamera = () => {
     if (intervalJamRef.current)     window.clearInterval(intervalJamRef.current);
     if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+  };
+
+  const bukaModalAbsen = async (mode: string) => {
+    setModeAbsen(mode);
+    setFotoBase64(null);
+    setFotoKiriBase64(null);
+    setTtdBase64(null);
+    setIsTtdEmpty(true);
+    setCameraStep(1);
+    setIsModalAbsenOpen(true);
+    setKameraBorder('border-[#fbc02d]');
+    setWajahStatus({ show: false, ok: false });
+    setGpsStatus({ tipe: 'loading', pesan: 'Cek Wi-Fi & GPS...' });
+    setJepretState({ aktif: false, teks: 'Loading...' });
+    intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
+
+    let currentIP = '';
+    try {
+      const resIp  = await fetch('https://api.ipify.org?format=json');
+      const dataIp = await resIp.json();
+      currentIP = dataIp.ip;
+    } catch { console.warn('Gagal cek IP'); }
+    const isIpValid = DAFTAR_IP_KANTOR.includes(currentIP);
+
+    // FIX: Pelonggaran syarat GPS
+    const MAX_AKURASI = outlet ? 200 : 100; // Akurasi GPS boleh sampai 100m (kantor) atau 200m (outlet)
+    const RADIUS_MIN_OUTLET = 250;          // Minimal radius untuk outlet 250 meter
+
+    // Timpa radius bawaan server dengan radius yg lebih longgar khusus outlet
+    const lokasiEfektif = lokasiKantor.map(k => ({
+      ...k,
+      radius: (outlet && k.radius < RADIUS_MIN_OUTLET) ? RADIUS_MIN_OUTLET : k.radius
+    }));
+
+    const cekRadiusEfektif = (lat: number, lng: number) => {
+      let terdekat = { valid: false, nama: '?', jarak: Infinity, radius: 100 };
+      for (const k of lokasiEfektif) {
+        const jarak = Math.round(hitungJarak(lat, lng, k.lat, k.lng));
+        if (jarak <= k.radius) return { valid: true, nama: k.nama, jarak, radius: k.radius };
+        if (jarak < terdekat.jarak) terdekat = { valid: false, nama: k.nama, jarak, radius: k.radius };
+      }
+      return terdekat;
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const coords  = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const akurasi = pos.coords.accuracy;
+        setKoordinatGPS(coords);
+        
+        const cek = cekRadiusEfektif(coords.lat, coords.lng);
+        const isGpsValid = cek.valid && akurasi <= MAX_AKURASI;
+
+        if (isGpsValid || isIpValid) {
+          let errorBranch = null;
+          if (!isIpValid) errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
+          
+          if (errorBranch) {
+            setGpsStatus({ tipe: 'error', pesan: errorBranch });
+            setJepretState({ aktif: false, teks: 'Akses Ditolak' });
+          } else {
+            const namaLokasiTampil = cek.nama !== '?' ? cek.nama : LOKASI_FALLBACK[0].nama;
+            const pesanValid = isIpValid
+              ? `Valid: ${namaLokasiTampil} (via Wi-Fi) ✓`
+              : `Valid: ${cek.nama} (Akurasi: ${Math.round(akurasi)}m) ✓`;
+            setGpsStatus({ tipe: 'ok', pesan: pesanValid });
+            setJepretState({ aktif: false, teks: 'Buka Kamera...' });
+            await nyalakanKamera();
+          }
+        } else {
+          let pesanError = 'Lokasi Ditolak.';
+          if (!cek.valid) pesanError = `Jarak ${cek.jarak}m dari lokasi (Maks: ${cek.radius}m).`;
+          else if (akurasi > MAX_AKURASI) pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < ${MAX_AKURASI}m.`;
+          
+          setGpsStatus({ tipe: 'error', pesan: `${pesanError} (Bukan Wi-Fi)` });
+          setJepretState({ aktif: false, teks: 'Ditolak' });
+        }
+      },
+      async () => {
+        if (isIpValid) {
+          setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng });
+          setGpsStatus({ tipe: 'ok', pesan: `Valid: ${LOKASI_FALLBACK[0].nama} (via Wi-Fi) ✓` });
+          setJepretState({ aktif: false, teks: 'Buka Kamera...' });
+          await nyalakanKamera();
+        } else {
+          setGpsStatus({ tipe: 'error', pesan: 'GPS Ditolak & Bukan Wi-Fi Kantor' });
+          setJepretState({ aktif: false, teks: 'Akses Ditolak' });
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+    );
+  };
+
+  const tutupModal = () => {
+    matikanKamera();
+    setIsModalAbsenOpen(false);
+    setCameraStep(1);
+    if (searchParams.has('auto')) setSearchParams({});
   };
 
   const nyalakanKamera = async () => {
@@ -602,88 +676,6 @@ const Absen = () => {
     }, 600);
   };
 
-  // ─────────────────────────────────────────
-  // Buka / tutup modal
-  // ─────────────────────────────────────────
-  const bukaModalAbsen = async (mode: string) => {
-    setModeAbsen(mode);
-    setFotoBase64(null);
-    setFotoKiriBase64(null);
-    setTtdBase64(null);
-    setIsTtdEmpty(true);
-    setCameraStep(1);
-    setIsModalAbsenOpen(true);
-    setKameraBorder('border-[#fbc02d]');
-    setWajahStatus({ show: false, ok: false });
-    setGpsStatus({ tipe: 'loading', pesan: 'Cek Wi-Fi & GPS...' });
-    setJepretState({ aktif: false, teks: 'Loading...' });
-    intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
-
-    // Cek IP kantor
-    let currentIP = '';
-    try {
-      const resIp  = await fetch('https://api.ipify.org?format=json');
-      const dataIp = await resIp.json();
-      currentIP = dataIp.ip;
-    } catch { console.warn('Gagal cek IP'); }
-    const isIpValid = DAFTAR_IP_KANTOR.includes(currentIP);
-
-    navigator.geolocation.getCurrentPosition(
-      async pos => {
-        const coords  = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        const akurasi = pos.coords.accuracy;
-        setKoordinatGPS(coords);
-        const cek       = cekRadius(coords.lat, coords.lng);
-        const isGpsValid = cek.valid && akurasi <= 70;
-
-        if (isGpsValid || isIpValid) {
-          let errorBranch = null;
-          if (!isIpValid) errorBranch = cekBranchVsLokasi(user?.branch, cek.nama);
-          if (errorBranch) {
-            setGpsStatus({ tipe: 'error', pesan: errorBranch });
-            setJepretState({ aktif: false, teks: 'Akses Ditolak' });
-          } else {
-            const namaLokasiTampil = cek.nama !== '?' ? cek.nama : LOKASI_FALLBACK[0].nama;
-            const pesanValid = isIpValid
-              ? `Valid: ${namaLokasiTampil} (via Wi-Fi) ✓`
-              : `Valid: ${cek.nama} (Akurasi: ${Math.round(akurasi)}m) ✓`;
-            setGpsStatus({ tipe: 'ok', pesan: pesanValid });
-            setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-            await nyalakanKamera();
-          }
-        } else {
-          let pesanError = 'Lokasi Ditolak.';
-          if (!cek.valid)      pesanError = `Jarak ${cek.jarak}m dari kantor (Max: ${cek.radius}m).`;
-          else if (akurasi > 70) pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < 70m.`;
-          setGpsStatus({ tipe: 'error', pesan: `${pesanError} (Bukan Wi-Fi)` });
-          setJepretState({ aktif: false, teks: 'Ditolak' });
-        }
-      },
-      async () => {
-        if (isIpValid) {
-          setKoordinatGPS({ lat: LOKASI_FALLBACK[0].lat, lng: LOKASI_FALLBACK[0].lng });
-          setGpsStatus({ tipe: 'ok', pesan: `Valid: ${LOKASI_FALLBACK[0].nama} (via Wi-Fi) ✓` });
-          setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-          await nyalakanKamera();
-        } else {
-          setGpsStatus({ tipe: 'error', pesan: 'GPS Ditolak & Bukan Wi-Fi Kantor' });
-          setJepretState({ aktif: false, teks: 'Akses Ditolak' });
-        }
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-    );
-  };
-
-  const tutupModal = () => {
-    matikanKamera();
-    setIsModalAbsenOpen(false);
-    setCameraStep(1);
-    if (searchParams.has('auto')) setSearchParams({});
-  };
-
-  // ─────────────────────────────────────────
-  // Jepret foto
-  // ─────────────────────────────────────────
   const jepretFoto = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -700,32 +692,29 @@ const Absen = () => {
 
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      // Mirror (selfie)
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
+      if (cameraStep === 1 || cameraStep === 2) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     }
 
     const base64 = canvas.toDataURL('image/jpeg', 0.3);
 
     if (cameraStep === 1) {
-      // Foto pertama: wajah + tangan kanan (outlet) atau selfie biasa (kantor)
       setFotoBase64(base64);
       if (outlet) {
-        // Lanjut ke step 2: foto wajah + tangan kiri
         setCameraStep(2);
         setKameraBorder('border-blue-400');
         setJepretState({ aktif: false, teks: 'Cari Wajah...' });
         setWajahStatus({ show: false, ok: false });
       } else {
-        // Kantor/Satpam: langsung ke TTD
         if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
         matikanKamera();
         setCameraStep(3);
         setKameraBorder('border-purple-400');
       }
     } else if (cameraStep === 2) {
-      // Foto kedua (outlet): wajah + tangan kiri
       setFotoKiriBase64(base64);
       if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
       matikanKamera();
@@ -735,38 +724,12 @@ const Absen = () => {
     }
   };
 
-  // ─────────────────────────────────────────
-  // TTD
-  // ─────────────────────────────────────────
-  const bersihkanTTD = () => {
-    const canvas = ttdCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    setIsTtdEmpty(true);
-  };
-
-  const simpanTTD = () => {
-    const canvas = ttdCanvasRef.current;
-    if (!canvas) return;
-    setTtdBase64(canvas.toDataURL('image/png'));
-    setCameraStep(4);
-  };
-
-  // ─────────────────────────────────────────
-  // Kirim absen ke backend
-  // ─────────────────────────────────────────
   const kirimAbsen = async () => {
-    if (!fotoBase64 || !ttdBase64 || !user) return;
-    if (outlet && !fotoKiriBase64) return; // outlet wajib foto kiri
-
+    if (!fotoBase64 || (!fotoKiriBase64 && outlet) || !ttdBase64 || !user) return;
     setIsKirimLoading(true);
 
-    // Nama shift yang dikirim ke backend
     const namaShiftKirim = outlet
-      ? '' // outlet: backend ambil dari ERPNext berdasarkan employee_id & tanggal
+      ? '' 
       : getNamaShiftKantor(new Date(), user.branch, satpam);
 
     try {
@@ -779,9 +742,7 @@ const Absen = () => {
           latitude:                  koordinatGPS?.lat || LOKASI_FALLBACK[0].lat,
           longitude:                 koordinatGPS?.lng || LOKASI_FALLBACK[0].lng,
           branch:                    user.branch || '',
-          // foto utama: wajah (+tangan kanan untuk outlet)
           image_verification:        fotoBase64,
-          // foto kiri hanya untuk outlet
           custom_verification_image: outlet ? fotoKiriBase64 : undefined,
           custom_signature:          ttdBase64,
           shift:                     namaShiftKirim,
@@ -801,26 +762,25 @@ const Absen = () => {
     setIsKirimLoading(false);
   };
 
-  // ─────────────────────────────────────────
-  // Group riwayat per tanggal
-  // ─────────────────────────────────────────
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
     const tgl = item.time?.substring(0, 10) || item.attendance_date || '';
     if (!groupedRiwayat[tgl]) groupedRiwayat[tgl] = {};
+    
     if (item.log_type === 'IN') {
-      if (!groupedRiwayat[tgl].in || (item.time && groupedRiwayat[tgl].in?.time && item.time < groupedRiwayat[tgl].in!.time!))
+      const currentInTime = groupedRiwayat[tgl].in?.time;
+      if (!groupedRiwayat[tgl].in || (item.time && currentInTime && item.time < currentInTime)) {
         groupedRiwayat[tgl].in = item;
+      }
     }
     if (item.log_type === 'OUT') {
-      if (!groupedRiwayat[tgl].out || (item.time && groupedRiwayat[tgl].out?.time && item.time > groupedRiwayat[tgl].out!.time!))
+      const currentOutTime = groupedRiwayat[tgl].out?.time;
+      if (!groupedRiwayat[tgl].out || (item.time && currentOutTime && item.time > currentOutTime)) {
         groupedRiwayat[tgl].out = item;
+      }
     }
   });
 
-  // ─────────────────────────────────────────
-  // Rekap bulanan
-  // ─────────────────────────────────────────
   const rekapHadir = Object.keys(groupedRiwayat).length;
   let rekapTelat = 0;
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
@@ -849,9 +809,6 @@ const Absen = () => {
   const sortedTglKeys = Object.keys(groupedRiwayat).sort((a, b) => b.localeCompare(a));
   const tampilKeys    = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
 
-  // ─────────────────────────────────────────
-  // Render kalender mini
-  // ─────────────────────────────────────────
   const renderKalender = () => {
     const hariPertama = new Date(tahunAktif, bulanAktif, 1).getDay();
     const totalHari   = new Date(tahunAktif, bulanAktif + 1, 0).getDate();
@@ -864,6 +821,7 @@ const Absen = () => {
       const checkin  = dataIn?.time;
       const adaIzin  = tanggalIzinSet.has(strTgl);
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
+      
       let dot: React.ReactNode = null;
       if (isHariIni) {
         kelas += 'bg-[#3e2723] text-[#fbc02d] font-black';
@@ -894,9 +852,6 @@ const Absen = () => {
     return url;
   };
 
-  // ─────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
       <style>{`.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}`}</style>
@@ -935,7 +890,7 @@ const Absen = () => {
 
         {/* ── KANAN ── */}
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
-          <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto overflow-hidden">
+          <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
             {/* HEADER */}
             <div className="bg-[#3e2723] pt-12 pb-5 px-6 shrink-0 shadow-md z-10 rounded-b-[1.5rem]">
@@ -1040,19 +995,22 @@ const Absen = () => {
                             ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {formatDurasi(selisih)}</span>
                             : <span className="text-green-600 text-[9px] font-black">✓ Tepat</span>;
                         }
-                        if (adaIzinHariIni && !badgeEl)
+                        if (adaIzinHariIni && !badgeEl) {
                           badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>;
+                        }
 
                         let badgeCepat: React.ReactNode = null;
                         if (jamOut !== '-') {
                           const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
-                          if (selisih > 0)
+                          if (selisih > 0) {
                             badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cepat {formatDurasi(selisih)}</span>;
+                          }
                         }
 
                         let badgeBelumKeluar: React.ReactNode = null;
-                        if (jamIn !== '-' && jamOut === '-')
+                        if (jamIn !== '-' && jamOut === '-') {
                           badgeBelumKeluar = <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">Belum Keluar</span>;
+                        }
 
                         return (
                           <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-3 rounded-2xl border border-gray-100 flex flex-col gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
@@ -1070,7 +1028,8 @@ const Absen = () => {
                                 {badgeEl}{badgeCepat}{badgeBelumKeluar}
                               </div>
                             </div>
-                            <div className="bg-gray-50 border border-gray-100 rounded-xl py-2 px-4 flex items-center justify-between">
+                            
+                            <div className="bg-gray-50 border border-gray-100 rounded-xl py-2 px-4 flex items-center justify-between mt-0.5">
                               <div className="flex flex-col">
                                 <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Aktual</span>
                                 <div className="flex items-center gap-1.5 text-xs font-black text-[#3e2723]">
@@ -1255,14 +1214,14 @@ const Absen = () => {
                               {outlet ? '📸 Wajah + Kanan' : '📸 Selfie Wajah'}
                             </p>
                             <div className={`rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-50 ${outlet ? '' : 'w-1/2 mx-auto'}`} style={{ aspectRatio: '3/4' }}>
-                              <img src={fotoBase64!} className="w-full h-full object-cover" alt="Selfie" />
+                              <img src={fotoBase64 || ''} className="w-full h-full object-cover" alt="Selfie" />
                             </div>
                           </div>
                           {outlet && (
                             <div className="flex flex-col gap-1">
                               <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">📸 Wajah + Kiri</p>
                               <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-50" style={{ aspectRatio: '3/4' }}>
-                                <img src={fotoKiriBase64!} className="w-full h-full object-cover" alt="Kiri" />
+                                <img src={fotoKiriBase64 || ''} className="w-full h-full object-cover" alt="Kiri" />
                               </div>
                             </div>
                           )}
@@ -1272,7 +1231,7 @@ const Absen = () => {
                         <div className="w-full rounded-2xl border-2 border-gray-200 bg-white px-3 pt-2 pb-3 shadow-sm flex flex-col items-center">
                           <p className="text-[10px] font-black text-gray-400 uppercase mb-1">✍️ Tanda Tangan</p>
                           <div className="w-full border-t border-dashed border-gray-200 pt-1">
-                            <img src={ttdBase64!} className="w-full object-contain" style={{ maxHeight: '60px' }} alt="TTD" />
+                            <img src={ttdBase64 || ''} className="w-full object-contain" style={{ maxHeight: '60px' }} alt="TTD" />
                           </div>
                         </div>
                       </>
@@ -1473,7 +1432,6 @@ const Absen = () => {
 
           </div>
         </div>
-
       </div>
     </div>
   );
