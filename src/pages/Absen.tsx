@@ -1221,7 +1221,7 @@ const Absen = () => {
                       {(cameraStep === 1 || cameraStep === 2) ? (
                         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold ${gpsStatus.tipe === 'error' ? 'bg-red-900/50 text-red-300' : gpsStatus.tipe === 'ok' ? 'bg-green-900/40 text-green-300' : 'bg-white/10 text-white/70'}`}>
                           {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'}`} />}
-                          <span className="truncate max-w-[180px]">{gpsStatus.pesan}</span>
+                          <span className="line-clamp-2 max-w-[200px] leading-tight">{gpsStatus.pesan}</span>
                         </div>
                       ) : <div className="flex-1" />}
 
