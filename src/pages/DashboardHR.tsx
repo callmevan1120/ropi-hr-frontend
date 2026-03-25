@@ -65,9 +65,6 @@ const isRamadhan = (): boolean => {
 };
 
 // Derive nama label shift dari tanggal (tanpa info branch per karyawan, default PH Klaten)
-// Sama persis dengan getShiftKantor di Absen.tsx —
-// selalu derive dari tanggal, ABAIKAN nama shift dari ERPNext
-// karena ERPNext hanya punya shift Senin-Kamis, sedangkan Jumat di-override manual
 const getShiftLabel = (tanggal: string): string => {
   const tglDate = new Date(tanggal);
   const hari = tglDate.getDay();
@@ -87,8 +84,6 @@ const getJamShift = (
   const tglDate = new Date(tanggal);
   const isFriday = tglDate.getDay() === 5;
   const ramadhan = isRamadhan();
-  // Kalau Jumat: pakai jam override, JANGAN pakai shift ERPNext (yang isinya Senin-Kamis)
-  // Kalau bukan Jumat: coba lookup dari masterShifts dulu
   if (!isFriday && shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
     return masterShifts[shiftNameFromRecord];
   }
@@ -115,7 +110,7 @@ const DashboardHR = () => {
   const [bulanAktif, setBulanAktif] = useState(localISOTime.substring(0, 7));
 
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
-  const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null); // State untuk akordion bulan
+  const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
 
   // State untuk Filter & Pencarian
   const [searchQuery, setSearchQuery] = useState('');
@@ -174,7 +169,7 @@ const DashboardHR = () => {
 
         result.data.forEach((item: RiwayatAbsen) => {
           if (!grouped[item.employee]) {
-            // Karena di history tidak ada branch, untuk sementara kita tebak dari shift yang sering dipakai
+            // Evaluasi branch dari nama shift
             let branchAsumsi = 'Outlet';
             if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
             if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
@@ -188,7 +183,6 @@ const DashboardHR = () => {
             };
           }
           
-          // Perbaiki asumsi branch jika data bertambah
           if (item.shift?.toLowerCase().includes('klaten')) grouped[item.employee].branch = 'PH Klaten';
           if (item.shift?.toLowerCase().includes('jakarta')) grouped[item.employee].branch = 'Jakarta';
 
@@ -219,7 +213,7 @@ const DashboardHR = () => {
         const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
         setDataAbsen(arrData);
 
-        // Fetch leave per karyawan secara paralel
+        // Fetch leave
         if (filterMode === 'bulanan') {
           const leaveResults = await Promise.allSettled(
             arrData.map(emp =>
@@ -255,15 +249,13 @@ const DashboardHR = () => {
           setLeaveMap(newLeaveMap);
           setLeaveRawMap(newLeaveRawMap);
         } else {
-          // Harian: fetch leave dari seluruh bulan aktif agar dapat semua karyawan
-          // (termasuk yang hanya izin tapi tidak absen hari ini)
-          const bulanRef = tanggalAktif.substring(0, 7); // "YYYY-MM"
+          // Harian: gabungkan karyawan izin yang tidak absen
+          const bulanRef = tanggalAktif.substring(0, 7);
           const [yr, mo] = bulanRef.split('-').map(Number);
           const lastDay = new Date(yr, mo, 0).getDate();
           const fromBulan = `${bulanRef}-01`;
           const toBulan = `${bulanRef}-${lastDay}`;
 
-          // Fetch all-history sebulan untuk dapat semua employee_id
           let allEmployeeIds: { employee: string; employee_name: string; branch: string }[] = [...arrData];
           try {
             const resBulan = await fetch(`${BACKEND}/api/attendance/all-history?from=${fromBulan}&to=${toBulan}`);
@@ -278,16 +270,14 @@ const DashboardHR = () => {
                   empMap[item.employee] = { name: item.employee_name || item.employee, branch: branchAsumsi };
                 }
               });
-              // Merge — pastikan semua karyawan ada
               Object.entries(empMap).forEach(([id, info]) => {
                 if (!allEmployeeIds.find(e => e.employee === id)) {
                   allEmployeeIds.push({ employee: id, employee_name: info.name, branch: info.branch });
                 }
               });
             }
-          } catch { /* pakai arrData saja */ }
+          } catch { }
 
-          // Fetch leave semua karyawan
           const leaveResults = await Promise.allSettled(
             allEmployeeIds.map(emp =>
               fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}`)
@@ -313,7 +303,6 @@ const DashboardHR = () => {
               newLeaveMap[employee] = izinHariIni ? 1 : 0;
               newLeaveRawMap[employee] = data as any[];
 
-              // Kalau karyawan ini izin tapi tidak ada di arrData (tidak absen hari ini)
               if (izinHariIni && !arrData.find(e => e.employee === employee)) {
                 extraEmployees.push({
                   employee,
@@ -326,7 +315,6 @@ const DashboardHR = () => {
             }
           });
 
-          // Merge karyawan izin-only ke arrData
           if (extraEmployees.length > 0) {
             const merged = [...arrData, ...extraEmployees].sort((a, b) => a.employee_name.localeCompare(b.employee_name));
             setDataAbsen(merged);
@@ -353,7 +341,6 @@ const DashboardHR = () => {
     if (filteredDataAbsen.length === 0) { alert('Tidak ada data untuk di-download!'); return; }
     const dataExcel: any[] = [];
     filteredDataAbsen.forEach((emp) => {
-      // Expand izin per hari untuk Excel
       const empIzinDates: Record<string, string> = {};
       const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
       if (filterMode === 'bulanan') {
@@ -373,7 +360,6 @@ const DashboardHR = () => {
           }
         });
       } else {
-        // Harian: cek apakah tanggalAktif masuk izin
         const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
           const from = new Date(r.from_date);
           const to = new Date(r.to_date);
@@ -383,7 +369,6 @@ const DashboardHR = () => {
         if (izinHariIni) empIzinDates[tanggalAktif] = izinHariIni.leave_type;
       }
 
-      // Semua tanggal: absen + izin
       const allDates = Array.from(new Set([
         ...Object.keys(emp.logsByDate),
         ...Object.keys(empIzinDates),
@@ -401,7 +386,6 @@ const DashboardHR = () => {
         let pulangCepat = '-';
         if (log.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) pulangCepat = formatDurasi(s); }
 
-        // Baris izin tanpa absen
         if (izinType && !log.in && !log.out) {
           dataExcel.push({
             'Tanggal': date,
@@ -443,7 +427,6 @@ const DashboardHR = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
-    // Sheet ringkasan per karyawan (bulanan saja)
     if (filterMode === 'bulanan') {
       const ringkasan = filteredDataAbsen.map(emp => ({
         'ID Karyawan': emp.employee,
@@ -468,11 +451,9 @@ const DashboardHR = () => {
 
   // 🔥 FILTER PENCARIAN DAN BRANCH 🔥
   const filteredDataAbsen = dataAbsen.filter(emp => {
-    // 1. Filter Pencarian Nama / ID
     const searchMatch = emp.employee_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                         emp.employee.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // 2. Filter Branch
     let branchMatch = true;
     if (activeTab === 'PH Klaten') branchMatch = emp.branch === 'PH Klaten';
     else if (activeTab === 'Jakarta') branchMatch = emp.branch === 'Jakarta';
@@ -500,7 +481,7 @@ const DashboardHR = () => {
 
   const tutupModal = () => {
     setDetailModal(null);
-    setExpandedDateHR(null); // Reset akordion saat tutup modal
+    setExpandedDateHR(null); 
   };
 
   // KOMPONEN FOTOSLOT REUSABLE
@@ -789,8 +770,8 @@ const DashboardHR = () => {
           })();
 
           return (
-            <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
-              <div className="bg-white w-full max-w-4xl md:max-h-[95vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn" style={{ maxHeight: '92vh' }}>
+            <div className="fixed inset-0 z-50 flex flex-col items-center justify-end md:justify-center md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
+              <div className="bg-white w-full md:max-w-4xl h-[95vh] md:h-auto md:max-h-[92vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
 
                 {/* ── HEADER mobile: nama + tombol tutup (sticky) ── */}
                 <div className="bg-[#3e2723] px-5 py-4 flex items-center gap-3 shrink-0 md:hidden">
@@ -827,7 +808,7 @@ const DashboardHR = () => {
                   </div>
 
                   {/* Info: shift, masuk/keluar, izin, peta */}
-                  <div className="p-4 md:p-8 md:flex-1 md:overflow-y-auto">
+                  <div className="p-4 md:p-8 md:flex-1 overflow-y-auto">
                     <div className="bg-[#fff8e1] px-4 py-3 rounded-2xl border border-[#fbc02d]/30 mb-3 flex items-center gap-3">
                       <i className="fa-solid fa-calendar-check text-[#fbc02d] shrink-0" />
                       <div>
@@ -863,13 +844,13 @@ const DashboardHR = () => {
 
                     <div className="flex flex-col gap-2">
                       {todayLog.in?.latitude && (
-                        <a href={`https://maps.google.com/?q=$${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                        <a href={`http://googleusercontent.com/maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                           <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                           <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                         </a>
                       )}
                       {todayLog.out?.latitude && (
-                        <a href={`https://maps.google.com/?q=$${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                        <a href={`http://googleusercontent.com/maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                           <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                           <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                         </a>
@@ -878,38 +859,61 @@ const DashboardHR = () => {
                   </div>
                 </div>
 
-                {/* ── KOLOM KANAN: Galeri foto (scrollable) ── */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/50">
-                  <h3 className="font-black text-[#3e2723] text-base mb-3 flex items-center gap-2">
-                    <i className="fa-solid fa-images text-[#fbc02d]" /> Galeri Autentikasi
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
-                    {[
-                      { label: 'Data Masuk', log: todayLog.in, iconColor: 'bg-green-100 text-green-600', icon: 'fa-arrow-right-to-bracket' },
-                      { label: 'Data Keluar', log: todayLog.out, iconColor: 'bg-orange-100 text-orange-600', icon: 'fa-arrow-right-from-bracket' },
-                    ].map(({ label, log, iconColor, icon }) => (
-                      <div key={label} className="flex flex-col gap-3 bg-white p-3 md:p-5 rounded-2xl shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                          <div className={`w-6 h-6 rounded-full ${iconColor} flex items-center justify-center shrink-0`}>
-                            <i className={`fa-solid ${icon} text-[10px]`} />
-                          </div>
-                          <p className="font-black text-[#3e2723] text-xs uppercase">{label}</p>
-                        </div>
-                        {log ? (
-                          <>
-                            <FotoSlot src={log.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge={label.includes('Masuk') ? "Masuk" : "Keluar"} badgeColor={label.includes('Masuk') ? "bg-green-500" : "bg-orange-500"} />
-                            {emp.branch === 'Outlet' && <FotoSlot src={log.custom_verification_image} label="Wajah + Kiri" badge={label.includes('Masuk') ? "Masuk" : "Keluar"} badgeColor={label.includes('Masuk') ? "bg-green-500" : "bg-orange-500"} />}
-                            <FotoSlot src={log.custom_signature} label="Tanda Tangan" badge={label.includes('Masuk') ? "Masuk" : "Keluar"} badgeColor={label.includes('Masuk') ? "bg-green-500" : "bg-orange-500"} isSignature />
-                          </>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center text-gray-300 py-10 gap-2 bg-gray-50 rounded-xl border border-gray-100">
-                            <i className="fa-solid fa-clock text-3xl" />
-                            <p className="text-[10px] font-bold">Belum Absen</p>
-                          </div>
-                        )}
+                {/* ── KOLOM KANAN: Galeri foto (Layout Konsisten By Event IN/OUT) ── */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50 flex flex-col gap-6 hide-scrollbar">
+                   {/* CONTAINER MASUK */}
+                   <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
+                      <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
+                        <div className="w-6 h-6 rounded-full bg-green-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-arrow-right-to-bracket text-green-500 text-[10px]" /></div>
+                        <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Data Masuk</p>
                       </div>
-                    ))}
-                  </div>
+                      
+                      {todayLog.in ? (
+                        <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                           <FotoSlot src={todayLog.in?.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
+                           {emp.branch === 'Outlet' && <FotoSlot src={todayLog.in?.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
+                           <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
+                              <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
+                              <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-square">
+                                 {todayLog.in?.custom_signature ? <img src={prosesUrlFoto(todayLog.in.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                 <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Masuk</div>
+                              </div>
+                           </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-gray-300 py-10 gap-2 bg-gray-50 rounded-xl border border-gray-100">
+                          <i className="fa-solid fa-clock text-3xl" />
+                          <p className="text-[10px] font-bold">Belum Absen Masuk</p>
+                        </div>
+                      )}
+                   </div>
+
+                   {/* CONTAINER KELUAR */}
+                   <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
+                      <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
+                        <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-arrow-right-from-bracket text-orange-500 text-[10px]" /></div>
+                        <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Data Keluar</p>
+                      </div>
+                      
+                      {todayLog.out ? (
+                        <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                           <FotoSlot src={todayLog.out?.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
+                           {emp.branch === 'Outlet' && <FotoSlot src={todayLog.out?.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
+                           <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
+                              <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
+                              <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-square">
+                                 {todayLog.out?.custom_signature ? <img src={prosesUrlFoto(todayLog.out.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Keluar" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                 <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Keluar</div>
+                              </div>
+                           </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-gray-300 py-10 gap-2 bg-gray-50 rounded-xl border border-gray-100">
+                          <i className="fa-solid fa-clock text-3xl" />
+                          <p className="text-[10px] font-bold">Belum Absen Keluar</p>
+                        </div>
+                      )}
+                   </div>
                 </div>
               </div>
             </div>
@@ -918,17 +922,17 @@ const DashboardHR = () => {
           // MODAL BULANAN DENGAN AKORDION FOTO
           const sortedDates = Object.keys(emp.logsByDate).sort((a,b) => b.localeCompare(a));
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
-              <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-zoomIn">
+            <div className="fixed inset-0 z-50 flex flex-col items-center justify-end md:justify-center p-0 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
+              <div className="bg-white w-full md:max-w-3xl h-[92vh] md:h-auto md:max-h-[92vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-zoomIn">
                 
                 {/* Header Modal Bulanan */}
-                <div className="bg-[#3e2723] p-6 relative flex justify-between items-center shrink-0">
+                <div className="bg-[#3e2723] p-5 md:p-6 relative flex justify-between items-center shrink-0">
                   <div>
-                    <h2 className="text-xl font-black text-[#fbc02d]">{emp.employee_name}</h2>
-                    <p className="text-xs font-bold text-white/70 uppercase tracking-wider">{emp.employee} • Rekap {bulanAktif}</p>
+                    <h2 className="text-lg md:text-xl font-black text-[#fbc02d]">{emp.employee_name}</h2>
+                    <p className="text-[10px] md:text-xs font-bold text-white/70 uppercase tracking-wider">{emp.employee} • Rekap {bulanAktif}</p>
                   </div>
-                  <button onClick={tutupModal} className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors border border-white/20">
-                    <i className="fa-solid fa-xmark text-lg" />
+                  <button onClick={tutupModal} className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors border border-white/20">
+                    <i className="fa-solid fa-xmark text-sm md:text-lg" />
                   </button>
                 </div>
 
@@ -1010,7 +1014,7 @@ const DashboardHR = () => {
                             </div>
                           </div>
 
-                          {/* Akordion Body (Expanded Foto & TTD) */}
+                          {/* Akordion Body (Expanded Foto & TTD By Event) */}
                           {isExpanded && (
                             <div className="p-4 bg-gray-50 border-t border-gray-100">
                               <div className="sm:hidden flex justify-between mb-4 bg-white p-2 rounded-xl border border-gray-100">
@@ -1031,22 +1035,41 @@ const DashboardHR = () => {
                               ) : (!log.in && !log.out) ? (
                                 <div className="text-xs font-bold text-gray-400 text-center py-4">Belum ada absen</div>
                               ) : (
-                                <div className="flex overflow-x-auto gap-4 snap-x snap-mandatory hide-scrollbar pb-2">
+                                <div className="flex flex-col gap-4">
                                   {/* MASUK */}
                                   {log.in && (
-                                    <>
-                                      <FotoSlot src={log.in.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
-                                      {emp.branch === 'Outlet' && <FotoSlot src={log.in.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
-                                      <FotoSlot src={log.in.custom_signature} label="Tanda Tangan" badge="Masuk" badgeColor="bg-green-500" isSignature />
-                                    </>
+                                    <div>
+                                      <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-200 pb-1">Data Masuk</p>
+                                      <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                                        <FotoSlot src={log.in.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
+                                        {emp.branch === 'Outlet' && <FotoSlot src={log.in.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
+                                        <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
+                                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
+                                          <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-square">
+                                            {log.in.custom_signature ? <img src={prosesUrlFoto(log.in.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                            <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Masuk</div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
                                   )}
+                                  
                                   {/* KELUAR */}
                                   {log.out && (
-                                    <>
-                                      <FotoSlot src={log.out.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
-                                      {emp.branch === 'Outlet' && <FotoSlot src={log.out.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
-                                      <FotoSlot src={log.out.custom_signature} label="Tanda Tangan" badge="Keluar" badgeColor="bg-orange-500" isSignature />
-                                    </>
+                                    <div>
+                                      <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-200 pb-1">Data Keluar</p>
+                                      <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                                        <FotoSlot src={log.out.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
+                                        {emp.branch === 'Outlet' && <FotoSlot src={log.out.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
+                                        <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
+                                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
+                                          <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-square">
+                                            {log.out.custom_signature ? <img src={prosesUrlFoto(log.out.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Keluar" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                            <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Keluar</div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
                               )}
