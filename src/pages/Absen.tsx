@@ -347,6 +347,12 @@ const Absen = () => {
   const [shiftLoading,  setShiftLoading]  = useState(false);
   const [shiftError,    setShiftError]    = useState<string | null>(null);
 
+  // 🔥 PERBAIKAN: Ref untuk track state di dalam timeout/interval
+  const shiftLoadingRef = useRef(shiftLoading);
+  useEffect(() => { shiftLoadingRef.current = shiftLoading; }, [shiftLoading]);
+  const activeShiftRef = useRef(activeShift);
+  useEffect(() => { activeShiftRef.current = activeShift; }, [activeShift]);
+
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
   const [modeAbsen,        setModeAbsen]        = useState('MASUK');
   const [jamModal,         setJamModal]         = useState('--:--');
@@ -616,8 +622,22 @@ const Absen = () => {
     } catch { return 'GPS Aktif'; }
   };
 
+  // 🔥 PERBAIKAN: Menunggu shiftLoading sebelum mengecek activeShift
   const bukaModalAbsen = async (mode: string) => {
-    if (outlet && !activeShift) {
+    if (outlet && shiftLoadingRef.current) {
+      await new Promise<void>(resolve => {
+        let waited = 0;
+        const check = setInterval(() => {
+          waited += 300;
+          if (!shiftLoadingRef.current || waited >= 6000) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 300);
+      });
+    }
+
+    if (outlet && !activeShiftRef.current) {
       alert('⚠️ Shift kamu hari ini belum diatur/di-ACC oleh HRD. Silakan ajukan shift atau hubungi HRD terlebih dahulu.');
       return;
     }
@@ -814,7 +834,7 @@ const Absen = () => {
     setIsKirimLoading(true);
 
     const namaShiftKirim = outlet
-      ? activeShift?.shift_name || '' 
+      ? activeShiftRef.current?.shift_name || '' 
       : getNamaShiftKantor(new Date(), user.branch, satpam);
 
     try {
@@ -1183,8 +1203,8 @@ const Absen = () => {
                         <p className="text-[#fbc02d] text-[9px] font-bold tracking-wide mt-1">
                           <i className="fa-solid fa-clock mr-1" />
                           {outlet 
-                            ? activeShift 
-                                ? `${activeShift.shift_name} • ${activeShift.start_time}-${activeShift.end_time}` 
+                            ? activeShiftRef.current 
+                                ? `${activeShiftRef.current.shift_name} • ${activeShiftRef.current.start_time}-${activeShiftRef.current.end_time}` 
                                 : 'Jadwal Shift belum diatur HRD'
                             : `${getNamaShiftKantor(new Date(), user?.branch, satpam)} • ${getJamShiftKantor(new Date(), satpam).in}-${getJamShiftKantor(new Date(), satpam).out}`
                           }
