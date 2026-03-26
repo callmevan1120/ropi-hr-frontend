@@ -60,7 +60,7 @@ const toMenit = (jam: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
-// LOGIKA RAMADHAN
+// LOGIKA RAMADHAN 
 const isRamadhan = (tanggalStr: string, ramadhanDates: string[]): boolean => {
   if (ramadhanDates.includes(tanggalStr)) return true;
 
@@ -148,6 +148,10 @@ const DashboardHR = () => {
   const [periodeMulai, setPeriodeMulai] = useState(localISOTime);
   const [periodeAkhir, setPeriodeAkhir] = useState(localISOTime);
 
+  // STATE PAGINATION 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
   const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
 
@@ -175,6 +179,11 @@ const DashboardHR = () => {
   }, [navigate]);
 
   useEffect(() => { tarikDataSemuaKaryawan(); }, [tanggalAktif, bulanAktif, periodeMulai, periodeAkhir, filterMode, masterShifts, lokasiKantor, ramadhanDates]);
+
+  // Reset pagination ke halaman 1 kalau filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeBranch, filterMode, tanggalAktif, bulanAktif, periodeMulai, periodeAkhir]);
 
   const ambilLiburRamadhan = async () => {
     try {
@@ -241,7 +250,6 @@ const DashboardHR = () => {
     }
 
     try {
-      // 🔥 PERBAIKAN: Menambahkan cache-buster agar selalu dapat data terbaru
       const res = await fetch(`${BACKEND}/api/attendance/all-history?from=${from}&to=${to}&_t=${Date.now()}`);
       const result = await res.json();
       if (result.success && result.data) {
@@ -293,7 +301,6 @@ const DashboardHR = () => {
           if (!grouped[item.employee].logsByDate[dateKey])
             grouped[item.employee].logsByDate[dateKey] = { in: null, out: null };
 
-          // 🔥 PERBAIKAN: MEMPRIORITASKAN LOG YANG MEMILIKI FOTO 🔥
           if (item.log_type === 'IN') {
             const curr = grouped[item.employee].logsByDate[dateKey].in;
             if (!curr) {
@@ -467,7 +474,6 @@ const DashboardHR = () => {
     setIsLoading(false);
   };
 
-  // PERBAIKAN: MELEWATKAN SEMUA FILE KE PROXY AGAR AMAN & BISA TAMPIL
   const prosesUrlFoto = (url?: string) => {
     if (!url) return '';
     if (url.startsWith('data:image')) return url;
@@ -566,8 +572,8 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
@@ -753,6 +759,11 @@ const DashboardHR = () => {
     </div>
   );
 
+  // LOGIKA PAGINATION
+  const totalPages = Math.ceil(filteredDataAbsen.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentData = filteredDataAbsen.slice(startIndex, startIndex + itemsPerPage);
+
   return (
     <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
 
@@ -875,7 +886,7 @@ const DashboardHR = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 md:px-8 mt-6 relative z-10">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 mt-6 relative z-10 flex flex-col h-full min-h-[500px]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center pt-24 text-gray-500">
             <i className="fa-solid fa-spinner fa-spin text-5xl mb-4 text-[#fbc02d]" />
@@ -889,126 +900,151 @@ const DashboardHR = () => {
             <p className="font-bold text-lg text-gray-500">Tidak ada karyawan yang sesuai filter.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {filteredDataAbsen.map((emp) => {
-              const todayLog = filterMode === 'harian' ? (emp.logsByDate[tanggalAktif] || { in: null, out: null }) : null;
-              const inJam = todayLog?.in ? formatJamLokal(todayLog.in.time) : '-';
-              const outJam = todayLog?.out ? formatJamLokal(todayLog.out.time) : '-';
-              const shiftInfo = getJamShift(todayLog?.in?.shift || todayLog?.out?.shift, tanggalAktif, masterShifts, ramadhanDates);
-              const shiftLabel = getShiftLabel(tanggalAktif, ramadhanDates);
-              const isTelat = todayLog?.in && toMenit(inJam) > toMenit(shiftInfo.in);
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {currentData.map((emp) => {
+                const todayLog = filterMode === 'harian' ? (emp.logsByDate[tanggalAktif] || { in: null, out: null }) : null;
+                const inJam = todayLog?.in ? formatJamLokal(todayLog.in.time) : '-';
+                const outJam = todayLog?.out ? formatJamLokal(todayLog.out.time) : '-';
+                const shiftInfo = getJamShift(todayLog?.in?.shift || todayLog?.out?.shift, tanggalAktif, masterShifts, ramadhanDates);
+                const shiftLabel = getShiftLabel(tanggalAktif, ramadhanDates);
+                const isTelat = todayLog?.in && toMenit(inJam) > toMenit(shiftInfo.in);
 
-              let avatarSrc = null;
-              if (filterMode === 'harian') avatarSrc = todayLog?.in?.custom_foto_absen;
-              else {
-                const firstAvailableLog = Object.values(emp.logsByDate).find(l => l.in?.custom_foto_absen);
-                if (firstAvailableLog) avatarSrc = firstAvailableLog.in!.custom_foto_absen;
-              }
+                let avatarSrc = null;
+                if (filterMode === 'harian') avatarSrc = todayLog?.in?.custom_foto_absen;
+                else {
+                  const firstAvailableLog = Object.values(emp.logsByDate).find(l => l.in?.custom_foto_absen);
+                  if (firstAvailableLog) avatarSrc = firstAvailableLog.in!.custom_foto_absen;
+                }
 
-              return (
-                <div
-                  key={emp.employee}
-                  onClick={() => setDetailModal(emp)}
-                  className="bg-white rounded-[1.5rem] p-5 shadow-[0_10px_30px_-10px_rgba(62,39,35,0.1)] hover:shadow-[0_15px_40px_-10px_rgba(251,192,45,0.3)] transition-all cursor-pointer border border-white hover:border-[#fbc02d] flex flex-col active:scale-95 group relative overflow-hidden"
+                return (
+                  <div
+                    key={emp.employee}
+                    onClick={() => setDetailModal(emp)}
+                    className="bg-white rounded-[1.5rem] p-5 shadow-[0_10px_30px_-10px_rgba(62,39,35,0.1)] hover:shadow-[0_15px_40px_-10px_rgba(251,192,45,0.3)] transition-all cursor-pointer border border-white hover:border-[#fbc02d] flex flex-col active:scale-95 group relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 left-0 w-full h-1 bg-[#fbc02d] opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                    <div className="absolute top-3 right-3">
+                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${
+                        emp.branch === 'PH Klaten' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                        emp.branch === 'Jakarta' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                        'bg-purple-50 text-purple-600 border-purple-100'
+                      }`}>
+                        {emp.branch}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-4 mb-3 mt-2">
+                      <div className="w-14 h-14 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 border-2 border-white shadow-sm relative">
+                        {avatarSrc
+                          ? <img src={prosesUrlFoto(avatarSrc)} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                          : <i className="fa-solid fa-user text-[#fbc02d] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl" />
+                        }
+                      </div>
+                      <div className="flex-1 pt-1">
+                        <h3 className="font-black text-[#3e2723] text-base leading-tight line-clamp-1">{emp.employee_name}</h3>
+                        {filterMode === 'harian' ? (
+                          isTelat
+                            ? <span className="inline-block mt-1.5 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Telat Masuk</span>
+                            : todayLog?.in
+                              ? <span className="inline-block mt-1.5 bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Hadir</span>
+                              : <span className="inline-block mt-1.5 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Belum Absen</span>
+                        ) : (
+                          <span className="inline-block mt-1.5 bg-[#fff8e1] text-[#fbc02d] border border-[#fbc02d]/50 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Rekap {filterMode === 'bulanan' ? 'Bulanan' : 'Periode'}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {filterMode === 'harian' && (
+                      <div className="bg-[#fff8e1] border border-[#fbc02d]/30 rounded-xl px-3 py-1.5 mb-3 flex items-center gap-2">
+                        <i className="fa-solid fa-calendar-check text-[#fbc02d] text-[10px] shrink-0" />
+                        <div>
+                          <p className="text-[9px] text-[#3e2723]/50 font-bold uppercase leading-none">Shift</p>
+                          <p className="text-[10px] font-black text-[#3e2723] leading-snug">{shiftLabel}</p>
+                          <p className="text-[10px] text-[#3e2723]/60 font-bold">{shiftInfo.in} – {shiftInfo.out}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {filterMode === 'harian' ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 mt-auto">
+                          <div className="bg-[#fff8e1] rounded-xl p-3 flex flex-col justify-center border border-[#fbc02d]/30">
+                            <div className="flex items-center gap-1.5 mb-1 text-[#fbc02d]">
+                              <i className="fa-solid fa-clock text-xs" />
+                              <p className="text-[10px] font-black uppercase text-[#3e2723]/60">Masuk</p>
+                            </div>
+                            <p className="font-black text-[#3e2723] text-lg">{inJam}</p>
+                          </div>
+                          <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-center border border-gray-200">
+                            <div className="flex items-center gap-1.5 mb-1 text-gray-400">
+                              <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
+                              <p className="text-[10px] font-black uppercase">Keluar</p>
+                            </div>
+                            <p className="font-black text-gray-600 text-lg">{outJam}</p>
+                          </div>
+                        </div>
+                        {leaveMap[emp.employee] === 1 && (() => {
+                          const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+                          const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
+                            const from = new Date(r.from_date);
+                            const to = new Date(r.to_date);
+                            const tgl = new Date(tanggalAktif);
+                            return tgl >= from && tgl <= to;
+                          });
+                          return izinHariIni ? (
+                            <div className="mt-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                              <i className="fa-solid fa-envelope-open-text text-blue-400 text-xs shrink-0" />
+                              <p className="text-[10px] font-black text-blue-700">{izinHariIni.leave_type}</p>
+                            </div>
+                          ) : null;
+                        })()}
+                      </>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 mt-auto">
+                        <div className="bg-green-50 rounded-xl p-2.5 flex flex-col justify-center border border-green-100">
+                          <p className="text-[9px] text-green-600 font-black uppercase mb-1">Hadir</p>
+                          <p className="font-black text-green-800 text-base">{emp.totalHadir} <span className="text-[10px] font-bold">Hari</span></p>
+                        </div>
+                        <div className="bg-red-50 rounded-xl p-2.5 flex flex-col justify-center border border-red-100">
+                          <p className="text-[9px] text-red-500 font-black uppercase mb-1">Telat</p>
+                          <p className="font-black text-red-800 text-base">{emp.totalTelat} <span className="text-[10px] font-bold">Kali</span></p>
+                        </div>
+                        <div className="bg-blue-50 rounded-xl p-2.5 flex flex-col justify-center border border-blue-100">
+                          <p className="text-[9px] text-blue-500 font-black uppercase mb-1">Izin</p>
+                          <p className="font-black text-blue-800 text-base">{leaveMap[emp.employee] ?? 0} <span className="text-[10px] font-bold">Hari</span></p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* KONTROL PAGINATION */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 mt-8 mb-4">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="w-10 h-10 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center text-[#3e2723] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 active:scale-95 transition-all"
                 >
-                  <div className="absolute top-0 left-0 w-full h-1 bg-[#fbc02d] opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                  <div className="absolute top-3 right-3">
-                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${
-                      emp.branch === 'PH Klaten' ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                      emp.branch === 'Jakarta' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                      'bg-purple-50 text-purple-600 border-purple-100'
-                    }`}>
-                      {emp.branch}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-4 mb-3 mt-2">
-                    <div className="w-14 h-14 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 border-2 border-white shadow-sm relative">
-                      {avatarSrc
-                        ? <img src={prosesUrlFoto(avatarSrc)} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                        : <i className="fa-solid fa-user text-[#fbc02d] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl" />
-                      }
-                    </div>
-                    <div className="flex-1 pt-1">
-                      <h3 className="font-black text-[#3e2723] text-base leading-tight line-clamp-1">{emp.employee_name}</h3>
-                      {filterMode === 'harian' ? (
-                        isTelat
-                          ? <span className="inline-block mt-1.5 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Telat Masuk</span>
-                          : todayLog?.in
-                            ? <span className="inline-block mt-1.5 bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Hadir</span>
-                            : <span className="inline-block mt-1.5 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Belum Absen</span>
-                      ) : (
-                        <span className="inline-block mt-1.5 bg-[#fff8e1] text-[#fbc02d] border border-[#fbc02d]/50 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Rekap {filterMode === 'bulanan' ? 'Bulanan' : 'Periode'}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {filterMode === 'harian' && (
-                    <div className="bg-[#fff8e1] border border-[#fbc02d]/30 rounded-xl px-3 py-1.5 mb-3 flex items-center gap-2">
-                      <i className="fa-solid fa-calendar-check text-[#fbc02d] text-[10px] shrink-0" />
-                      <div>
-                        <p className="text-[9px] text-[#3e2723]/50 font-bold uppercase leading-none">Shift</p>
-                        <p className="text-[10px] font-black text-[#3e2723] leading-snug">{shiftLabel}</p>
-                        <p className="text-[10px] text-[#3e2723]/60 font-bold">{shiftInfo.in} – {shiftInfo.out}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {filterMode === 'harian' ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-3 mt-auto">
-                        <div className="bg-[#fff8e1] rounded-xl p-3 flex flex-col justify-center border border-[#fbc02d]/30">
-                          <div className="flex items-center gap-1.5 mb-1 text-[#fbc02d]">
-                            <i className="fa-solid fa-clock text-xs" />
-                            <p className="text-[10px] font-black uppercase text-[#3e2723]/60">Masuk</p>
-                          </div>
-                          <p className="font-black text-[#3e2723] text-lg">{inJam}</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-center border border-gray-200">
-                          <div className="flex items-center gap-1.5 mb-1 text-gray-400">
-                            <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
-                            <p className="text-[10px] font-black uppercase">Keluar</p>
-                          </div>
-                          <p className="font-black text-gray-600 text-lg">{outJam}</p>
-                        </div>
-                      </div>
-                      {leaveMap[emp.employee] === 1 && (() => {
-                        const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
-                        const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').find((r: any) => {
-                          const from = new Date(r.from_date);
-                          const to = new Date(r.to_date);
-                          const tgl = new Date(tanggalAktif);
-                          return tgl >= from && tgl <= to;
-                        });
-                        return izinHariIni ? (
-                          <div className="mt-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 flex items-center gap-2">
-                            <i className="fa-solid fa-envelope-open-text text-blue-400 text-xs shrink-0" />
-                            <p className="text-[10px] font-black text-blue-700">{izinHariIni.leave_type}</p>
-                          </div>
-                        ) : null;
-                      })()}
-                    </>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-2 mt-auto">
-                      <div className="bg-green-50 rounded-xl p-2.5 flex flex-col justify-center border border-green-100">
-                        <p className="text-[9px] text-green-600 font-black uppercase mb-1">Hadir</p>
-                        <p className="font-black text-green-800 text-base">{emp.totalHadir} <span className="text-[10px] font-bold">Hari</span></p>
-                      </div>
-                      <div className="bg-red-50 rounded-xl p-2.5 flex flex-col justify-center border border-red-100">
-                        <p className="text-[9px] text-red-500 font-black uppercase mb-1">Telat</p>
-                        <p className="font-black text-red-800 text-base">{emp.totalTelat} <span className="text-[10px] font-bold">Kali</span></p>
-                      </div>
-                      <div className="bg-blue-50 rounded-xl p-2.5 flex flex-col justify-center border border-blue-100">
-                        <p className="text-[9px] text-blue-500 font-black uppercase mb-1">Izin</p>
-                        <p className="font-black text-blue-800 text-base">{leaveMap[emp.employee] ?? 0} <span className="text-[10px] font-bold">Hari</span></p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  <i className="fa-solid fa-chevron-left"></i>
+                </button>
+                <span className="text-sm font-black text-gray-500 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-200">
+                  Halaman <span className="text-[#fbc02d]">{currentPage}</span> dari {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="w-10 h-10 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center text-[#3e2723] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 active:scale-95 transition-all"
+                >
+                  <i className="fa-solid fa-chevron-right"></i>
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1112,13 +1148,13 @@ const DashboardHR = () => {
 
                       <div className="flex flex-col gap-2">
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
@@ -1310,12 +1346,12 @@ const DashboardHR = () => {
 
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                   </a>
                                 )}
@@ -1328,7 +1364,7 @@ const DashboardHR = () => {
                               ) : (!log.in && !log.out) ? (
                                 <div className="text-xs font-bold text-gray-400 text-center py-4">Belum ada absen</div>
                               ) : (
-                                <div className="flex flex-col md:flex-row gap-4 overflow-hidden">
+                                <div className="flex flex-col md:flex-row gap-4">
                                   {/* MASUK */}
                                   {log.in && (
                                     <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full overflow-hidden">
