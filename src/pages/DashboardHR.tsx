@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx'; // 🔥 KEMBALI MENGGUNAKAN XLSX BIASA 🔥
 
 interface RiwayatAbsen {
   name: string;
@@ -60,7 +60,7 @@ const toMenit = (jam: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
-// LOGIKA RAMADHAN (Bisa Dinamis dari Backend & Punya Fallback Aman)
+// 🔥 LOGIKA RAMADHAN 🔥
 const isRamadhan = (tanggalStr: string, ramadhanDates: string[]): boolean => {
   if (ramadhanDates.includes(tanggalStr)) return true;
 
@@ -139,7 +139,6 @@ const DashboardHR = () => {
   const [ramadhanDates, setRamadhanDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // STATE BARU UNTUK PERIODE
   const [filterMode, setFilterMode] = useState<'harian' | 'bulanan' | 'periode'>('harian');
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
   const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
@@ -237,7 +236,6 @@ const DashboardHR = () => {
       const lastDay = new Date(year, month, 0).getDate();
       to = `${bulanAktif}-${lastDay}`;
     } else if (filterMode === 'periode') {
-      // SET FROM & TO UNTUK PERIODE
       from = periodeMulai;
       to = periodeAkhir;
     }
@@ -360,7 +358,6 @@ const DashboardHR = () => {
           setLeaveMap(newLeaveMap);
           setLeaveRawMap(newLeaveRawMap);
         } else {
-          // Harian
           const bulanRef = tanggalAktif.substring(0, 7); 
           const [yr, mo] = bulanRef.split('-').map(Number);
           const lastDay = new Date(yr, mo, 0).getDate();
@@ -533,7 +530,7 @@ const DashboardHR = () => {
           return;
         }
 
-        // URL MAPS YANG RESMI (GOOGLE MAPS SEARCH QUERY)
+        // 🔥 PERBAIKAN: FORMAT URL MAPS GOOGLE RESMI & VALID 🔥
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -546,8 +543,8 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps/search/?api=1&query=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps/search/?api=1&query=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
@@ -568,7 +565,7 @@ const DashboardHR = () => {
     
     XLSX.utils.sheet_add_json(worksheet, dataExcel, { origin: 'A3', skipHeader: false } as any);
 
-    // Hyperlink di Excel standar 
+    // Bikin link otomatis (bawaan library biasa)
     const wsRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
     const headers = dataExcel.length > 0 ? Object.keys(dataExcel[0]) : [];
     const colLokasiMasuk = headers.indexOf('Lokasi Masuk');
@@ -595,7 +592,7 @@ const DashboardHR = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
-    // SHEET RINGKASAN
+    // 🔥 SHEET RINGKASAN 🔥
     if (filterMode === 'bulanan' || filterMode === 'periode') {
       const dateRange: string[] = [];
       
@@ -611,7 +608,6 @@ const DashboardHR = () => {
           dateRange.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
         }
       } else {
-        // Logic Date Range Kustom (Periode)
         let curr = new Date(periodeMulai);
         const end = new Date(periodeAkhir);
         while (curr <= end) {
@@ -645,7 +641,6 @@ const DashboardHR = () => {
             }
           }
 
-          // Jika bulanan tampil Tgl 1, 2, dll. Jika periode tampil 26/03, 27/03 dll agar tidak bingung
           const dayLabel = filterMode === 'bulanan' 
             ? `Tgl ${parseInt(dateStr.split('-')[2])}`
             : `${dateStr.substring(8, 10)}/${dateStr.substring(5, 7)}`;
@@ -784,7 +779,6 @@ const DashboardHR = () => {
             <div className="flex bg-white/10 rounded-xl p-1 border border-white/10 shadow-inner md:w-auto shrink-0">
               <button onClick={() => setFilterMode('harian')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Harian</button>
               <button onClick={() => setFilterMode('bulanan')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Bulanan</button>
-              {/* TABS PERIODE KUSTOM */}
               <button onClick={() => setFilterMode('periode')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'periode' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Periode</button>
             </div>
 
@@ -1025,6 +1019,7 @@ const DashboardHR = () => {
           if (todayLog.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) durasiTelat = s; }
           if (todayLog.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) durasiCepat = s; }
 
+          // Cari izin hari ini sekali saja
           const izinHariIniData = (() => {
             if (leaveMap[emp.employee] !== 1) return null;
             const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
@@ -1038,8 +1033,9 @@ const DashboardHR = () => {
 
           return (
             <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
-              <div className="bg-white w-full md:max-w-6xl h-[90vh] md:h-[85vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
+              <div className="bg-white w-full md:max-w-6xl max-h-[92dvh] md:max-h-[85vh] h-[92dvh] md:h-auto rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
 
+                {/* ── HEADER mobile: nama + tombol tutup (sticky) ── */}
                 <div className="bg-[#3e2723] px-5 py-4 flex items-center gap-3 shrink-0 md:hidden">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 border-2 border-white/30">
                     {todayLog.in?.custom_foto_absen
@@ -1056,9 +1052,12 @@ const DashboardHR = () => {
                   </button>
                 </div>
 
+                {/* ── Content Wrapper (Scrollable Area) ── */}
                 <div className="flex-1 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row">
 
+                  {/* ── KOLOM KIRI (Info) ── */}
                   <div className="md:w-1/3 flex flex-col shrink-0 md:overflow-y-auto bg-white md:border-r border-gray-100">
+                    {/* Avatar + nama — hanya desktop */}
                     <div className="hidden md:block p-8 border-b border-gray-100 relative shrink-0">
                       <button onClick={tutupModal} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
                         <i className="fa-solid fa-xmark text-lg" />
@@ -1073,6 +1072,7 @@ const DashboardHR = () => {
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee} • <span className="text-[#fbc02d]">{emp.branch}</span></p>
                     </div>
 
+                    {/* Info: shift, masuk/keluar, izin, peta */}
                     <div className="p-4 md:p-8 shrink-0">
                       <div className="bg-[#fff8e1] px-4 py-3 rounded-2xl border border-[#fbc02d]/30 mb-3 flex items-center gap-3">
                         <i className="fa-solid fa-calendar-check text-[#fbc02d] shrink-0" />
@@ -1108,15 +1108,15 @@ const DashboardHR = () => {
                       )}
 
                       <div className="flex flex-col gap-2">
-                        {/* LINK MAPS GOOGLE RESMI (BISA DIKLIK) */}
+                        {/* 🔥 PERBAIKAN LINK GOOGLE MAPS HARIAN 🔥 */}
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
@@ -1125,8 +1125,11 @@ const DashboardHR = () => {
                     </div>
                   </div>
 
-                  <div className="flex-1 md:overflow-y-auto p-4 md:p-8 bg-gray-50 flex flex-col lg:flex-row items-start gap-6 pb-10">
-                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0 flex-1 w-full overflow-hidden">
+                  {/* ── KOLOM KANAN: Galeri Foto ── */}
+                  <div className="flex-1 md:overflow-y-auto p-4 md:p-8 bg-gray-50 flex flex-col lg:flex-row items-start gap-6 pb-24 md:pb-10">
+                    
+                    {/* CONTAINER MASUK */}
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0 flex-1 w-full">
                         <div className="flex items-center gap-2 border-b border-gray-50 pb-2 shrink-0">
                           <div className="w-6 h-6 rounded-full bg-green-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-arrow-right-to-bracket text-green-500 text-[10px]" /></div>
                           <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Data Masuk</p>
@@ -1152,7 +1155,8 @@ const DashboardHR = () => {
                         )}
                     </div>
 
-                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0 flex-1 w-full overflow-hidden">
+                    {/* CONTAINER KELUAR */}
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0 flex-1 w-full">
                         <div className="flex items-center gap-2 border-b border-gray-50 pb-2 shrink-0">
                           <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-arrow-right-from-bracket text-orange-500 text-[10px]" /></div>
                           <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Data Keluar</p>
@@ -1187,15 +1191,15 @@ const DashboardHR = () => {
           // MODAL BULANAN / PERIODE
           const sortedDates = Object.keys(emp.logsByDate).sort((a,b) => b.localeCompare(a));
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
-              <div className="bg-white w-full max-w-3xl h-[90vh] md:h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-zoomIn">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
+              <div className="bg-white w-full max-w-3xl max-h-[92dvh] md:max-h-[85vh] h-[92dvh] md:h-auto rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-zoomIn">
                 
                 {/* Header Modal */}
                 <div className="bg-[#3e2723] p-5 md:p-6 relative flex justify-between items-center shrink-0">
                   <div>
                     <h2 className="text-lg md:text-xl font-black text-[#fbc02d]">{emp.employee_name}</h2>
                     <p className="text-[10px] md:text-xs font-bold text-white/70 uppercase tracking-wider">
-                      {emp.employee} • Rekap {filterMode === 'bulanan' ? bulanAktif : `${periodeMulai} - ${periodeAkhir}`}
+                      {emp.employee} • Rekap {filterMode === 'bulanan' ? bulanAktif : `${periodeMulai} s/d ${periodeAkhir}`}
                     </p>
                   </div>
                   <button onClick={tutupModal} className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors border border-white/20 shrink-0">
@@ -1203,7 +1207,7 @@ const DashboardHR = () => {
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 flex flex-col gap-3 pb-10">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 flex flex-col gap-3 pb-24 md:pb-10">
                   {(() => {
                     const empLeaveData = leaveMap[emp.employee] !== undefined
                       ? (() => {
@@ -1255,7 +1259,7 @@ const DashboardHR = () => {
                       const isOutlet = emp.branch !== 'PH Klaten' && emp.branch !== 'Jakarta';
 
                       return (
-                        <div key={date} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden shrink-0">
+                        <div key={date} className="bg-white rounded-2xl shadow-sm border border-gray-200 shrink-0">
                           <div
                             onClick={() => setExpandedDateHR(isExpanded ? null : date)}
                             className="p-3 md:p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors gap-2"
@@ -1294,7 +1298,7 @@ const DashboardHR = () => {
                           </div>
 
                           {isExpanded && (
-                            <div className="p-3 md:p-4 bg-gray-50 border-t border-gray-100">
+                            <div className="p-3 md:p-4 bg-gray-50 border-t border-gray-100 rounded-b-2xl">
                               <div className="sm:hidden flex justify-between mb-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
                                  <div className="text-center w-1/2 border-r border-gray-100">
                                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Masuk</p>
@@ -1306,15 +1310,15 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
-                              {/* LINK MAPS GOOGLE RESMI */}
+                              {/* 🔥 PERBAIKAN LINK MAPS BULANAN 🔥 */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://www.google.com/maps/search/?api=1&query=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://www.google.com/maps/search/?api=1&query=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                   </a>
                                 )}
@@ -1327,10 +1331,10 @@ const DashboardHR = () => {
                               ) : (!log.in && !log.out) ? (
                                 <div className="text-xs font-bold text-gray-400 text-center py-4">Belum ada absen</div>
                               ) : (
-                                <div className="flex flex-col md:flex-row gap-4 overflow-hidden">
+                                <div className="flex flex-col md:flex-row gap-4">
                                   {/* MASUK */}
                                   {log.in && (
-                                    <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-gray-100 overflow-hidden w-full">
+                                    <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full">
                                       <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Data Masuk</p>
                                       <div className="flex overflow-x-auto flex-nowrap lg:flex-wrap lg:justify-center gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
                                         <FotoSlot src={log.in.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
@@ -1348,7 +1352,7 @@ const DashboardHR = () => {
                                   
                                   {/* KELUAR */}
                                   {log.out && (
-                                    <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-gray-100 overflow-hidden w-full">
+                                    <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full">
                                       <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Data Keluar</p>
                                       <div className="flex overflow-x-auto flex-nowrap lg:flex-wrap lg:justify-center gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
                                         <FotoSlot src={log.out.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
