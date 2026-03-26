@@ -1050,27 +1050,6 @@ const Absen = () => {
             {/* KONTEN */}
             <div className="flex-1 overflow-y-auto pb-24 pt-4 hide-scrollbar">
 
-              {/* Badge izin aktif */}
-              {leaveRecords.length > 0 && (
-                <div className="px-6 mb-3 flex flex-wrap gap-1.5">
-                  {leaveRecords.map(r => {
-                    const statusColor = r.status?.toLowerCase() === 'approved'
-                      ? 'bg-blue-100 text-blue-700 border-blue-200'
-                      : r.status?.toLowerCase() === 'rejected'
-                        ? 'bg-red-100 text-red-600 border-red-200'
-                        : 'bg-yellow-100 text-yellow-700 border-yellow-200';
-                    const fromLabel = parseLokalDate(r.from_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-                    const toLabel   = parseLokalDate(r.to_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-                    return (
-                      <div key={r.name} className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full border ${statusColor}`}>
-                        <i className="fa-solid fa-envelope-open-text text-[8px]" />
-                        <span>{r.leave_type} · {fromLabel}{r.from_date !== r.to_date ? ` – ${toLabel}` : ''}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
               {/* Kalender mini */}
               <div className="px-6 mb-4">
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
