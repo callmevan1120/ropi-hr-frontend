@@ -60,37 +60,33 @@ const toMenit = (jam: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
-// SOLUSI RAMADHAN: Hardcode rentang 3 tahun ke depan. Paling aman tanpa perlu API Backend.
-const isRamadhan = (tanggalStr: string): boolean => {
+// LOGIKA RAMADHAN (Bisa Dinamis dari Backend & Punya Fallback Aman)
+const isRamadhan = (tanggalStr: string, ramadhanDates: string[]): boolean => {
+  if (ramadhanDates.includes(tanggalStr)) return true;
+
   const d = new Date(tanggalStr);
   const tahun = d.getFullYear();
-  const bulan = d.getMonth() + 1; // getMonth() mulai dari 0, makanya +1
+  const bulan = d.getMonth() + 1; 
   const tgl = d.getDate();
   
-  // Rentang Ramadhan 2025: ~1 Maret - ~30 Maret
   if (tahun === 2025 && bulan === 3 && tgl >= 1 && tgl <= 30) return true;
-  
-  // Rentang Ramadhan 2026: ~18 Februari - ~21 Maret
   if (tahun === 2026) {
-    if (bulan === 2 && tgl >= 18) return true;
-    if (bulan === 3 && tgl <= 21) return true;
+    if (bulan === 2 && tgl >= 19) return true; 
+    if (bulan === 3 && tgl <= 21) return true; 
   }
-  
-  // Rentang Ramadhan 2027: ~8 Februari - ~9 Maret
   if (tahun === 2027) {
     if (bulan === 2 && tgl >= 8) return true;
     if (bulan === 3 && tgl <= 9) return true;
   }
-  
   return false;
 };
 
-const getShiftLabel = (tanggal: string): string => {
+const getShiftLabel = (tanggal: string, ramadhanDates: string[]): string => {
   const tglDate = new Date(tanggal);
   const hari = tglDate.getDay();
   if (hari === 0 || hari === 6) return 'Libur';
   const isFriday = hari === 5;
-  const ramadhan = isRamadhan(tanggal);
+  const ramadhan = isRamadhan(tanggal, ramadhanDates);
   const hariLabel = isFriday ? 'Jumat' : 'Senin - Kamis';
   const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
   return `${hariLabel} (PH Klaten ${periodeLabel})`;
@@ -99,11 +95,12 @@ const getShiftLabel = (tanggal: string): string => {
 const getJamShift = (
   shiftNameFromRecord: string | undefined,
   tanggal: string,
-  masterShifts: Record<string, { in: string; out: string }>
+  masterShifts: Record<string, { in: string; out: string }>,
+  ramadhanDates: string[]
 ): { in: string; out: string } => {
   const tglDate = new Date(tanggal);
   const isFriday = tglDate.getDay() === 5;
-  const ramadhan = isRamadhan(tanggal);
+  const ramadhan = isRamadhan(tanggal, ramadhanDates);
   if (!isFriday && shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
     return masterShifts[shiftNameFromRecord];
   }
@@ -139,14 +136,18 @@ const DashboardHR = () => {
   const [leaveMap, setLeaveMap] = useState<Record<string, number>>({});
   const [leaveRawMap, setLeaveRawMap] = useState<Record<string, any[]>>({});
   const [masterShifts, setMasterShifts] = useState<Record<string, { in: string; out: string }>>({});
+  const [ramadhanDates, setRamadhanDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [filterMode, setFilterMode] = useState<'harian' | 'bulanan'>('harian');
+  // STATE BARU UNTUK PERIODE
+  const [filterMode, setFilterMode] = useState<'harian' | 'bulanan' | 'periode'>('harian');
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
   const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
 
   const [tanggalAktif, setTanggalAktif] = useState(localISOTime);
   const [bulanAktif, setBulanAktif] = useState(localISOTime.substring(0, 7));
+  const [periodeMulai, setPeriodeMulai] = useState(localISOTime);
+  const [periodeAkhir, setPeriodeAkhir] = useState(localISOTime);
 
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
   const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
@@ -170,10 +171,26 @@ const DashboardHR = () => {
     } else {
       ambilLokasiKantor();
       ambilMasterShift();
+      ambilLiburRamadhan();
     }
   }, [navigate]);
 
-  useEffect(() => { tarikDataSemuaKaryawan(); }, [tanggalAktif, bulanAktif, filterMode, masterShifts, lokasiKantor]);
+  useEffect(() => { tarikDataSemuaKaryawan(); }, [tanggalAktif, bulanAktif, periodeMulai, periodeAkhir, filterMode, masterShifts, lokasiKantor, ramadhanDates]);
+
+  const ambilLiburRamadhan = async () => {
+    try {
+      const res = await fetch(`${BACKEND}/api/holidays`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        const rDates = data.data
+          .filter((h: any) => h.description?.toLowerCase().includes('ramadhan') || h.description?.toLowerCase().includes('puasa'))
+          .map((h: any) => h.holiday_date);
+        if (rDates.length > 0) setRamadhanDates(rDates);
+      }
+    } catch (e) {
+      console.log('API Holiday belum tersedia, menggunakan fallback manual isRamadhan');
+    }
+  };
 
   const ambilLokasiKantor = async () => {
     try {
@@ -219,6 +236,10 @@ const DashboardHR = () => {
       const month = parseInt(bulanAktif.split('-')[1]);
       const lastDay = new Date(year, month, 0).getDate();
       to = `${bulanAktif}-${lastDay}`;
+    } else if (filterMode === 'periode') {
+      // SET FROM & TO UNTUK PERIODE
+      from = periodeMulai;
+      to = periodeAkhir;
     }
 
     try {
@@ -286,7 +307,7 @@ const DashboardHR = () => {
           let hadir = 0, telat = 0, cepat = 0;
           Object.entries(emp.logsByDate).forEach(([date, log]) => {
             if (log.in) hadir++;
-            const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
+            const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts, ramadhanDates);
             if (log.in && toMenit(formatJamLokal(log.in.time)) > toMenit(shiftInfo.in)) telat++;
             if (log.out && toMenit(shiftInfo.out) > toMenit(formatJamLokal(log.out.time))) cepat++;
           });
@@ -296,7 +317,7 @@ const DashboardHR = () => {
         const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
         setDataAbsen(arrData);
 
-        if (filterMode === 'bulanan') {
+        if (filterMode === 'bulanan' || filterMode === 'periode') {
           const leaveResults = await Promise.allSettled(
             arrData.map(emp =>
               fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}`)
@@ -307,19 +328,27 @@ const DashboardHR = () => {
           );
           const newLeaveMap: Record<string, number> = {};
           const newLeaveRawMap: Record<string, any[]> = {};
+          
+          let startDateObj: Date, endDateObj: Date;
+          if (filterMode === 'bulanan') {
+            const year = parseInt(bulanAktif.split('-')[0]);
+            const month = parseInt(bulanAktif.split('-')[1]) - 1;
+            startDateObj = new Date(year, month, 1);
+            endDateObj = new Date(year, month + 1, 0);
+          } else {
+            startDateObj = new Date(periodeMulai);
+            endDateObj = new Date(periodeAkhir);
+          }
+
           leaveResults.forEach(result => {
             if (result.status === 'fulfilled') {
               const { employee, data } = result.value;
-              const year = parseInt(bulanAktif.split('-')[0]);
-              const month = parseInt(bulanAktif.split('-')[1]) - 1;
-              const bulanMulai = new Date(year, month, 1);
-              const bulanAkhir = new Date(year, month + 1, 0);
               let totalIzin = 0;
               (data as any[]).filter(r => r.status?.toLowerCase() !== 'rejected').forEach((r: any) => {
                 const from = new Date(r.from_date);
                 const to = new Date(r.to_date);
-                const start = from < bulanMulai ? bulanMulai : from;
-                const end = to > bulanAkhir ? bulanAkhir : to;
+                const start = from < startDateObj ? startDateObj : from;
+                const end = to > endDateObj ? endDateObj : to;
                 for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                   if (d.getDay() !== 0 && d.getDay() !== 6) totalIzin++;
                 }
@@ -331,6 +360,7 @@ const DashboardHR = () => {
           setLeaveMap(newLeaveMap);
           setLeaveRawMap(newLeaveRawMap);
         } else {
+          // Harian
           const bulanRef = tanggalAktif.substring(0, 7); 
           const [yr, mo] = bulanRef.split('-').map(Number);
           const lastDay = new Date(yr, mo, 0).getDate();
@@ -433,15 +463,22 @@ const DashboardHR = () => {
       const empIzinDates: Record<string, string> = {};
       const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
       
-      if (filterMode === 'bulanan') {
-        const [year, month] = bulanAktif.split('-').map(Number);
-        const bulanMulai = new Date(year, month - 1, 1);
-        const bulanAkhir = new Date(year, month, 0);
+      if (filterMode === 'bulanan' || filterMode === 'periode') {
+        let startDateObj: Date, endDateObj: Date;
+        if (filterMode === 'bulanan') {
+          const [year, month] = bulanAktif.split('-').map(Number);
+          startDateObj = new Date(year, month - 1, 1);
+          endDateObj = new Date(year, month, 0);
+        } else {
+          startDateObj = new Date(periodeMulai);
+          endDateObj = new Date(periodeAkhir);
+        }
+
         rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').forEach((r: any) => {
           const from = new Date(r.from_date);
           const to = new Date(r.to_date);
-          const start = from < bulanMulai ? bulanMulai : from;
-          const end = to > bulanAkhir ? bulanAkhir : to;
+          const start = from < startDateObj ? startDateObj : from;
+          const end = to > endDateObj ? endDateObj : to;
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             if (d.getDay() !== 0 && d.getDay() !== 6) {
               const key = d.toISOString().substring(0, 10);
@@ -469,8 +506,8 @@ const DashboardHR = () => {
         const izinType = empIzinDates[date];
         const inJam = log.in ? formatJamLokal(log.in.time) : '-';
         const outJam = log.out ? formatJamLokal(log.out.time) : '-';
-        const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
-        const shiftLabel = getShiftLabel(date);
+        const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts, ramadhanDates);
+        const shiftLabel = getShiftLabel(date, ramadhanDates);
         
         let telat = '-';
         if (log.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) telat = formatDurasi(s); }
@@ -496,7 +533,7 @@ const DashboardHR = () => {
           return;
         }
 
-        // URL MAPS YANG BENAR DAN AMAN
+        // URL MAPS YANG RESMI (GOOGLE MAPS SEARCH QUERY)
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -509,26 +546,26 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps/search/?api=1&query=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps/search/?api=1&query=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
     
     dataExcel.sort((a, b) => a.Tanggal.localeCompare(b.Tanggal) || a['Nama Karyawan'].localeCompare(b['Nama Karyawan']));
     
-    // FIX ERROR TYPESCRIPT `origin`: Memanfaatkan aoa_to_sheet & sheet_add_json sesuai anjuran TypeScript 🔥
+    // Mencegah error TS Origin: Gunakan aoa_to_sheet baru di append
     const judulLaporan = filterMode === 'harian' 
       ? `Laporan Absensi Harian - ${tanggalAktif}` 
-      : `Laporan Absensi Bulanan - ${bulanAktif}`;
-      
-    // Buat sheet kosong dengan Judul di baris 1
+      : filterMode === 'bulanan'
+        ? `Laporan Absensi Bulanan - ${bulanAktif}`
+        : `Laporan Absensi Periode - ${periodeMulai} s/d ${periodeAkhir}`;
+        
     const worksheet = XLSX.utils.aoa_to_sheet([
       [judulLaporan],
-      [] // Baris 2 kosong sebagai jarak
+      [] 
     ]);
     
-    // Suntikkan data JSON mulai dari baris ke-3
     XLSX.utils.sheet_add_json(worksheet, dataExcel, { origin: 'A3', skipHeader: false } as any);
 
     // Hyperlink di Excel standar 
@@ -541,7 +578,7 @@ const DashboardHR = () => {
         if (R > 2 && (C === colLokasiMasuk || C === colLokasiKeluar)) {
           const addr = XLSX.utils.encode_cell({ r: R, c: C });
           const cell = worksheet[addr];
-          if (cell && typeof cell.v === 'string' && cell.v.startsWith('https')) {
+          if (cell && typeof cell.v === 'string' && cell.v.startsWith('http')) {
             cell.l = { Target: cell.v, Tooltip: 'Buka di Google Maps' };
           }
         }
@@ -559,13 +596,31 @@ const DashboardHR = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
     // SHEET RINGKASAN
-    if (filterMode === 'bulanan') {
-      const [year, month] = bulanAktif.split('-').map(Number);
-      const now = new Date();
-      let lastDayToExport = new Date(year, month, 0).getDate();
+    if (filterMode === 'bulanan' || filterMode === 'periode') {
+      const dateRange: string[] = [];
       
-      if (year === now.getFullYear() && month === now.getMonth() + 1) {
-        lastDayToExport = now.getDate();
+      if (filterMode === 'bulanan') {
+        const [year, month] = bulanAktif.split('-').map(Number);
+        const now = new Date();
+        let lastDayToExport = new Date(year, month, 0).getDate();
+        
+        if (year === now.getFullYear() && month === now.getMonth() + 1) {
+          lastDayToExport = now.getDate();
+        }
+        for (let d = 1; d <= lastDayToExport; d++) {
+          dateRange.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+        }
+      } else {
+        // Logic Date Range Kustom (Periode)
+        let curr = new Date(periodeMulai);
+        const end = new Date(periodeAkhir);
+        while (curr <= end) {
+          const y = curr.getFullYear();
+          const m = String(curr.getMonth() + 1).padStart(2, '0');
+          const d = String(curr.getDate()).padStart(2, '0');
+          dateRange.push(`${y}-${m}-${d}`);
+          curr.setDate(curr.getDate() + 1);
+        }
       }
 
       const ringkasan = filteredDataAbsen.map(emp => {
@@ -577,20 +632,25 @@ const DashboardHR = () => {
 
         let totalTelatBulanIni = 0;
 
-        for (let d = 1; d <= lastDayToExport; d++) {
-          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        for (const dateStr of dateRange) {
           const log = emp.logsByDate[dateStr];
           let isTelat = 0;
 
           if (log && log.in) {
             const inJam = formatJamLokal(log.in.time);
-            const shiftInfo = getJamShift(log.in.shift, dateStr, masterShifts);
+            const shiftInfo = getJamShift(log.in.shift, dateStr, masterShifts, ramadhanDates);
             if (toMenit(inJam) > toMenit(shiftInfo.in)) {
               isTelat = 1;
               totalTelatBulanIni++;
             }
           }
-          row[`Tgl ${d}`] = isTelat;
+
+          // Jika bulanan tampil Tgl 1, 2, dll. Jika periode tampil 26/03, 27/03 dll agar tidak bingung
+          const dayLabel = filterMode === 'bulanan' 
+            ? `Tgl ${parseInt(dateStr.split('-')[2])}`
+            : `${dateStr.substring(8, 10)}/${dateStr.substring(5, 7)}`;
+          
+          row[dayLabel] = isTelat;
         }
 
         row['Total Telat'] = totalTelatBulanIni;
@@ -599,22 +659,25 @@ const DashboardHR = () => {
         return row;
       });
 
-      // Sama seperti di atas, gunakan aoa lalu add_json untuk menghindari Error Typescript
       const wsRingkasan = XLSX.utils.aoa_to_sheet([
-        [`Ringkasan Absensi - ${bulanAktif}`],
+        [filterMode === 'bulanan' ? `Ringkasan Absensi - ${bulanAktif}` : `Ringkasan Absensi - ${periodeMulai} s/d ${periodeAkhir}`],
         [] 
       ]);
       XLSX.utils.sheet_add_json(wsRingkasan, ringkasan, { origin: 'A3', skipHeader: false } as any);
 
       const ringkasanColWidths = [{ wch: 18 }, { wch: 30 }, { wch: 20 }];
-      for (let d = 1; d <= lastDayToExport; d++) ringkasanColWidths.push({ wch: 7 }); 
+      for (let d = 0; d < dateRange.length; d++) ringkasanColWidths.push({ wch: 7 }); 
       ringkasanColWidths.push({ wch: 15 }, { wch: 15 }, { wch: 18 }); 
       wsRingkasan['!cols'] = ringkasanColWidths;
 
       XLSX.utils.book_append_sheet(workbook, wsRingkasan, "Ringkasan");
     }
 
-    const namaFile = filterMode === 'harian' ? `Laporan_Harian_${tanggalAktif}.xlsx` : `Laporan_Bulanan_${bulanAktif}.xlsx`;
+    let namaFile = '';
+    if (filterMode === 'harian') namaFile = `Laporan_Harian_${tanggalAktif}.xlsx`;
+    else if (filterMode === 'bulanan') namaFile = `Laporan_Bulanan_${bulanAktif}.xlsx`;
+    else namaFile = `Laporan_Periode_${periodeMulai}_sd_${periodeAkhir}.xlsx`;
+    
     XLSX.writeFile(workbook, namaFile);
   };
 
@@ -647,7 +710,7 @@ const DashboardHR = () => {
       const todayLog = emp.logsByDate[tanggalAktif];
       if (todayLog?.in) {
         globalHadir++;
-        const shiftInfo = getJamShift(todayLog.in.shift, tanggalAktif, masterShifts);
+        const shiftInfo = getJamShift(todayLog.in.shift, tanggalAktif, masterShifts, ramadhanDates);
         if (toMenit(formatJamLokal(todayLog.in.time)) > toMenit(shiftInfo.in)) globalTelat++;
       }
       if (leaveMap[emp.employee] === 1) globalIzin++;
@@ -666,7 +729,7 @@ const DashboardHR = () => {
   const FotoSlot = ({ src, label, badge, badgeColor, isSignature = false }: { src?: string; label: string; badge: string; badgeColor: string; isSignature?: boolean }) => (
     <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-[3/4] p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
+      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-square p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
         {src
           ? <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain mix-blend-multiply' : 'object-cover'}`} alt={label} />
           : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gray-50"><i className={`fa-solid ${isSignature ? 'fa-pen-slash' : 'fa-image-slash'} text-2xl text-gray-300`} /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
@@ -721,13 +784,24 @@ const DashboardHR = () => {
             <div className="flex bg-white/10 rounded-xl p-1 border border-white/10 shadow-inner md:w-auto shrink-0">
               <button onClick={() => setFilterMode('harian')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Harian</button>
               <button onClick={() => setFilterMode('bulanan')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Bulanan</button>
+              {/* TABS PERIODE KUSTOM */}
+              <button onClick={() => setFilterMode('periode')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'periode' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Periode</button>
             </div>
 
-            <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 md:py-2.5 border border-white/10 shadow-sm w-full md:w-auto shrink-0">
-              {filterMode === 'harian'
-                ? <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
-                : <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
-              }
+            <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 md:py-2.5 border border-white/10 shadow-sm w-full md:w-auto shrink-0 gap-2 overflow-x-auto">
+              {filterMode === 'harian' && (
+                <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
+              )}
+              {filterMode === 'bulanan' && (
+                <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
+              )}
+              {filterMode === 'periode' && (
+                <>
+                  <input type="date" value={periodeMulai} onChange={(e) => setPeriodeMulai(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-28 md:w-auto text-center" style={{ colorScheme: 'dark' }} />
+                  <span className="text-white/50 font-bold">-</span>
+                  <input type="date" value={periodeAkhir} onChange={(e) => setPeriodeAkhir(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-28 md:w-auto text-center" style={{ colorScheme: 'dark' }} />
+                </>
+              )}
             </div>
 
             {/* FILTER DROPDOWN CABANG */}
@@ -812,8 +886,8 @@ const DashboardHR = () => {
               const todayLog = filterMode === 'harian' ? (emp.logsByDate[tanggalAktif] || { in: null, out: null }) : null;
               const inJam = todayLog?.in ? formatJamLokal(todayLog.in.time) : '-';
               const outJam = todayLog?.out ? formatJamLokal(todayLog.out.time) : '-';
-              const shiftInfo = getJamShift(todayLog?.in?.shift || todayLog?.out?.shift, tanggalAktif, masterShifts);
-              const shiftLabel = getShiftLabel(tanggalAktif);
+              const shiftInfo = getJamShift(todayLog?.in?.shift || todayLog?.out?.shift, tanggalAktif, masterShifts, ramadhanDates);
+              const shiftLabel = getShiftLabel(tanggalAktif, ramadhanDates);
               const isTelat = todayLog?.in && toMenit(inJam) > toMenit(shiftInfo.in);
 
               let avatarSrc = null;
@@ -859,7 +933,7 @@ const DashboardHR = () => {
                             ? <span className="inline-block mt-1.5 bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Hadir</span>
                             : <span className="inline-block mt-1.5 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Belum Absen</span>
                       ) : (
-                        <span className="inline-block mt-1.5 bg-[#fff8e1] text-[#fbc02d] border border-[#fbc02d]/50 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Rekap Bulanan</span>
+                        <span className="inline-block mt-1.5 bg-[#fff8e1] text-[#fbc02d] border border-[#fbc02d]/50 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Rekap {filterMode === 'bulanan' ? 'Bulanan' : 'Periode'}</span>
                       )}
                     </div>
                   </div>
@@ -942,8 +1016,8 @@ const DashboardHR = () => {
         if (filterMode === 'harian') {
           // MODAL HARIAN
           const todayLog = emp.logsByDate[tanggalAktif] || { in: null, out: null };
-          const shiftInfo = getJamShift(todayLog.in?.shift || todayLog.out?.shift, tanggalAktif, masterShifts);
-          const shiftLabel = getShiftLabel(tanggalAktif);
+          const shiftInfo = getJamShift(todayLog.in?.shift || todayLog.out?.shift, tanggalAktif, masterShifts, ramadhanDates);
+          const shiftLabel = getShiftLabel(tanggalAktif, ramadhanDates);
           const inJam = todayLog.in ? formatJamLokal(todayLog.in.time) : '-';
           const outJam = todayLog.out ? formatJamLokal(todayLog.out.time) : '-';
 
@@ -951,7 +1025,6 @@ const DashboardHR = () => {
           if (todayLog.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) durasiTelat = s; }
           if (todayLog.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) durasiCepat = s; }
 
-          // Cari izin hari ini sekali saja
           const izinHariIniData = (() => {
             if (leaveMap[emp.employee] !== 1) return null;
             const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
@@ -967,7 +1040,6 @@ const DashboardHR = () => {
             <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
               <div className="bg-white w-full md:max-w-6xl h-[90vh] md:h-[85vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
 
-                {/* ── HEADER mobile: nama + tombol tutup (sticky) ── */}
                 <div className="bg-[#3e2723] px-5 py-4 flex items-center gap-3 shrink-0 md:hidden">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 border-2 border-white/30">
                     {todayLog.in?.custom_foto_absen
@@ -984,12 +1056,9 @@ const DashboardHR = () => {
                   </button>
                 </div>
 
-                {/* ── Content Wrapper (Scrollable Area) ── */}
                 <div className="flex-1 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row">
 
-                  {/* ── KOLOM KIRI (Info) ── */}
                   <div className="md:w-1/3 flex flex-col shrink-0 md:overflow-y-auto bg-white md:border-r border-gray-100">
-                    {/* Avatar + nama — hanya desktop */}
                     <div className="hidden md:block p-8 border-b border-gray-100 relative shrink-0">
                       <button onClick={tutupModal} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
                         <i className="fa-solid fa-xmark text-lg" />
@@ -1004,7 +1073,6 @@ const DashboardHR = () => {
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee} • <span className="text-[#fbc02d]">{emp.branch}</span></p>
                     </div>
 
-                    {/* Info: shift, masuk/keluar, izin, peta */}
                     <div className="p-4 md:p-8 shrink-0">
                       <div className="bg-[#fff8e1] px-4 py-3 rounded-2xl border border-[#fbc02d]/30 mb-3 flex items-center gap-3">
                         <i className="fa-solid fa-calendar-check text-[#fbc02d] shrink-0" />
@@ -1040,15 +1108,15 @@ const DashboardHR = () => {
                       )}
 
                       <div className="flex flex-col gap-2">
-                        {/*  PERBAIKAN LINK GOOGLE MAPS WEB */}
+                        {/* LINK MAPS GOOGLE RESMI (BISA DIKLIK) */}
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps/search/?api=1&query=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://www.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps/search/?api=1&query=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
@@ -1057,10 +1125,7 @@ const DashboardHR = () => {
                     </div>
                   </div>
 
-                  {/* ── KOLOM KANAN: Galeri Foto ── */}
                   <div className="flex-1 md:overflow-y-auto p-4 md:p-8 bg-gray-50 flex flex-col lg:flex-row items-start gap-6 pb-10">
-                    
-                    {/* CONTAINER MASUK */}
                     <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0 flex-1 w-full overflow-hidden">
                         <div className="flex items-center gap-2 border-b border-gray-50 pb-2 shrink-0">
                           <div className="w-6 h-6 rounded-full bg-green-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-arrow-right-to-bracket text-green-500 text-[10px]" /></div>
@@ -1087,7 +1152,6 @@ const DashboardHR = () => {
                         )}
                     </div>
 
-                    {/* CONTAINER KELUAR */}
                     <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0 flex-1 w-full overflow-hidden">
                         <div className="flex items-center gap-2 border-b border-gray-50 pb-2 shrink-0">
                           <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-arrow-right-from-bracket text-orange-500 text-[10px]" /></div>
@@ -1120,38 +1184,45 @@ const DashboardHR = () => {
             </div>
           );
         } else {
-          // MODAL BULANAN
+          // MODAL BULANAN / PERIODE
           const sortedDates = Object.keys(emp.logsByDate).sort((a,b) => b.localeCompare(a));
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
               <div className="bg-white w-full max-w-3xl h-[90vh] md:h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-zoomIn">
                 
-                {/* Header Modal Bulanan */}
+                {/* Header Modal */}
                 <div className="bg-[#3e2723] p-5 md:p-6 relative flex justify-between items-center shrink-0">
                   <div>
                     <h2 className="text-lg md:text-xl font-black text-[#fbc02d]">{emp.employee_name}</h2>
-                    <p className="text-[10px] md:text-xs font-bold text-white/70 uppercase tracking-wider">{emp.employee} • Rekap {bulanAktif}</p>
+                    <p className="text-[10px] md:text-xs font-bold text-white/70 uppercase tracking-wider">
+                      {emp.employee} • Rekap {filterMode === 'bulanan' ? bulanAktif : `${periodeMulai} - ${periodeAkhir}`}
+                    </p>
                   </div>
                   <button onClick={tutupModal} className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors border border-white/20 shrink-0">
                     <i className="fa-solid fa-xmark text-sm md:text-lg" />
                   </button>
                 </div>
 
-                {/* Body Modal Bulanan - List Akordion */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 flex flex-col gap-3 pb-10">
                   {(() => {
                     const empLeaveData = leaveMap[emp.employee] !== undefined
                       ? (() => {
                           const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
-                          const [year, month] = bulanAktif.split('-').map(Number);
-                          const bulanMulai = new Date(year, month - 1, 1);
-                          const bulanAkhir = new Date(year, month, 0);
+                          let startDateObj: Date, endDateObj: Date;
+                          if (filterMode === 'bulanan') {
+                            const [year, month] = bulanAktif.split('-').map(Number);
+                            startDateObj = new Date(year, month - 1, 1);
+                            endDateObj = new Date(year, month, 0);
+                          } else {
+                            startDateObj = new Date(periodeMulai);
+                            endDateObj = new Date(periodeAkhir);
+                          }
                           const izinDates: Record<string, string> = {};
                           rawLeaves.filter(r => r.status?.toLowerCase() !== 'rejected').forEach((r: any) => {
                             const from = new Date(r.from_date);
                             const to = new Date(r.to_date);
-                            const start = from < bulanMulai ? bulanMulai : from;
-                            const end = to > bulanAkhir ? bulanAkhir : to;
+                            const start = from < startDateObj ? startDateObj : from;
+                            const end = to > endDateObj ? endDateObj : to;
                             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                               if (d.getDay() !== 0 && d.getDay() !== 6) {
                                 const key = d.toISOString().substring(0, 10);
@@ -1169,7 +1240,7 @@ const DashboardHR = () => {
                     ])).sort((a,b) => b.localeCompare(a));
 
                     if (allDates.length === 0) {
-                      return <div className="py-8 text-center text-gray-400 font-bold">Tidak ada absen di bulan ini</div>;
+                      return <div className="py-8 text-center text-gray-400 font-bold">Tidak ada absen di periode ini</div>;
                     }
 
                     return allDates.map(date => {
@@ -1177,15 +1248,14 @@ const DashboardHR = () => {
                       const izinType = empLeaveData[date];
                       const inJam = log.in ? formatJamLokal(log.in.time) : '-';
                       const outJam = log.out ? formatJamLokal(log.out.time) : '-';
-                      const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts);
-                      const shiftLabel = getShiftLabel(date);
+                      const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts, ramadhanDates);
+                      const shiftLabel = getShiftLabel(date, ramadhanDates);
                       const isTelat = log.in && toMenit(inJam) > toMenit(shiftInfo.in);
                       const isExpanded = expandedDateHR === date;
                       const isOutlet = emp.branch !== 'PH Klaten' && emp.branch !== 'Jakarta';
 
                       return (
                         <div key={date} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden shrink-0">
-                          {/* Akordion Header */}
                           <div
                             onClick={() => setExpandedDateHR(isExpanded ? null : date)}
                             className="p-3 md:p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors gap-2"
@@ -1223,7 +1293,6 @@ const DashboardHR = () => {
                             </div>
                           </div>
 
-                          {/* Akordion Body (Expanded Foto & TTD By Event) */}
                           {isExpanded && (
                             <div className="p-3 md:p-4 bg-gray-50 border-t border-gray-100">
                               <div className="sm:hidden flex justify-between mb-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
@@ -1237,15 +1306,15 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
-                              {/* 🔥 PERBAIKAN LINK MAPS BULANAN 🔥 */}
+                              {/* LINK MAPS GOOGLE RESMI */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps/search/?api=1&query=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps/search/?api=1&query=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                   </a>
                                 )}
