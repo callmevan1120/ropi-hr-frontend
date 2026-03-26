@@ -137,7 +137,6 @@ const DashboardHR = () => {
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
   const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
 
-  // State untuk Filter & Pencarian
   const [searchQuery, setSearchQuery] = useState('');
   const [activeBranch, setActiveBranch] = useState('Semua Lokasi');
   const [lokasiKantor, setLokasiKantor] = useState<Lokasi[]>([]);
@@ -483,6 +482,7 @@ const DashboardHR = () => {
           return;
         }
 
+        // PERBAIKAN: FORMAT URL GOOGLE MAPS YANG VALID & BENAR
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -495,16 +495,34 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://maps.google.com/?q=...?q=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://maps.google.com/?q=...?q=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
     
     dataExcel.sort((a, b) => a.Tanggal.localeCompare(b.Tanggal) || a['Nama Karyawan'].localeCompare(b['Nama Karyawan']));
     
+    // Create Worksheet Laporan Absen
     const worksheet = XLSX.utils.aoa_to_sheet([[`Laporan Absensi ${filterMode === 'harian' ? 'Harian' : 'Bulanan'} - ${filterMode === 'harian' ? tanggalAktif : bulanAktif}`]]);
     XLSX.utils.sheet_add_json(worksheet, dataExcel, { origin: 'A3' });
+
+    // PERBAIKAN TAMPILAN EXCEL: Mengatur Lebar Kolom secara Otomatis (Auto-Width)
+    worksheet['!cols'] = [
+      { wch: 12 }, // Tanggal
+      { wch: 16 }, // ID Karyawan
+      { wch: 30 }, // Nama Karyawan
+      { wch: 20 }, // Kategori
+      { wch: 35 }, // Shift
+      { wch: 16 }, // Jam Shift
+      { wch: 12 }, // Jam Masuk
+      { wch: 12 }, // Jam Keluar
+      { wch: 16 }, // Keterlambatan
+      { wch: 16 }, // Pulang Cepat
+      { wch: 25 }, // Status
+      { wch: 55 }, // Lokasi Masuk
+      { wch: 55 }  // Lokasi Keluar
+    ];
 
     const wsRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
     const headers = dataExcel.length > 0 ? Object.keys(dataExcel[0]) : [];
@@ -530,7 +548,7 @@ const DashboardHR = () => {
         }
 
         if (R > 2 && (C === colLokasiMasuk || C === colLokasiKeluar)) {
-          if (typeof cell.v === 'string' && cell.v.startsWith('http')) {
+          if (typeof cell.v === 'string' && cell.v.startsWith('https')) {
             cell.l = { Target: cell.v, Tooltip: 'Buka di Google Maps' };
             if (!cell.s) cell.s = {};
             cell.s.font = { color: { rgb: "0000FF" }, underline: true }; 
@@ -542,6 +560,7 @@ const DashboardHR = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
+    // SHEET RINGKASAN
     if (filterMode === 'bulanan') {
       const [year, month] = bulanAktif.split('-').map(Number);
       const now = new Date();
@@ -587,6 +606,12 @@ const DashboardHR = () => {
       const wsRingkasan = XLSX.utils.aoa_to_sheet([[`Ringkasan Absensi - ${bulanAktif}`]]);
       XLSX.utils.sheet_add_json(wsRingkasan, ringkasan, { origin: 'A3' });
 
+      // PERBAIKAN TAMPILAN EXCEL: Auto Width untuk Sheet Ringkasan
+      const ringkasanColWidths = [{ wch: 16 }, { wch: 30 }, { wch: 20 }];
+      for (let d = 1; d <= lastDayToExport; d++) ringkasanColWidths.push({ wch: 7 }); // Tgl
+      ringkasanColWidths.push({ wch: 15 }, { wch: 15 }, { wch: 18 }); // Total
+      wsRingkasan['!cols'] = ringkasanColWidths;
+
       const wsRangeRingkasan = XLSX.utils.decode_range(wsRingkasan['!ref'] || 'A1');
       for (let R = wsRangeRingkasan.s.r; R <= wsRangeRingkasan.e.r; R++) {
         for (let C = wsRangeRingkasan.s.c; C <= wsRangeRingkasan.e.c; C++) {
@@ -602,6 +627,7 @@ const DashboardHR = () => {
               left: { style: 'thin', color: { rgb: '000000' } },
               right: { style: 'thin', color: { rgb: '000000' } }
             };
+            cell.s.alignment = { vertical: 'center', horizontal: C > 2 ? 'center' : 'left' };
             if (R === 2) cell.s.font = { bold: true };
           }
         }
@@ -662,7 +688,7 @@ const DashboardHR = () => {
   const FotoSlot = ({ src, label, badge, badgeColor, isSignature = false }: { src?: string; label: string; badge: string; badgeColor: string; isSignature?: boolean }) => (
     <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-[3/4] p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
+      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-square p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
         {src
           ? <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain mix-blend-multiply' : 'object-cover'}`} alt={label} />
           : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gray-50"><i className={`fa-solid ${isSignature ? 'fa-pen-slash' : 'fa-image-slash'} text-2xl text-gray-300`} /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
@@ -1036,16 +1062,17 @@ const DashboardHR = () => {
                       )}
 
                       <div className="flex flex-col gap-2">
+                        {/* 🔥 PERBAIKAN LINK GOOGLE MAPS HARIAN 🔥 */}
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://maps.google.com/?q=...?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
+                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://maps.google.com/?q=...?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
+                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                       </div>
@@ -1180,32 +1207,28 @@ const DashboardHR = () => {
 
                       return (
                         <div key={date} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden shrink-0">
-                          {/* PERBAIKAN: Layout Header Akordion Dipercantik */}
+                          {/* Akordion Header */}
                           <div
                             onClick={() => setExpandedDateHR(isExpanded ? null : date)}
                             className="p-3 md:p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors gap-2"
                           >
-                            {/* Kiri: Tanggal & Shift */}
-                            <div className="flex flex-col flex-1 min-w-0">
+                            <div className="flex flex-col flex-1 min-w-0 pr-2">
                               <span className="font-bold text-[#3e2723] text-sm md:text-base leading-none">{date}</span>
-                              <span className="text-[10px] md:text-xs text-gray-500 font-medium mt-1 truncate pr-2">{shiftLabel}</span>
+                              <span className="text-[10px] md:text-xs text-gray-500 font-medium mt-1 truncate">{shiftLabel}</span>
                             </div>
                             
-                            {/* Kanan: Jam, Badge, Chevron */}
                             <div className="flex items-center gap-3 md:gap-6 shrink-0">
-                              {/* Jam Masuk & Keluar (Sembunyi di mobile super kecil, tapi berjejer rapi di layar medium/besar) */}
                               <div className="hidden sm:flex items-center gap-4 text-right border-r border-gray-200 pr-4 md:pr-6">
                                 <div className="flex flex-col items-center">
-                                  <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Masuk</p>
-                                  <p className="font-black text-green-600 text-sm">{inJam}</p>
+                                  <p className="text-[8px] md:text-[9px] text-gray-400 uppercase font-bold tracking-wider">Masuk</p>
+                                  <p className="font-black text-green-600 text-xs md:text-sm">{inJam}</p>
                                 </div>
                                 <div className="flex flex-col items-center">
-                                  <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Keluar</p>
-                                  <p className="font-black text-orange-500 text-sm">{outJam}</p>
+                                  <p className="text-[8px] md:text-[9px] text-gray-400 uppercase font-bold tracking-wider">Keluar</p>
+                                  <p className="font-black text-orange-500 text-xs md:text-sm">{outJam}</p>
                                 </div>
                               </div>
                               
-                              {/* Badge Status */}
                               <div className="w-12 md:w-16 flex justify-center">
                                 {izinType ? (
                                   <span className="bg-blue-50 text-blue-600 border border-blue-200 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md w-full text-center">Izin</span>
@@ -1217,7 +1240,6 @@ const DashboardHR = () => {
                                   <span className="bg-gray-50 text-gray-400 border border-gray-200 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md w-full text-center">-</span>
                                 )}
                               </div>
-                              
                               <i className={`fa-solid fa-chevron-${isExpanded ? 'up' : 'down'} text-gray-400 text-xs w-4 text-center transition-transform`} />
                             </div>
                           </div>
@@ -1236,14 +1258,15 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
+                              {/* PERBAIKAN LINK MAPS BULANAN (URL VALID) */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://maps.google.com/?q=...?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://maps.google.com/?q=...?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                   </a>
                                 )}
