@@ -359,9 +359,9 @@ const DashboardHR = () => {
           let startDateObj: Date, endDateObj: Date;
           if (filterMode === 'bulanan') {
             const year = parseInt(bulanAktif.split('-')[0]);
-            const month = parseInt(bulanAktif.split('-')[1]) - 1;
+            const month = parseInt(bulanAktif.split('-')[1]) - 1; // 0-indexed
             startDateObj = new Date(year, month, 1);
-            endDateObj = new Date(year, month, 0);
+            endDateObj = new Date(year, month + 1, 0); // hari terakhir bulan aktif
           } else {
             startDateObj = new Date(periodeMulai);
             endDateObj = new Date(periodeAkhir);
@@ -949,7 +949,9 @@ const DashboardHR = () => {
                             ? <span className="inline-block mt-1.5 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Telat Masuk</span>
                             : todayLog?.in
                               ? <span className="inline-block mt-1.5 bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Hadir</span>
-                              : <span className="inline-block mt-1.5 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Belum Absen</span>
+                              : leaveMap[emp.employee] === 1
+                                ? <span className="inline-block mt-1.5 bg-blue-100 text-blue-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Izin</span>
+                                : <span className="inline-block mt-1.5 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Belum Absen</span>
                         ) : (
                           <span className="inline-block mt-1.5 bg-[#fff8e1] text-[#fbc02d] border border-[#fbc02d]/50 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Rekap {filterMode === 'bulanan' ? 'Bulanan' : 'Periode'}</span>
                         )}
@@ -1250,7 +1252,7 @@ const DashboardHR = () => {
                           if (filterMode === 'bulanan') {
                             const [year, month] = bulanAktif.split('-').map(Number);
                             startDateObj = new Date(year, month - 1, 1);
-                            endDateObj = new Date(year, month, 0);
+                            endDateObj = new Date(year, month, 0); // hari terakhir bulan aktif (month-1+1=month, hari 0 = hari terakhir bulan sebelumnya dari month+1)
                           } else {
                             startDateObj = new Date(periodeMulai);
                             endDateObj = new Date(periodeAkhir);
