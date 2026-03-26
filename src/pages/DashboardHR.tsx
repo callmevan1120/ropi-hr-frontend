@@ -150,7 +150,7 @@ const DashboardHR = () => {
 
   // STATE PAGINATION 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 12;
 
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
   const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
@@ -359,9 +359,9 @@ const DashboardHR = () => {
           let startDateObj: Date, endDateObj: Date;
           if (filterMode === 'bulanan') {
             const year = parseInt(bulanAktif.split('-')[0]);
-            const month = parseInt(bulanAktif.split('-')[1]) - 1;
+            const month = parseInt(bulanAktif.split('-')[1]) - 1; // 0-indexed
             startDateObj = new Date(year, month, 1);
-            endDateObj = new Date(year, month, 0);
+            endDateObj = new Date(year, month + 1, 0); // hari terakhir bulan aktif
           } else {
             startDateObj = new Date(periodeMulai);
             endDateObj = new Date(periodeAkhir);
@@ -949,7 +949,9 @@ const DashboardHR = () => {
                             ? <span className="inline-block mt-1.5 bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Telat Masuk</span>
                             : todayLog?.in
                               ? <span className="inline-block mt-1.5 bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Hadir</span>
-                              : <span className="inline-block mt-1.5 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Belum Absen</span>
+                              : leaveMap[emp.employee] === 1
+                                ? <span className="inline-block mt-1.5 bg-blue-100 text-blue-700 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Izin</span>
+                                : <span className="inline-block mt-1.5 bg-gray-100 text-gray-500 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Belum Absen</span>
                         ) : (
                           <span className="inline-block mt-1.5 bg-[#fff8e1] text-[#fbc02d] border border-[#fbc02d]/50 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">Rekap {filterMode === 'bulanan' ? 'Bulanan' : 'Periode'}</span>
                         )}
@@ -1023,40 +1025,27 @@ const DashboardHR = () => {
             </div>
 
             {/* KONTROL PAGINATION */}
-            <div className="flex justify-between items-center mt-8 mb-4 gap-3">
-              <span className="text-xs font-bold text-gray-400 hidden sm:block">
-                Menampilkan <span className="text-[#3e2723] font-black">{Math.min(startIndex + 1, filteredDataAbsen.length)}–{Math.min(startIndex + itemsPerPage, filteredDataAbsen.length)}</span> dari <span className="text-[#3e2723] font-black">{filteredDataAbsen.length}</span> karyawan
-              </span>
-              <div className="flex items-center gap-2 mx-auto sm:mx-0">
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 mt-8 mb-4">
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="w-9 h-9 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center text-[#3e2723] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 active:scale-95 transition-all"
+                  className="w-10 h-10 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center text-[#3e2723] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 active:scale-95 transition-all"
                 >
-                  <i className="fa-solid fa-chevron-left text-xs" />
+                  <i className="fa-solid fa-chevron-left"></i>
                 </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-9 h-9 rounded-full text-sm font-black transition-all active:scale-95 border ${
-                      page === currentPage
-                        ? 'bg-[#fbc02d] text-[#3e2723] border-[#fbc02d] shadow-md'
-                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 shadow-sm'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
+                <span className="text-sm font-black text-gray-500 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-200">
+                  Halaman <span className="text-[#fbc02d]">{currentPage}</span> dari {totalPages}
+                </span>
                 <button
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="w-9 h-9 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center text-[#3e2723] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 active:scale-95 transition-all"
+                  className="w-10 h-10 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center text-[#3e2723] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50 active:scale-95 transition-all"
                 >
-                  <i className="fa-solid fa-chevron-right text-xs" />
+                  <i className="fa-solid fa-chevron-right"></i>
                 </button>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>
@@ -1263,7 +1252,7 @@ const DashboardHR = () => {
                           if (filterMode === 'bulanan') {
                             const [year, month] = bulanAktif.split('-').map(Number);
                             startDateObj = new Date(year, month - 1, 1);
-                            endDateObj = new Date(year, month, 0);
+                            endDateObj = new Date(year, month, 0); // hari terakhir bulan aktif (month-1+1=month, hari 0 = hari terakhir bulan sebelumnya dari month+1)
                           } else {
                             startDateObj = new Date(periodeMulai);
                             endDateObj = new Date(periodeAkhir);
