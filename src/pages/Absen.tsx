@@ -108,12 +108,6 @@ const isSatpam = (role?: string): boolean => {
 };
 
 // ─── Tabel jam kantor (PH Klaten & Jakarta sama) ───────────────────
-//  Periode        | Hari           | Masuk | Pulang | Satpam masuk | Satpam pulang
-//  Non Ramadhan   | Senin – Kamis  | 07:30 | 16:30  | 07:00        | 17:00
-//  Non Ramadhan   | Jumat          | 07:30 | 17:00  | 07:00        | 17:30
-//  Ramadhan       | Senin – Kamis  | 07:00 | 15:30  | 06:30        | 16:00
-//  Ramadhan       | Jumat          | 07:00 | 16:00  | 06:30        | 16:30
-// ───────────────────────────────────────────────────────────────────
 const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: string } => {
   const hari     = tglDate.getDay(); // 0=Min,1=Sen,...,5=Jum,6=Sab
   const isFriday = hari === 5;
@@ -136,12 +130,6 @@ const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: s
   return { in: baseIn, out: baseOut };
 };
 
-// Nama shift kantor harus SAMA PERSIS dengan Shift Type di ERPNext
-// Format: "{HariLabel} ({BranchLabel} {PeriodeLabel})"
-// Contoh : "Senin - Kamis (PH Klaten Non Ramadhan)"
-//          "Jumat (Jakarta Ramadhan)"
-// Catatan: Satpam TIDAK memiliki Shift Type terpisah di ERPNext →
-//          gunakan nama shift kantor biasa (jam ditangani di getJamShiftKantor)
 const getNamaShiftKantor = (tglDate: Date, branchUser: string | undefined, _satpamFlag: boolean): string => {
   const hari         = tglDate.getDay();
   const isFriday     = hari === 5;
@@ -207,9 +195,8 @@ const validasiShiftName = (
   if (isFriday && recordIsSenKam) return shiftLokal;
   if (!isFriday && !isWeekend && recordIsFriday) return shiftLokal;
 
-  // Jika record dari ERPNext sudah dalam format lama (tanpa kurung), normalisasi
   if (shiftFromRecord && !shiftFromRecord.includes('(') && !shiftFromRecord.includes(')')) {
-    return shiftLokal; // gunakan format lokal yang sudah benar
+    return shiftLokal; 
   }
 
   return shiftFromRecord;
@@ -253,9 +240,6 @@ const hitungJarak = (lat1: number, lng1: number, lat2: number, lng2: number) => 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// ─────────────────────────────────────────────
-// OVERLAY WATERMARK: Logo + 3 Baris Estetik
-// ─────────────────────────────────────────────
 const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, lokasi: string) => {
   const now = new Date();
   const jam = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
@@ -323,15 +307,11 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
   });
 };
 
-// ─────────────────────────────────────────────
-// KOMPONEN UTAMA
-// ─────────────────────────────────────────────
 const Absen = () => {
   const navigate      = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const BACKEND      = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
-  const ERPNEXT_URL  = 'http://103.187.147.240';
   const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
 
   const [user,          setUser]          = useState<User | null>(null);
@@ -532,7 +512,7 @@ const Absen = () => {
     setShiftLoading(true);
     setShiftError(null);
     try {
-      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}`);
+      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}&_t=${Date.now()}`);
       const data = await res.json();
       if (data.success) {
         setActiveShift({
@@ -552,7 +532,7 @@ const Absen = () => {
 
   const ambilMasterShift = async () => {
     try {
-      const res  = await fetch(`${BACKEND}/api/attendance/shifts`);
+      const res  = await fetch(`${BACKEND}/api/attendance/shifts?_t=${Date.now()}`);
       const data = await res.json();
       if (data.success && data.data) {
         const tempMap: Record<string, { in: string; out: string }> = {};
@@ -569,7 +549,7 @@ const Absen = () => {
 
   const ambilLokasiKantor = async (branch?: string) => {
     try {
-      const url  = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}` : `${BACKEND}/api/locations`;
+      const url  = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}?_t=${Date.now()}` : `${BACKEND}/api/locations?_t=${Date.now()}`;
       const res  = await fetch(url);
       const data = await res.json();
       if (data.success && data.locations?.length > 0) setLokasiKantor(data.locations);
@@ -582,7 +562,9 @@ const Absen = () => {
       const dari   = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
       const akhir  = new Date(tahunAktif, bulanAktif + 1, 0);
       const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
-      const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}`);
+      
+      // PERBAIKAN: Menambahkan cache-buster agar selalu dapat data terbaru
+      const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}&_t=${Date.now()}`);
       const data   = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
       else setDataRiwayat([]);
@@ -591,7 +573,7 @@ const Absen = () => {
 
   const ambilRiwayatIzin = async (employeeId: string) => {
     try {
-      const res  = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}`);
+      const res  = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}&_t=${Date.now()}`);
       const data = await res.json();
       if (data.success && data.data) {
         const filtered = data.data.filter((item: LeaveRecord) => {
@@ -865,21 +847,43 @@ const Absen = () => {
     setIsKirimLoading(false);
   };
 
+  // PERBAIKAN: MEMPRIORITASKAN LOG YANG MEMILIKI FOTO
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
     const tgl = item.time?.substring(0, 10) || item.attendance_date || '';
     if (!groupedRiwayat[tgl]) groupedRiwayat[tgl] = {};
     
     if (item.log_type === 'IN') {
-      const currentInTime = groupedRiwayat[tgl].in?.time;
-      if (!groupedRiwayat[tgl].in || (item.time && currentInTime && item.time < currentInTime)) {
+      const curr = groupedRiwayat[tgl].in;
+      if (!curr) {
         groupedRiwayat[tgl].in = item;
+      } else {
+        // Jika log yang lama tidak ada foto, tapi log yang baru ada fotonya, ambil yang ada fotonya!
+        const currHasPic = !!curr.custom_foto_absen;
+        const itemHasPic = !!item.custom_foto_absen;
+        if (!currHasPic && itemHasPic) {
+          groupedRiwayat[tgl].in = item;
+        } else if (currHasPic === itemHasPic && item.time && curr.time && item.time < curr.time) {
+          // Jika sama-sama ada/tidak ada foto, ambil jam yang paling awal (Masuk)
+          groupedRiwayat[tgl].in = item;
+        }
       }
     }
+    
     if (item.log_type === 'OUT') {
-      const currentOutTime = groupedRiwayat[tgl].out?.time;
-      if (!groupedRiwayat[tgl].out || (item.time && currentOutTime && item.time > currentOutTime)) {
+      const curr = groupedRiwayat[tgl].out;
+      if (!curr) {
         groupedRiwayat[tgl].out = item;
+      } else {
+        // Jika log yang lama tidak ada foto (misal dari Auto-Checkout), timpa dengan log manual kita yang ada fotonya!
+        const currHasPic = !!curr.custom_foto_absen;
+        const itemHasPic = !!item.custom_foto_absen;
+        if (!currHasPic && itemHasPic) {
+          groupedRiwayat[tgl].out = item;
+        } else if (currHasPic === itemHasPic && item.time && curr.time && item.time > curr.time) {
+          // Jika sama-sama ada/tidak ada foto, ambil jam yang paling akhir (Keluar)
+          groupedRiwayat[tgl].out = item;
+        }
       }
     }
   });
@@ -948,10 +952,12 @@ const Absen = () => {
     setDetailModal({ show: true, tgl, inData: groupedRiwayat[tgl]?.in, outData: groupedRiwayat[tgl]?.out });
   };
 
+  // PERBAIKAN: MELEWATKAN SEMUA FILE ERPNEXT KE PROXY AGAR TIDAK TERBLOKIR CORS/AUTH
   const prosesUrlFoto = (url?: string) => {
     if (!url) return '';
     if (url.startsWith('data:image')) return url;
-    if (url.startsWith('/files')) return ERPNEXT_URL + url;
+    if (url.startsWith('/files') || url.startsWith('/private')) return `${BACKEND}/api/attendance/file?path=${encodeURIComponent(url)}`;
+    if (url.startsWith('http')) return url;
     return url;
   };
 
@@ -1521,7 +1527,6 @@ const Absen = () => {
 
                     <div className={`flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 bg-gray-50`}>
                       
-                      {/* Kalau Outlet (Punya Foto Kiri), pakai carousel biar rapi di HP */}
                       {hasVerifImage ? (
                         <div className="flex flex-col gap-6 w-full">
                            {/* CONTAINER MASUK */}
