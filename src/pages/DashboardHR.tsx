@@ -32,6 +32,13 @@ interface EmployeeSummary {
   logsByDate: Record<string, DayLog>;
 }
 
+interface Lokasi {
+  nama: string;
+  lat: number;
+  lng: number;
+  radius: number;
+}
+
 // ── HELPER ──
 const formatJamLokal = (timeString?: string) => {
   if (!timeString) return '-';
@@ -83,7 +90,6 @@ const getJamShift = (
   const tglDate = new Date(tanggal);
   const isFriday = tglDate.getDay() === 5;
   const ramadhan = isRamadhan();
-  
   if (!isFriday && shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
     return masterShifts[shiftNameFromRecord];
   }
@@ -115,6 +121,8 @@ const DashboardHR = () => {
   // State untuk Filter & Pencarian
   const [searchQuery, setSearchQuery] = useState('');
   const [activeBranch, setActiveBranch] = useState('Semua');
+  const [lokasiKantor, setLokasiKantor] = useState<Lokasi[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
@@ -126,10 +134,21 @@ const DashboardHR = () => {
       navigate('/home', { replace: true });
     } else {
       ambilMasterShift();
+      ambilLokasiKantor();
     }
   }, [navigate]);
 
   useEffect(() => { tarikDataSemuaKaryawan(); }, [tanggalAktif, bulanAktif, filterMode, masterShifts]);
+
+  const ambilLokasiKantor = async () => {
+    try {
+      const res = await fetch(`${BACKEND}/api/locations`);
+      const data = await res.json();
+      if (data.success && data.locations?.length > 0) {
+        setLokasiKantor(data.locations);
+      }
+    } catch (e) { console.error('Gagal mengambil daftar lokasi', e); }
+  };
 
   const ambilMasterShift = async () => {
     try {
@@ -247,7 +266,7 @@ const DashboardHR = () => {
           setLeaveMap(newLeaveMap);
           setLeaveRawMap(newLeaveRawMap);
         } else {
-          const bulanRef = tanggalAktif.substring(0, 7); 
+          const bulanRef = tanggalAktif.substring(0, 7);
           const [yr, mo] = bulanRef.split('-').map(Number);
           const lastDay = new Date(yr, mo, 0).getDate();
           const fromBulan = `${bulanRef}-01`;
@@ -417,8 +436,8 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps/search/?api=1&query=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps/search/?api=1&query=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
@@ -450,8 +469,12 @@ const DashboardHR = () => {
     navigate('/login', { replace: true });
   };
 
-  // 🔥 FILTER CABANG DINAMIS (Membuat list dari data yang ada)
-  const uniqueBranches = Array.from(new Set(dataAbsen.map(emp => emp.branch))).sort();
+  // 🔥 FILTER CABANG DINAMIS DARI API /locations 🔥
+  const branchOptions = Array.from(new Set([
+    'Semua', 
+    ...lokasiKantor.map(l => l.nama), 
+    ...dataAbsen.map(d => d.branch)
+  ])).sort();
 
   // 🔥 LOGIKA FILTERING (Pencarian & Cabang)
   const filteredDataAbsen = dataAbsen.filter(emp => {
@@ -543,7 +566,7 @@ const DashboardHR = () => {
             </div>
           </div>
 
-          {/* BARIS 3: TOOLBAR (Toggle Harian/Bulanan, Input Tanggal, Filter Cabang, Pencarian) */}
+          {/* BARIS 3: TOOLBAR (Toggle Harian/Bulanan, Input Tanggal, Filter Dropdown, Pencarian) */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full">
             {/* Toggle Harian/Bulanan */}
             <div className="flex bg-white/10 rounded-xl p-1 border border-white/10 shadow-inner md:w-auto shrink-0">
@@ -560,20 +583,43 @@ const DashboardHR = () => {
             </div>
 
             {/* 🔥 FILTER DROPDOWN CABANG 🔥 */}
-            <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 md:py-2.5 border border-white/10 shadow-sm w-full md:w-auto shrink-0 relative group focus-within:bg-white/20 transition-colors cursor-pointer">
-              <i className="fa-solid fa-store text-white/50 mr-2" />
-              <select 
-                value={activeBranch} 
-                onChange={(e) => setActiveBranch(e.target.value)}
-                className="bg-transparent text-white font-bold text-xs md:text-sm outline-none w-full appearance-none cursor-pointer pr-4"
-                style={{ colorScheme: 'dark' }}
+            <div 
+              className="relative w-full md:w-48 shrink-0"
+              tabIndex={0}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                  setIsDropdownOpen(false);
+                }
+              }}
+            >
+              <div 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center justify-between bg-white/10 rounded-xl px-4 py-2 md:py-2.5 border border-white/10 shadow-sm cursor-pointer hover:bg-white/20 transition-colors"
               >
-                <option value="Semua" className="text-gray-900">Semua Lokasi</option>
-                {uniqueBranches.map(b => (
-                  <option key={b} value={b} className="text-gray-900">{b}</option>
-                ))}
-              </select>
-              <i className="fa-solid fa-chevron-down text-white/50 absolute right-3 text-[10px] pointer-events-none" />
+                <div className="flex items-center gap-3">
+                  <i className="fa-solid fa-store text-white/50" />
+                  <span className="text-white font-bold text-xs md:text-sm truncate">
+                    {activeBranch}
+                  </span>
+                </div>
+                <i className={`fa-solid fa-chevron-down text-white/50 text-[10px] transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </div>
+
+              {isDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+                  <div className="max-h-60 overflow-y-auto">
+                    {branchOptions.map(b => (
+                      <div
+                        key={b}
+                        onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }}
+                        className={`px-4 py-3 text-xs md:text-sm font-bold cursor-pointer transition-colors ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        {b}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Pencarian Nama Karyawan */}
@@ -769,7 +815,7 @@ const DashboardHR = () => {
 
           return (
             <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
-              <div className="bg-white w-full md:max-w-4xl h-[90vh] md:h-[85vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
+              <div className="bg-white w-full md:max-w-6xl h-[90vh] md:h-[85vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
 
                 {/* ── HEADER mobile: nama + tombol tutup (sticky) ── */}
                 <div className="bg-[#3e2723] px-5 py-4 flex items-center gap-3 shrink-0 md:hidden">
@@ -845,13 +891,13 @@ const DashboardHR = () => {
 
                       <div className="flex flex-col gap-2">
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
@@ -861,21 +907,23 @@ const DashboardHR = () => {
                   </div>
 
                   {/* ── KOLOM KANAN: Galeri foto (Layout Konsisten By Event IN/OUT) ── */}
-                  <div className="flex-1 md:overflow-y-auto p-4 md:p-8 bg-gray-50 flex flex-col gap-6 pb-10">
+                  {/* 🔥 PERBAIKAN: Menggunakan flex-row di lg agar Masuk & Keluar bersebelahan di Desktop */}
+                  <div className="flex-1 md:overflow-y-auto p-4 md:p-8 bg-gray-50 flex flex-col lg:flex-row items-start gap-6 pb-10">
+                    
                     {/* CONTAINER MASUK */}
-                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0">
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0 flex-1 w-full">
                         <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
                           <div className="w-6 h-6 rounded-full bg-green-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-arrow-right-to-bracket text-green-500 text-[10px]" /></div>
                           <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Data Masuk</p>
                         </div>
                         
                         {todayLog.in ? (
-                          <div className="flex overflow-x-auto md:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
+                          <div className="flex overflow-x-auto gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar flex-wrap md:flex-nowrap lg:flex-wrap">
                             <FotoSlot src={todayLog.in?.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
                             {emp.branch === 'Outlet' && <FotoSlot src={todayLog.in?.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
                             <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
-                                <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-[3/4] md:aspect-square">
+                                <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-square">
                                   {todayLog.in?.custom_signature ? <img src={prosesUrlFoto(todayLog.in.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
                                   <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Masuk</div>
                                 </div>
@@ -890,19 +938,19 @@ const DashboardHR = () => {
                     </div>
 
                     {/* CONTAINER KELUAR */}
-                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0">
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3 shrink-0 flex-1 w-full">
                         <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
                           <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-arrow-right-from-bracket text-orange-500 text-[10px]" /></div>
                           <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Data Keluar</p>
                         </div>
                         
                         {todayLog.out ? (
-                          <div className="flex overflow-x-auto md:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
+                          <div className="flex overflow-x-auto gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar flex-wrap md:flex-nowrap lg:flex-wrap">
                             <FotoSlot src={todayLog.out?.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
                             {emp.branch === 'Outlet' && <FotoSlot src={todayLog.out?.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
                             <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
-                                <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-[3/4] md:aspect-square">
+                                <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-square">
                                   {todayLog.out?.custom_signature ? <img src={prosesUrlFoto(todayLog.out.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Keluar" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
                                   <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Keluar</div>
                                 </div>
@@ -916,6 +964,7 @@ const DashboardHR = () => {
                         )}
                     </div>
                   </div>
+
                 </div>
               </div>
             </div>
@@ -1033,12 +1082,12 @@ const DashboardHR = () => {
                               {/* Tombol Map Bulanan */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://www.google.com/maps/search/?api=1&query=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://www.google.com/maps/search/?api=1&query=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                   </a>
                                 )}
@@ -1051,12 +1100,12 @@ const DashboardHR = () => {
                               ) : (!log.in && !log.out) ? (
                                 <div className="text-xs font-bold text-gray-400 text-center py-4">Belum ada absen</div>
                               ) : (
-                                <div className="flex flex-col gap-4">
+                                <div className="flex flex-col md:flex-row gap-4">
                                   {/* MASUK */}
                                   {log.in && (
-                                    <div>
-                                      <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-200 pb-1">Data Masuk</p>
-                                      <div className="flex overflow-x-auto md:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
+                                    <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-gray-100">
+                                      <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Data Masuk</p>
+                                      <div className="flex overflow-x-auto flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
                                         <FotoSlot src={log.in.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
                                         {emp.branch === 'Outlet' && <FotoSlot src={log.in.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
                                         <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
@@ -1072,9 +1121,9 @@ const DashboardHR = () => {
                                   
                                   {/* KELUAR */}
                                   {log.out && (
-                                    <div>
-                                      <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-200 pb-1">Data Keluar</p>
-                                      <div className="flex overflow-x-auto md:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
+                                    <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-gray-100">
+                                      <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Data Keluar</p>
+                                      <div className="flex overflow-x-auto flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
                                         <FotoSlot src={log.out.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
                                         {emp.branch === 'Outlet' && <FotoSlot src={log.out.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
                                         <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
