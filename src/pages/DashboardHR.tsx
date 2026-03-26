@@ -156,7 +156,14 @@ const DashboardHR = () => {
       const res = await fetch(`${BACKEND}/api/locations`);
       const data = await res.json();
       if (data.success && data.locations?.length > 0) {
-        setLokasiKantor(data.locations);
+        // 🔥 NORMALISASI NAMA LOKASI (Hindari spasi dobel seperti 'PH  KLATEN')
+        const cleanedLocations = data.locations.map((l: any) => {
+          let namaBersih = l.nama.replace(/\s+/g, ' ').trim();
+          if (namaBersih.toLowerCase() === 'ph klaten') namaBersih = 'PH Klaten';
+          if (namaBersih.toLowerCase() === 'jakarta') namaBersih = 'Jakarta';
+          return { ...l, nama: namaBersih };
+        });
+        setLokasiKantor(cleanedLocations);
       }
     } catch (e) { console.error('Gagal mengambil daftar lokasi', e); }
   };
@@ -200,17 +207,18 @@ const DashboardHR = () => {
 
         result.data.forEach((item: RiwayatAbsen) => {
           if (!grouped[item.employee]) {
-            let branchAsumsi = 'Outlet Lainnya';
+            let branchAsumsi = 'Outlet';
             
-            // 1. Coba cocokkan dari nama shift
-            if (item.shift) {
-              const shiftLower = item.shift.toLowerCase();
-              const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase().trim()));
+            // Evaluasi Branch yang solid
+            if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
+            else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
+            else if (item.shift) {
+              const shiftLower = item.shift.toLowerCase().replace(/\s+/g, ' ').trim();
+              const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase()));
               if (matchLoc) branchAsumsi = matchLoc.nama;
             }
 
-            // 2. Coba cocokkan dari koordinat (radius 2KM) jika belum ketemu
-            if (branchAsumsi === 'Outlet Lainnya' && item.latitude && item.longitude) {
+            if (branchAsumsi === 'Outlet' && item.latitude && item.longitude) {
               const lat = Number(item.latitude);
               const lng = Number(item.longitude);
               if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
@@ -223,12 +231,6 @@ const DashboardHR = () => {
               }
             }
 
-            // 3. Fallback jika semua gagal
-            if (branchAsumsi === 'Outlet Lainnya') {
-              if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
-              else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
-            }
-
             grouped[item.employee] = {
               employee: item.employee,
               employee_name: item.employee_name || item.employee,
@@ -237,6 +239,11 @@ const DashboardHR = () => {
               logsByDate: {}
             };
           }
+
+          // Perbaiki asumsi jika data berikutnya ternyata valid PH Klaten / Jakarta
+          const empRef = grouped[item.employee];
+          if (item.shift?.toLowerCase().includes('klaten')) empRef.branch = 'PH Klaten';
+          else if (item.shift?.toLowerCase().includes('jakarta')) empRef.branch = 'Jakarta';
 
           const dateKey = item.time.substring(0, 10);
           if (!grouped[item.employee].logsByDate[dateKey])
@@ -316,12 +323,12 @@ const DashboardHR = () => {
               
               dataBulan.data.forEach((item: any) => {
                 if (!empMap[item.employee]) {
-                  let branchAsumsi = 'Outlet Lainnya';
+                  let branchAsumsi = 'Outlet';
                   if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
                   else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
                   else if (item.shift) {
-                    const shiftLower = item.shift.toLowerCase();
-                    const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase().trim()));
+                    const shiftLower = item.shift.toLowerCase().replace(/\s+/g, ' ').trim();
+                    const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase()));
                     if (matchLoc) branchAsumsi = matchLoc.nama;
                   }
                   empMap[item.employee] = { name: item.employee_name || item.employee, branch: branchAsumsi };
@@ -465,7 +472,7 @@ const DashboardHR = () => {
           return;
         }
 
-        // 🔥 PERBAIKAN LINK MAPS DI EXCEL (Menggunakan URL Valid Google Maps)
+        // PERBAIKAN: LINK GOOGLE MAPS UNTUK EXCEL SUDAH BENAR
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -511,9 +518,13 @@ const DashboardHR = () => {
     navigate('/login', { replace: true });
   };
 
-  // 🔥 FILTER PENGELOMPOKAN CABANG DINAMIS 🔥
+  // FILTER PENGELOMPOKAN CABANG DINAMIS (Kantor vs Outlet)
   const kantorLocations = ['PH Klaten', 'Jakarta'];
-  const outletLocations = lokasiKantor.map(l => l.nama).filter(n => !kantorLocations.includes(n));
+  // Hanya ambil nama outlet dari API yang bukan Kantor
+  const outletLocations = Array.from(new Set([
+    ...lokasiKantor.map(l => l.nama),
+    ...dataAbsen.map(d => d.branch)
+  ])).filter(n => !kantorLocations.includes(n) && n !== 'Semua Lokasi').sort();
 
   const filteredDataAbsen = dataAbsen.filter(emp => {
     const searchMatch = emp.employee_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -616,7 +627,7 @@ const DashboardHR = () => {
               }
             </div>
 
-            {/* 🔥 FILTER DROPDOWN CABANG (Lebih rapi mengelompokkan Outlet dan Kantor) 🔥 */}
+            {/* FILTER DROPDOWN CABANG (Lebih rapi, dipisah Outlet & Kantor) */}
             <div 
               className="relative w-full md:w-48 shrink-0"
               tabIndex={0}
@@ -653,7 +664,6 @@ const DashboardHR = () => {
                     {outletLocations.map(b => (
                       <div key={b} onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>{b}</div>
                     ))}
-                    <div onClick={() => { setActiveBranch('Outlet Lainnya'); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === 'Outlet Lainnya' ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>Lainnya</div>
                   </div>
                 </div>
               )}
@@ -839,7 +849,7 @@ const DashboardHR = () => {
           if (todayLog.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) durasiTelat = s; }
           if (todayLog.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) durasiCepat = s; }
 
-          // Cari izin hari ini
+          // Cari izin hari ini sekali saja
           const izinHariIniData = (() => {
             if (leaveMap[emp.employee] !== 1) return null;
             const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
@@ -853,9 +863,9 @@ const DashboardHR = () => {
 
           return (
             <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
-              <div className="bg-white w-full md:max-w-6xl h-[90vh] md:h-[85vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
+              <div className="bg-white w-full md:max-w-5xl h-[90vh] md:h-[85vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
 
-                {/* HEADER mobile */}
+                {/* ── HEADER mobile: nama + tombol tutup (sticky) ── */}
                 <div className="bg-[#3e2723] px-5 py-4 flex items-center gap-3 shrink-0 md:hidden">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 border-2 border-white/30">
                     {todayLog.in?.custom_foto_absen
@@ -872,9 +882,12 @@ const DashboardHR = () => {
                   </button>
                 </div>
 
+                {/* ── Content Wrapper (Scrollable Area) ── */}
                 <div className="flex-1 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row">
-                  {/* KOLOM KIRI (Info) */}
+
+                  {/* ── KOLOM KIRI (Info) ── */}
                   <div className="md:w-1/3 flex flex-col shrink-0 md:overflow-y-auto bg-white md:border-r border-gray-100">
+                    {/* Avatar + nama — hanya desktop */}
                     <div className="hidden md:block p-8 border-b border-gray-100 relative shrink-0">
                       <button onClick={tutupModal} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
                         <i className="fa-solid fa-xmark text-lg" />
@@ -889,6 +902,7 @@ const DashboardHR = () => {
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee} • <span className="text-[#fbc02d]">{emp.branch}</span></p>
                     </div>
 
+                    {/* Info: shift, masuk/keluar, izin, peta */}
                     <div className="p-4 md:p-8 shrink-0">
                       <div className="bg-[#fff8e1] px-4 py-3 rounded-2xl border border-[#fbc02d]/30 mb-3 flex items-center gap-3">
                         <i className="fa-solid fa-calendar-check text-[#fbc02d] shrink-0" />
@@ -923,18 +937,18 @@ const DashboardHR = () => {
                         </div>
                       )}
 
-                      {/* 🔥 PERBAIKAN LINK MAPS HARIAN 🔥 */}
                       <div className="flex flex-col gap-2">
+                        {/* PERBAIKAN LINK GOOGLE MAPS */}
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
                           <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
+                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
                           <a href={`https://www.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
+                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
                           </a>
                         )}
                       </div>
@@ -952,7 +966,7 @@ const DashboardHR = () => {
                         </div>
                         
                         {todayLog.in ? (
-                          <div className="flex overflow-x-auto md:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
+                          <div className="flex overflow-x-auto lg:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
                             <FotoSlot src={todayLog.in?.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
                             {isOutlet && <FotoSlot src={todayLog.in?.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
                             <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
@@ -979,7 +993,7 @@ const DashboardHR = () => {
                         </div>
                         
                         {todayLog.out ? (
-                          <div className="flex overflow-x-auto md:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
+                          <div className="flex overflow-x-auto lg:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
                             <FotoSlot src={todayLog.out?.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
                             {isOutlet && <FotoSlot src={todayLog.out?.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
                             <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
@@ -1110,16 +1124,18 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
-                              {/* 🔥 PERBAIKAN LINK MAPS BULANAN 🔥 */}
+                              {/* 🔥 PERBAIKAN LINK GOOGLE MAPS BULANAN 🔥 */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
                                   <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
+                                    <i className="fa-solid fa-arrow-up-right-from-square text-gray-400 ml-1" />
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
                                   <a href={`https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
+                                    <i className="fa-solid fa-arrow-up-right-from-square text-gray-400 ml-1" />
                                   </a>
                                 )}
                               </div>
