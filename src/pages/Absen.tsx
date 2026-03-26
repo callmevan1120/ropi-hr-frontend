@@ -347,7 +347,6 @@ const Absen = () => {
   const [shiftLoading,  setShiftLoading]  = useState(false);
   const [shiftError,    setShiftError]    = useState<string | null>(null);
 
-  // 🔥 PERBAIKAN: Ref untuk track state di dalam timeout/interval
   const shiftLoadingRef = useRef(shiftLoading);
   useEffect(() => { shiftLoadingRef.current = shiftLoading; }, [shiftLoading]);
   const activeShiftRef = useRef(activeShift);
@@ -622,7 +621,6 @@ const Absen = () => {
     } catch { return 'GPS Aktif'; }
   };
 
-  // 🔥 PERBAIKAN: Menunggu shiftLoading sebelum mengecek activeShift
   const bukaModalAbsen = async (mode: string) => {
     if (outlet && shiftLoadingRef.current) {
       await new Promise<void>(resolve => {
@@ -1013,7 +1011,7 @@ const Absen = () => {
                 </div>
               </div>
 
-              {/* Status Badge Khusus Outlet (Menampilkan Jadwal Shift Hari Ini) */}
+              {/* Status Badge Khusus Outlet */}
               {outlet && (
                 <div className="mt-3 flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10 min-h-[32px]">
                   <i className={`fa-solid ${shiftLoading ? 'fa-spinner fa-spin' : shiftError ? 'fa-triangle-exclamation text-orange-300' : 'fa-clock text-[#fbc02d]'} text-xs shrink-0`} />
@@ -1342,21 +1340,21 @@ const Absen = () => {
                               <div className="shrink-0 w-[85%] snap-center flex flex-col gap-1.5">
                                 <p className="text-[10px] font-black text-gray-400 uppercase text-center">📸 Wajah + Kanan</p>
                                 <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black aspect-[3/4] flex items-center justify-center">
-                                  <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Kanan" />
+                                  <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Kanan" loading="lazy" decoding="async" />
                                 </div>
                               </div>
                               {/* Foto 2 */}
                               <div className="shrink-0 w-[85%] snap-center flex flex-col gap-1.5">
                                 <p className="text-[10px] font-black text-gray-400 uppercase text-center">📸 Wajah + Kiri</p>
                                 <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black aspect-[3/4] flex items-center justify-center">
-                                  <img src={fotoKiriBase64 || ''} className="w-full h-full object-contain" alt="Kiri" />
+                                  <img src={fotoKiriBase64 || ''} className="w-full h-full object-contain" alt="Kiri" loading="lazy" decoding="async" />
                                 </div>
                               </div>
                               {/* TTD */}
                               <div className="shrink-0 w-[85%] snap-center flex flex-col gap-1.5">
                                 <p className="text-[10px] font-black text-gray-400 uppercase text-center">✍️ Tanda Tangan</p>
                                 <div className="rounded-2xl border-2 border-gray-200 bg-white p-2 shadow-sm aspect-[3/4] flex items-center justify-center">
-                                  <img src={ttdBase64 || ''} className="w-full h-auto max-h-full object-contain mix-blend-multiply" alt="TTD" />
+                                  <img src={ttdBase64 || ''} className="w-full h-auto max-h-full object-contain mix-blend-multiply" alt="TTD" loading="lazy" decoding="async" />
                                 </div>
                               </div>
                             </div>
@@ -1373,14 +1371,14 @@ const Absen = () => {
                             <div className="flex flex-col gap-1">
                               <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">📸 Selfie Wajah</p>
                               <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black flex items-center justify-center max-w-[240px] mx-auto w-full aspect-[3/4]">
-                                <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Selfie" />
+                                <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Selfie" loading="lazy" decoding="async" />
                               </div>
                             </div>
 
                             <div className="w-full max-w-[240px] mx-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-sm flex flex-col items-center">
                               <p className="text-[10px] font-black text-gray-400 uppercase mb-2 border-b border-dashed border-gray-200 w-full text-center pb-1">✍️ Tanda Tangan</p>
                               <div className="w-full aspect-square flex items-center justify-center">
-                                <img src={ttdBase64 || ''} className="max-w-full max-h-full object-contain mix-blend-multiply" alt="TTD" />
+                                <img src={ttdBase64 || ''} className="max-w-full max-h-full object-contain mix-blend-multiply" alt="TTD" loading="lazy" decoding="async" />
                               </div>
                             </div>
                           </>
@@ -1480,7 +1478,7 @@ const Absen = () => {
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
                     {src
-                      ? <img src={prosesUrlFoto(src)} className="w-full h-full object-contain" alt={label} />
+                      ? <img src={prosesUrlFoto(src)} className="w-full h-full object-contain" alt={label} loading="lazy" decoding="async" />
                       : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
                     }
                     <div className={`absolute top-2 left-2 ${badgeColor} text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20`}>{badge}</div>
@@ -1538,7 +1536,7 @@ const Absen = () => {
                                  <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
                                     <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
-                                       {detailModal.inData?.custom_signature ? <img src={prosesUrlFoto(detailModal.inData.custom_signature)} className="w-full h-auto object-contain mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                       {detailModal.inData?.custom_signature ? <img src={prosesUrlFoto(detailModal.inData.custom_signature)} className="w-full h-auto object-contain mix-blend-multiply" alt="TTD Masuk" loading="lazy" decoding="async" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
                                        <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
                                     </div>
                                  </div>
@@ -1559,7 +1557,7 @@ const Absen = () => {
                                    <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
                                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
                                       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
-                                         {detailModal.outData?.custom_signature ? <img src={prosesUrlFoto(detailModal.outData.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Keluar" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                         {detailModal.outData?.custom_signature ? <img src={prosesUrlFoto(detailModal.outData.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Keluar" loading="lazy" decoding="async" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
                                          <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
                                       </div>
                                    </div>
@@ -1593,7 +1591,7 @@ const Absen = () => {
                                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
                                   <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
                                     {data?.custom_signature
-                                      ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full h-auto object-contain mix-blend-multiply" alt={`TTD ${label}`} />
+                                      ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full h-auto object-contain mix-blend-multiply" alt={`TTD ${label}`} loading="lazy" decoding="async" />
                                       : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
                                     }
                                   </div>
