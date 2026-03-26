@@ -472,7 +472,6 @@ const DashboardHR = () => {
           return;
         }
 
-        // PERBAIKAN: LINK GOOGLE MAPS UNTUK EXCEL SUDAH BENAR
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -485,14 +484,36 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
+          'Koordinat Masuk': log.in?.latitude && log.in?.longitude ? `${log.in.latitude}, ${log.in.longitude}` : '-',
+          'Link Maps Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Koordinat Keluar': log.out?.latitude && log.out?.longitude ? `${log.out.latitude}, ${log.out.longitude}` : '-',
+          'Link Maps Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
     
     dataExcel.sort((a, b) => a.Tanggal.localeCompare(b.Tanggal) || a['Nama Karyawan'].localeCompare(b['Nama Karyawan']));
     const worksheet = XLSX.utils.json_to_sheet(dataExcel);
+
+    // ── Konversi kolom Link Maps menjadi hyperlink yang bisa diklik di Excel ──
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    const headers = dataExcel.length > 0 ? Object.keys(dataExcel[0]) : [];
+    const colMasukIdx = headers.indexOf('Link Maps Masuk');
+    const colKeluarIdx = headers.indexOf('Link Maps Keluar');
+
+    for (let R = range.s.r + 1; R <= range.e.r; R++) {
+      [colMasukIdx, colKeluarIdx].forEach((C) => {
+        if (C < 0) return;
+        const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+        const cell = worksheet[cellAddr];
+        if (cell && cell.v && cell.v !== '-') {
+          const url = cell.v as string;
+          cell.l = { Target: url, Tooltip: 'Buka di Google Maps' };
+          cell.s = { font: { color: { rgb: '0563C1' }, underline: true } };
+        }
+      });
+    }
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
@@ -510,7 +531,7 @@ const DashboardHR = () => {
     }
 
     const namaFile = filterMode === 'harian' ? `Laporan_Harian_${tanggalAktif}.xlsx` : `Laporan_Bulanan_${bulanAktif}.xlsx`;
-    XLSX.writeFile(workbook, namaFile);
+    XLSX.writeFile(workbook, namaFile, { cellStyles: true, bookSST: false });
   };
 
   const handleLogout = () => {
@@ -938,18 +959,24 @@ const DashboardHR = () => {
                       )}
 
                       <div className="flex flex-col gap-2">
-                        {/* PERBAIKAN LINK GOOGLE MAPS */}
+                        {/* LINK GOOGLE MAPS + KOORDINAT */}
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
-                            <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
-                          </a>
+                          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                            <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="hover:bg-gray-50 text-[#3e2723] px-3 py-2.5 text-xs font-bold flex items-center justify-between transition-colors border-b border-gray-100">
+                              <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk</span>
+                              <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
+                            </a>
+                            <p className="text-[9px] text-gray-400 font-mono px-3 py-1.5 select-all">{todayLog.in.latitude}, {todayLog.in.longitude}</p>
+                          </div>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://www.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
-                            <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
-                          </a>
+                          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                            <a href={`https://www.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="hover:bg-gray-50 text-[#3e2723] px-3 py-2.5 text-xs font-bold flex items-center justify-between transition-colors border-b border-gray-100">
+                              <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
+                              <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
+                            </a>
+                            <p className="text-[9px] text-gray-400 font-mono px-3 py-1.5 select-all">{todayLog.out.latitude}, {todayLog.out.longitude}</p>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1124,19 +1151,25 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
-                              {/* 🔥 PERBAIKAN LINK GOOGLE MAPS BULANAN 🔥 */}
+                              {/* LINK GOOGLE MAPS + KOORDINAT BULANAN */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
-                                    <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
-                                    <i className="fa-solid fa-arrow-up-right-from-square text-gray-400 ml-1" />
-                                  </a>
+                                  <div className="flex-1 bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                    <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1 hover:bg-gray-100 text-[#3e2723] px-2 py-2 text-[10px] font-bold transition-colors border-b border-gray-100">
+                                      <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
+                                      <i className="fa-solid fa-arrow-up-right-from-square text-gray-400 ml-1" />
+                                    </a>
+                                    <p className="text-[8px] text-gray-400 font-mono text-center px-2 py-1 select-all">{log.in.latitude}, {log.in.longitude}</p>
+                                  </div>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
-                                    <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
-                                    <i className="fa-solid fa-arrow-up-right-from-square text-gray-400 ml-1" />
-                                  </a>
+                                  <div className="flex-1 bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                    <a href={`https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1 hover:bg-gray-100 text-[#3e2723] px-2 py-2 text-[10px] font-bold transition-colors border-b border-gray-100">
+                                      <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
+                                      <i className="fa-solid fa-arrow-up-right-from-square text-gray-400 ml-1" />
+                                    </a>
+                                    <p className="text-[8px] text-gray-400 font-mono text-center px-2 py-1 select-all">{log.out.latitude}, {log.out.longitude}</p>
+                                  </div>
                                 )}
                               </div>
 
