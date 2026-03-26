@@ -898,8 +898,8 @@ const Absen = () => {
     }
   });
 
-  const rekapIzin  = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() !== 'rejected', tahunAktif, bulanAktif);
-  const rekapCuti  = hitungHariKerjaDalamBulan(leaveRecords, r =>  r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() !== 'rejected', tahunAktif, bulanAktif);
+  const rekapIzin  = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
+  const rekapCuti  = hitungHariKerjaDalamBulan(leaveRecords, r =>  r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
 
   const tanggalIzinSet  = (() => {
     const set = new Set<string>();
