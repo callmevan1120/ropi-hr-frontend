@@ -105,18 +105,6 @@ const hitungJarak = (lat1: number, lng1: number, lat2: number, lng2: number) => 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// Ambil koordinat dari berbagai kemungkinan nama field ERPNext
-const getLatLng = (record: any): { lat: string | null; lng: string | null } => {
-  const lat = record?.custom_latitude || record?.latitude || record?.device_latitude || null;
-  const lng = record?.custom_longitude || record?.longitude || record?.device_longitude || null;
-  const latN = parseFloat(lat);
-  const lngN = parseFloat(lng);
-  if (lat && lng && !isNaN(latN) && !isNaN(lngN) && latN !== 0 && lngN !== 0) {
-    return { lat: String(lat), lng: String(lng) };
-  }
-  return { lat: null, lng: null };
-};
-
 const DashboardHR = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
@@ -217,9 +205,6 @@ const DashboardHR = () => {
         const locs = lokasiKantorRef.current;
 
         result.data.forEach((item: RiwayatAbsen) => {
-          const { lat: normLat, lng: normLng } = getLatLng(item);
-          if (normLat && normLng) { item.latitude = normLat; item.longitude = normLng; }
-
           if (!grouped[item.employee]) {
             let branchAsumsi = 'Outlet';
             
@@ -484,7 +469,6 @@ const DashboardHR = () => {
           return;
         }
 
-        // PERBAIKAN LINK GOOGLE MAPS (Format Resmi)
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -497,8 +481,8 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps/search/?api=1&query=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps/search/?api=1&query=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=latitude,longitude{log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=latitude,longitude{log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
@@ -524,10 +508,17 @@ const DashboardHR = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
-    // 🔥 PERBAIKAN: SHEET RINGKASAN MEMILIKI KOLOM PER TANGGAL ANGKA (0/1) 🔥
+    // PERBAIKAN: SHEET RINGKASAN MEMILIKI KOLOM PER TANGGAL ANGKA (0/1) 
+    // DIBATASI SAMPAI TANGGAL HARI INI JIKA BULAN YANG DIPILIH ADALAH BULAN INI 
     if (filterMode === 'bulanan') {
       const [year, month] = bulanAktif.split('-').map(Number);
-      const lastDay = new Date(year, month, 0).getDate();
+      const now = new Date();
+      let lastDayToExport = new Date(year, month, 0).getDate();
+      
+      // Jika bulan yang dipilih adalah bulan ini, batasi sampai tanggal hari ini
+      if (year === now.getFullYear() && month === now.getMonth() + 1) {
+        lastDayToExport = now.getDate();
+      }
 
       const ringkasan = filteredDataAbsen.map(emp => {
         const row: any = {
@@ -538,7 +529,7 @@ const DashboardHR = () => {
 
         let totalTelatBulanIni = 0;
 
-        for (let d = 1; d <= lastDay; d++) {
+        for (let d = 1; d <= lastDayToExport; d++) {
           const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
           const log = emp.logsByDate[dateStr];
           let isTelat = 0;
@@ -618,7 +609,7 @@ const DashboardHR = () => {
   const FotoSlot = ({ src, label, badge, badgeColor, isSignature = false }: { src?: string; label: string; badge: string; badgeColor: string; isSignature?: boolean }) => (
     <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-[3/4] p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
+      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-square p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
         {src
           ? <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain mix-blend-multiply' : 'object-cover'}`} alt={label} />
           : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gray-50"><i className={`fa-solid ${isSignature ? 'fa-pen-slash' : 'fa-image-slash'} text-2xl text-gray-300`} /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
@@ -682,6 +673,7 @@ const DashboardHR = () => {
               }
             </div>
 
+            {/* FILTER DROPDOWN CABANG */}
             <div 
               className="relative w-full md:w-48 shrink-0"
               tabIndex={0}
@@ -991,17 +983,16 @@ const DashboardHR = () => {
                       )}
 
                       <div className="flex flex-col gap-2">
-                        {/* PERBAIKAN LINK GOOGLE MAPS */}
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=latitude,longitude{todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
+                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=latitude,longitude{todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
+                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
                           </a>
                         )}
                       </div>
@@ -1181,15 +1172,14 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
-                              {/* PERBAIKAN LINK MAPS BULANAN */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://www.google.com/maps/search/?api=1&query=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=latitude,longitude{log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://www.google.com/maps/search/?api=1&query=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=latitude,longitude{log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                   </a>
                                 )}
