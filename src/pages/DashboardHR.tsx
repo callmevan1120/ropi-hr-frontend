@@ -60,14 +60,28 @@ const toMenit = (jam: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
-const isRamadhan = (): boolean => {
-  const now = new Date();
-  const tahun = now.getFullYear();
-  const bulan = now.getMonth() + 1;
-  const tgl = now.getDate();
+// SOLUSI RAMADHAN: Hardcode rentang 3 tahun ke depan. Paling aman tanpa perlu API Backend.
+const isRamadhan = (tanggalStr: string): boolean => {
+  const d = new Date(tanggalStr);
+  const tahun = d.getFullYear();
+  const bulan = d.getMonth() + 1; // getMonth() mulai dari 0, makanya +1
+  const tgl = d.getDate();
+  
+  // Rentang Ramadhan 2025: ~1 Maret - ~30 Maret
   if (tahun === 2025 && bulan === 3 && tgl >= 1 && tgl <= 30) return true;
-  if (tahun === 2026 && bulan === 2 && tgl >= 18) return true;
-  if (tahun === 2026 && bulan === 3 && tgl <= 19) return true;
+  
+  // Rentang Ramadhan 2026: ~18 Februari - ~21 Maret
+  if (tahun === 2026) {
+    if (bulan === 2 && tgl >= 18) return true;
+    if (bulan === 3 && tgl <= 21) return true;
+  }
+  
+  // Rentang Ramadhan 2027: ~8 Februari - ~9 Maret
+  if (tahun === 2027) {
+    if (bulan === 2 && tgl >= 8) return true;
+    if (bulan === 3 && tgl <= 9) return true;
+  }
+  
   return false;
 };
 
@@ -76,7 +90,7 @@ const getShiftLabel = (tanggal: string): string => {
   const hari = tglDate.getDay();
   if (hari === 0 || hari === 6) return 'Libur';
   const isFriday = hari === 5;
-  const ramadhan = isRamadhan();
+  const ramadhan = isRamadhan(tanggal);
   const hariLabel = isFriday ? 'Jumat' : 'Senin - Kamis';
   const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
   return `${hariLabel} (PH Klaten ${periodeLabel})`;
@@ -89,7 +103,7 @@ const getJamShift = (
 ): { in: string; out: string } => {
   const tglDate = new Date(tanggal);
   const isFriday = tglDate.getDay() === 5;
-  const ramadhan = isRamadhan();
+  const ramadhan = isRamadhan(tanggal);
   if (!isFriday && shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
     return masterShifts[shiftNameFromRecord];
   }
@@ -482,7 +496,7 @@ const DashboardHR = () => {
           return;
         }
 
-        // PERBAIKAN: FORMAT URL GOOGLE MAPS YANG VALID & BENAR
+        // URL MAPS YANG BENAR DAN AMAN
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -503,59 +517,43 @@ const DashboardHR = () => {
     
     dataExcel.sort((a, b) => a.Tanggal.localeCompare(b.Tanggal) || a['Nama Karyawan'].localeCompare(b['Nama Karyawan']));
     
-    // Create Worksheet Laporan Absen
-    const worksheet = XLSX.utils.aoa_to_sheet([[`Laporan Absensi ${filterMode === 'harian' ? 'Harian' : 'Bulanan'} - ${filterMode === 'harian' ? tanggalAktif : bulanAktif}`]]);
-    XLSX.utils.sheet_add_json(worksheet, dataExcel, { origin: 'A3' });
+    // FIX ERROR TYPESCRIPT `origin`: Memanfaatkan aoa_to_sheet & sheet_add_json sesuai anjuran TypeScript 🔥
+    const judulLaporan = filterMode === 'harian' 
+      ? `Laporan Absensi Harian - ${tanggalAktif}` 
+      : `Laporan Absensi Bulanan - ${bulanAktif}`;
+      
+    // Buat sheet kosong dengan Judul di baris 1
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      [judulLaporan],
+      [] // Baris 2 kosong sebagai jarak
+    ]);
+    
+    // Suntikkan data JSON mulai dari baris ke-3
+    XLSX.utils.sheet_add_json(worksheet, dataExcel, { origin: 'A3', skipHeader: false } as any);
 
-    // PERBAIKAN TAMPILAN EXCEL: Mengatur Lebar Kolom secara Otomatis (Auto-Width)
-    worksheet['!cols'] = [
-      { wch: 12 }, // Tanggal
-      { wch: 16 }, // ID Karyawan
-      { wch: 30 }, // Nama Karyawan
-      { wch: 20 }, // Kategori
-      { wch: 35 }, // Shift
-      { wch: 16 }, // Jam Shift
-      { wch: 12 }, // Jam Masuk
-      { wch: 12 }, // Jam Keluar
-      { wch: 16 }, // Keterlambatan
-      { wch: 16 }, // Pulang Cepat
-      { wch: 25 }, // Status
-      { wch: 55 }, // Lokasi Masuk
-      { wch: 55 }  // Lokasi Keluar
-    ];
-
+    // Hyperlink di Excel standar 
     const wsRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
     const headers = dataExcel.length > 0 ? Object.keys(dataExcel[0]) : [];
     const colLokasiMasuk = headers.indexOf('Lokasi Masuk');
     const colLokasiKeluar = headers.indexOf('Lokasi Keluar');
-    
     for (let R = wsRange.s.r; R <= wsRange.e.r; R++) {
       for (let C = wsRange.s.c; C <= wsRange.e.c; C++) {
-        const addr = XLSX.utils.encode_cell({ r: R, c: C });
-        const cell = worksheet[addr];
-        if (!cell) continue;
-
-        if (R >= 2) {
-          if (!cell.s) cell.s = {};
-          cell.s.border = {
-            top: { style: 'thin', color: { rgb: '000000' } },
-            bottom: { style: 'thin', color: { rgb: '000000' } },
-            left: { style: 'thin', color: { rgb: '000000' } },
-            right: { style: 'thin', color: { rgb: '000000' } }
-          };
-          cell.s.alignment = { vertical: 'center' };
-          if (R === 2) cell.s.font = { bold: true };
-        }
-
         if (R > 2 && (C === colLokasiMasuk || C === colLokasiKeluar)) {
-          if (typeof cell.v === 'string' && cell.v.startsWith('https')) {
+          const addr = XLSX.utils.encode_cell({ r: R, c: C });
+          const cell = worksheet[addr];
+          if (cell && typeof cell.v === 'string' && cell.v.startsWith('https')) {
             cell.l = { Target: cell.v, Tooltip: 'Buka di Google Maps' };
-            if (!cell.s) cell.s = {};
-            cell.s.font = { color: { rgb: "0000FF" }, underline: true }; 
           }
         }
       }
     }
+
+    // Auto Width
+    worksheet['!cols'] = [
+      { wch: 12 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 35 }, 
+      { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, 
+      { wch: 25 }, { wch: 55 }, { wch: 55 }
+    ];
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
@@ -592,52 +590,32 @@ const DashboardHR = () => {
               totalTelatBulanIni++;
             }
           }
-
           row[`Tgl ${d}`] = isTelat;
         }
 
         row['Total Telat'] = totalTelatBulanIni;
         row['Total Hadir'] = emp.totalHadir;
         row['Total Izin (Hari)'] = leaveMap[emp.employee] ?? 0;
-
         return row;
       });
 
-      const wsRingkasan = XLSX.utils.aoa_to_sheet([[`Ringkasan Absensi - ${bulanAktif}`]]);
-      XLSX.utils.sheet_add_json(wsRingkasan, ringkasan, { origin: 'A3' });
+      // Sama seperti di atas, gunakan aoa lalu add_json untuk menghindari Error Typescript
+      const wsRingkasan = XLSX.utils.aoa_to_sheet([
+        [`Ringkasan Absensi - ${bulanAktif}`],
+        [] 
+      ]);
+      XLSX.utils.sheet_add_json(wsRingkasan, ringkasan, { origin: 'A3', skipHeader: false } as any);
 
-      // PERBAIKAN TAMPILAN EXCEL: Auto Width untuk Sheet Ringkasan
-      const ringkasanColWidths = [{ wch: 16 }, { wch: 30 }, { wch: 20 }];
-      for (let d = 1; d <= lastDayToExport; d++) ringkasanColWidths.push({ wch: 7 }); // Tgl
-      ringkasanColWidths.push({ wch: 15 }, { wch: 15 }, { wch: 18 }); // Total
+      const ringkasanColWidths = [{ wch: 18 }, { wch: 30 }, { wch: 20 }];
+      for (let d = 1; d <= lastDayToExport; d++) ringkasanColWidths.push({ wch: 7 }); 
+      ringkasanColWidths.push({ wch: 15 }, { wch: 15 }, { wch: 18 }); 
       wsRingkasan['!cols'] = ringkasanColWidths;
-
-      const wsRangeRingkasan = XLSX.utils.decode_range(wsRingkasan['!ref'] || 'A1');
-      for (let R = wsRangeRingkasan.s.r; R <= wsRangeRingkasan.e.r; R++) {
-        for (let C = wsRangeRingkasan.s.c; C <= wsRangeRingkasan.e.c; C++) {
-          const addr = XLSX.utils.encode_cell({ r: R, c: C });
-          const cell = wsRingkasan[addr];
-          if (!cell) continue;
-
-          if (R >= 2) {
-            if (!cell.s) cell.s = {};
-            cell.s.border = {
-              top: { style: 'thin', color: { rgb: '000000' } },
-              bottom: { style: 'thin', color: { rgb: '000000' } },
-              left: { style: 'thin', color: { rgb: '000000' } },
-              right: { style: 'thin', color: { rgb: '000000' } }
-            };
-            cell.s.alignment = { vertical: 'center', horizontal: C > 2 ? 'center' : 'left' };
-            if (R === 2) cell.s.font = { bold: true };
-          }
-        }
-      }
 
       XLSX.utils.book_append_sheet(workbook, wsRingkasan, "Ringkasan");
     }
 
     const namaFile = filterMode === 'harian' ? `Laporan_Harian_${tanggalAktif}.xlsx` : `Laporan_Bulanan_${bulanAktif}.xlsx`;
-    XLSX.writeFile(workbook, namaFile, { cellStyles: true });
+    XLSX.writeFile(workbook, namaFile);
   };
 
   const handleLogout = () => {
@@ -688,7 +666,7 @@ const DashboardHR = () => {
   const FotoSlot = ({ src, label, badge, badgeColor, isSignature = false }: { src?: string; label: string; badge: string; badgeColor: string; isSignature?: boolean }) => (
     <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-square p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
+      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-[3/4] p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
         {src
           ? <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain mix-blend-multiply' : 'object-cover'}`} alt={label} />
           : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gray-50"><i className={`fa-solid ${isSignature ? 'fa-pen-slash' : 'fa-image-slash'} text-2xl text-gray-300`} /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
@@ -1062,7 +1040,7 @@ const DashboardHR = () => {
                       )}
 
                       <div className="flex flex-col gap-2">
-                        {/* 🔥 PERBAIKAN LINK GOOGLE MAPS HARIAN 🔥 */}
+                        {/*  PERBAIKAN LINK GOOGLE MAPS WEB */}
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
                           <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
@@ -1214,7 +1192,7 @@ const DashboardHR = () => {
                           >
                             <div className="flex flex-col flex-1 min-w-0 pr-2">
                               <span className="font-bold text-[#3e2723] text-sm md:text-base leading-none">{date}</span>
-                              <span className="text-[10px] md:text-xs text-gray-500 font-medium mt-1 truncate">{shiftLabel}</span>
+                              <span className="text-[9px] md:text-[10px] text-gray-400 font-bold mt-0.5 truncate pr-2">{shiftLabel}</span>
                             </div>
                             
                             <div className="flex items-center gap-3 md:gap-6 shrink-0">
@@ -1223,7 +1201,7 @@ const DashboardHR = () => {
                                   <p className="text-[8px] md:text-[9px] text-gray-400 uppercase font-bold tracking-wider">Masuk</p>
                                   <p className="font-black text-green-600 text-xs md:text-sm">{inJam}</p>
                                 </div>
-                                <div className="flex flex-col items-center">
+                                <div className="hidden sm:block">
                                   <p className="text-[8px] md:text-[9px] text-gray-400 uppercase font-bold tracking-wider">Keluar</p>
                                   <p className="font-black text-orange-500 text-xs md:text-sm">{outJam}</p>
                                 </div>
@@ -1240,6 +1218,7 @@ const DashboardHR = () => {
                                   <span className="bg-gray-50 text-gray-400 border border-gray-200 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md w-full text-center">-</span>
                                 )}
                               </div>
+                              
                               <i className={`fa-solid fa-chevron-${isExpanded ? 'up' : 'down'} text-gray-400 text-xs w-4 text-center transition-transform`} />
                             </div>
                           </div>
@@ -1250,15 +1229,15 @@ const DashboardHR = () => {
                               <div className="sm:hidden flex justify-between mb-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
                                  <div className="text-center w-1/2 border-r border-gray-100">
                                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Masuk</p>
-                                   <p className="font-black text-green-600 text-base">{inJam}</p>
+                                   <p className="font-black text-green-600 text-sm">{inJam}</p>
                                  </div>
                                  <div className="text-center w-1/2">
                                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Keluar</p>
-                                   <p className="font-black text-orange-500 text-base">{outJam}</p>
+                                   <p className="font-black text-orange-500 text-sm">{outJam}</p>
                                  </div>
                               </div>
 
-                              {/* PERBAIKAN LINK MAPS BULANAN (URL VALID) */}
+                              {/* 🔥 PERBAIKAN LINK MAPS BULANAN 🔥 */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
                                   <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
