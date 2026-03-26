@@ -469,6 +469,7 @@ const DashboardHR = () => {
           return;
         }
 
+        // PERBAIKAN LINK GOOGLE MAPS UNTUK EXCEL (URL BENAR)
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -481,41 +482,66 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=latitude,longitude{log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=latitude,longitude{log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `http://maps.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `http://maps.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
     
     dataExcel.sort((a, b) => a.Tanggal.localeCompare(b.Tanggal) || a['Nama Karyawan'].localeCompare(b['Nama Karyawan']));
-    const worksheet = XLSX.utils.json_to_sheet(dataExcel);
     
+    // FIX ERROR TYPESCRIPT: Buat sheet kosong dengan judul dulu, lalu tambahkan JSON
+    const judulLaporan = filterMode === 'harian' 
+      ? `Laporan Absensi Harian - ${tanggalAktif}` 
+      : `Laporan Absensi Bulanan - ${bulanAktif}`;
+      
+    const worksheet = XLSX.utils.aoa_to_sheet([[judulLaporan]]);
+    XLSX.utils.sheet_add_json(worksheet, dataExcel, { origin: 'A3' });
+
     const wsRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
     const headers = dataExcel.length > 0 ? Object.keys(dataExcel[0]) : [];
     const colLokasiMasuk = headers.indexOf('Lokasi Masuk');
     const colLokasiKeluar = headers.indexOf('Lokasi Keluar');
-    for (let R = wsRange.s.r + 1; R <= wsRange.e.r; R++) {
-      [colLokasiMasuk, colLokasiKeluar].forEach(C => {
-        if (C < 0) return;
+    
+    for (let R = wsRange.s.r; R <= wsRange.e.r; R++) {
+      for (let C = wsRange.s.c; C <= wsRange.e.c; C++) {
         const addr = XLSX.utils.encode_cell({ r: R, c: C });
         const cell = worksheet[addr];
-        if (cell && typeof cell.v === 'string' && cell.v.startsWith('http')) {
-          cell.l = { Target: cell.v, Tooltip: 'Buka di Google Maps' };
+        if (!cell) continue;
+
+        // Beri Border
+        if (R >= 2) {
+          if (!cell.s) cell.s = {};
+          cell.s.border = {
+            top: { style: 'thin', color: { rgb: '000000' } },
+            bottom: { style: 'thin', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: '000000' } },
+            right: { style: 'thin', color: { rgb: '000000' } }
+          };
+          cell.s.alignment = { vertical: 'center' };
+          if (R === 2) cell.s.font = { bold: true };
         }
-      });
+
+        // Style Warna Biru & Underline Untuk Link Maps
+        if (R > 2 && (C === colLokasiMasuk || C === colLokasiKeluar)) {
+          if (typeof cell.v === 'string' && cell.v.startsWith('http')) {
+            cell.l = { Target: cell.v, Tooltip: 'Buka di Google Maps' };
+            if (!cell.s) cell.s = {};
+            cell.s.font = { color: { rgb: "0000FF" }, underline: true }; 
+          }
+        }
+      }
     }
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
-    // PERBAIKAN: SHEET RINGKASAN MEMILIKI KOLOM PER TANGGAL ANGKA (0/1) 
-    // DIBATASI SAMPAI TANGGAL HARI INI JIKA BULAN YANG DIPILIH ADALAH BULAN INI 
+    // SHEET RINGKASAN 
     if (filterMode === 'bulanan') {
       const [year, month] = bulanAktif.split('-').map(Number);
       const now = new Date();
       let lastDayToExport = new Date(year, month, 0).getDate();
       
-      // Jika bulan yang dipilih adalah bulan ini, batasi sampai tanggal hari ini
       if (year === now.getFullYear() && month === now.getMonth() + 1) {
         lastDayToExport = now.getDate();
       }
@@ -553,7 +579,30 @@ const DashboardHR = () => {
         return row;
       });
 
-      const wsRingkasan = XLSX.utils.json_to_sheet(ringkasan);
+      // FIX ERROR TYPESCRIPT: Gunakan aoa_to_sheet lalu sheet_add_json 
+      const wsRingkasan = XLSX.utils.aoa_to_sheet([[`Ringkasan Absensi - ${bulanAktif}`]]);
+      XLSX.utils.sheet_add_json(wsRingkasan, ringkasan, { origin: 'A3' });
+
+      const wsRangeRingkasan = XLSX.utils.decode_range(wsRingkasan['!ref'] || 'A1');
+      for (let R = wsRangeRingkasan.s.r; R <= wsRangeRingkasan.e.r; R++) {
+        for (let C = wsRangeRingkasan.s.c; C <= wsRangeRingkasan.e.c; C++) {
+          const addr = XLSX.utils.encode_cell({ r: R, c: C });
+          const cell = wsRingkasan[addr];
+          if (!cell) continue;
+
+          if (R >= 2) {
+            if (!cell.s) cell.s = {};
+            cell.s.border = {
+              top: { style: 'thin', color: { rgb: '000000' } },
+              bottom: { style: 'thin', color: { rgb: '000000' } },
+              left: { style: 'thin', color: { rgb: '000000' } },
+              right: { style: 'thin', color: { rgb: '000000' } }
+            };
+            if (R === 2) cell.s.font = { bold: true };
+          }
+        }
+      }
+
       XLSX.utils.book_append_sheet(workbook, wsRingkasan, "Ringkasan");
     }
 
@@ -984,22 +1033,22 @@ const DashboardHR = () => {
 
                       <div className="flex flex-col gap-2">
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://www.google.com/maps?q=latitude,longitude{todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`http://maps.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
+                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://www.google.com/maps?q=latitude,longitude{todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`http://maps.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
-                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
+                            <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* ── KOLOM KANAN: Galeri Foto Diperbaiki agar rata tengah (justify-center) ── */}
+                  {/* ── KOLOM KANAN: Galeri Foto ── */}
                   <div className="flex-1 md:overflow-y-auto p-4 md:p-8 bg-gray-50 flex flex-col lg:flex-row items-start gap-6 pb-10">
                     
                     {/* CONTAINER MASUK */}
@@ -1174,12 +1223,12 @@ const DashboardHR = () => {
 
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=latitude,longitude{log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`http://maps.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=latitude,longitude{log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`http://maps.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                   </a>
                                 )}
