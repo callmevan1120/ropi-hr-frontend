@@ -370,6 +370,10 @@ const DashboardHR = () => {
           leaveResults.forEach(result => {
             if (result.status === 'fulfilled') {
               const { employee, data } = result.value;
+              // DEBUG: log status values dari API
+              if ((data as any[]).length > 0) {
+                console.log('[IZIN DEBUG] employee:', employee, 'statuses:', (data as any[]).map((r:any) => r.status));
+              }
               let totalIzin = 0;
               (data as any[]).filter(r => r.status?.toLowerCase() === 'approved').forEach((r: any) => {
                 const from = new Date(r.from_date);
