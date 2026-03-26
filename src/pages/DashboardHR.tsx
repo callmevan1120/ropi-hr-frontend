@@ -128,7 +128,7 @@ const DashboardHR = () => {
 
   // State untuk Filter & Pencarian
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeBranch, setActiveBranch] = useState('Semua');
+  const [activeBranch, setActiveBranch] = useState('Semua Lokasi');
   const [lokasiKantor, setLokasiKantor] = useState<Lokasi[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -179,7 +179,7 @@ const DashboardHR = () => {
   };
 
   const tarikDataSemuaKaryawan = async () => {
-    if (Object.keys(masterShifts).length === 0) return;
+    if (Object.keys(masterShifts).length === 0 || lokasiKantor.length === 0) return;
     setIsLoading(true);
 
     let from = tanggalAktif, to = tanggalAktif;
@@ -196,13 +196,38 @@ const DashboardHR = () => {
       const result = await res.json();
       if (result.success && result.data) {
         const grouped: Record<string, EmployeeSummary> = {};
+        const locs = lokasiKantorRef.current;
 
         result.data.forEach((item: RiwayatAbsen) => {
           if (!grouped[item.employee]) {
-            // 🔥 PERBAIKAN FILTER: Jika nama shift tidak ada klaten/jakarta, langsung masuk Outlet
-            let branchAsumsi = 'Outlet';
-            if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
-            else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
+            let branchAsumsi = 'Outlet Lainnya';
+            
+            // 1. Coba cocokkan dari nama shift
+            if (item.shift) {
+              const shiftLower = item.shift.toLowerCase();
+              const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase().trim()));
+              if (matchLoc) branchAsumsi = matchLoc.nama;
+            }
+
+            // 2. Coba cocokkan dari koordinat (radius 2KM) jika belum ketemu
+            if (branchAsumsi === 'Outlet Lainnya' && item.latitude && item.longitude) {
+              const lat = Number(item.latitude);
+              const lng = Number(item.longitude);
+              if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                let min = Infinity;
+                for (const l of locs) {
+                  if (l.lat === 0 && l.lng === 0) continue;
+                  const d = hitungJarak(lat, lng, l.lat, l.lng);
+                  if (d < 2000 && d < min) { min = d; branchAsumsi = l.nama; }
+                }
+              }
+            }
+
+            // 3. Fallback jika semua gagal
+            if (branchAsumsi === 'Outlet Lainnya') {
+              if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
+              else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
+            }
 
             grouped[item.employee] = {
               employee: item.employee,
@@ -212,10 +237,6 @@ const DashboardHR = () => {
               logsByDate: {}
             };
           }
-
-          // Perbarui asumsi jika di record selanjutnya ternyata ada shift kantor
-          if (item.shift?.toLowerCase().includes('klaten')) grouped[item.employee].branch = 'PH Klaten';
-          else if (item.shift?.toLowerCase().includes('jakarta')) grouped[item.employee].branch = 'Jakarta';
 
           const dateKey = item.time.substring(0, 10);
           if (!grouped[item.employee].logsByDate[dateKey])
@@ -291,11 +312,18 @@ const DashboardHR = () => {
             const dataBulan = await resBulan.json();
             if (dataBulan.success && dataBulan.data) {
               const empMap: Record<string, {name: string, branch: string}> = {};
+              const locs = lokasiKantorRef.current;
+              
               dataBulan.data.forEach((item: any) => {
                 if (!empMap[item.employee]) {
-                  let branchAsumsi = 'Outlet';
+                  let branchAsumsi = 'Outlet Lainnya';
                   if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
                   else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
+                  else if (item.shift) {
+                    const shiftLower = item.shift.toLowerCase();
+                    const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase().trim()));
+                    if (matchLoc) branchAsumsi = matchLoc.nama;
+                  }
                   empMap[item.employee] = { name: item.employee_name || item.employee, branch: branchAsumsi };
                 }
               });
@@ -437,7 +465,7 @@ const DashboardHR = () => {
           return;
         }
 
-        // PERBAIKAN LINK GOOGLE MAPS UNTUK EXCEL
+        // 🔥 PERBAIKAN LINK MAPS DI EXCEL (Menggunakan URL Valid Google Maps)
         dataExcel.push({
           'Tanggal': date,
           'ID Karyawan': emp.employee,
@@ -483,15 +511,16 @@ const DashboardHR = () => {
     navigate('/login', { replace: true });
   };
 
-  // FILTER PENCARIAN DAN BRANCH 
-  const uniqueBranches = ['Semua', 'PH Klaten', 'Jakarta', 'Outlet'];
+  // 🔥 FILTER PENGELOMPOKAN CABANG DINAMIS 🔥
+  const kantorLocations = ['PH Klaten', 'Jakarta'];
+  const outletLocations = lokasiKantor.map(l => l.nama).filter(n => !kantorLocations.includes(n));
 
   const filteredDataAbsen = dataAbsen.filter(emp => {
     const searchMatch = emp.employee_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                         emp.employee.toLowerCase().includes(searchQuery.toLowerCase());
     
     let branchMatch = true;
-    if (activeBranch !== 'Semua') {
+    if (activeBranch !== 'Semua Lokasi') {
       branchMatch = emp.branch === activeBranch;
     }
 
@@ -520,11 +549,10 @@ const DashboardHR = () => {
     setExpandedDateHR(null); 
   };
 
-  // KOMPONEN FOTOSLOT REUSABLE
   const FotoSlot = ({ src, label, badge, badgeColor, isSignature = false }: { src?: string; label: string; badge: string; badgeColor: string; isSignature?: boolean }) => (
     <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-square p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
+      <div className={`relative rounded-2xl overflow-hidden shadow-sm flex items-center justify-center ${isSignature ? 'bg-white border-2 border-gray-100 aspect-[3/4] p-2' : 'bg-black border-2 border-gray-200 aspect-[3/4]'}`}>
         {src
           ? <img src={prosesUrlFoto(src)} className={`w-full h-full ${isSignature ? 'object-contain mix-blend-multiply' : 'object-cover'}`} alt={label} />
           : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gray-50"><i className={`fa-solid ${isSignature ? 'fa-pen-slash' : 'fa-image-slash'} text-2xl text-gray-300`} /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
@@ -537,7 +565,7 @@ const DashboardHR = () => {
   return (
     <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
 
-      {/* ── HEADER DIREVISI AGAR TIDAK MENUMPUK ── */}
+      {/* ── HEADER ── */}
       <div className="bg-[#3e2723] pt-6 pb-6 px-5 md:px-10 shadow-lg sticky top-0 z-20 w-full rounded-b-[2rem]">
         <div className="max-w-7xl mx-auto flex flex-col gap-4 md:gap-5">
           
@@ -553,13 +581,12 @@ const DashboardHR = () => {
               </div>
             </div>
             
-            {/* Tombol Export - Geser ke Kanan Atas */}
             <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-4 py-2 rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 text-xs md:text-sm shrink-0">
               <i className="fa-solid fa-file-excel" /> <span className="hidden sm:inline">Export Excel</span>
             </button>
           </div>
 
-          {/* BARIS 2: KOTAK STATISTIK (Hadir, Telat, Izin) */}
+          {/* BARIS 2: KOTAK STATISTIK */}
           <div className="grid grid-cols-3 gap-2 md:gap-4 w-full">
             <div className="bg-green-500/20 rounded-xl px-2 py-2 md:py-3 border border-green-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
               <p className="text-[9px] md:text-xs text-green-300 font-bold uppercase tracking-wide">Hadir</p>
@@ -575,15 +602,13 @@ const DashboardHR = () => {
             </div>
           </div>
 
-          {/* BARIS 3: TOOLBAR (Toggle Harian/Bulanan, Input Tanggal, Filter Dropdown, Pencarian) */}
+          {/* BARIS 3: TOOLBAR */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full">
-            {/* Toggle Harian/Bulanan */}
             <div className="flex bg-white/10 rounded-xl p-1 border border-white/10 shadow-inner md:w-auto shrink-0">
               <button onClick={() => setFilterMode('harian')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Harian</button>
               <button onClick={() => setFilterMode('bulanan')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Bulanan</button>
             </div>
 
-            {/* Input Tanggal / Bulan */}
             <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 md:py-2.5 border border-white/10 shadow-sm w-full md:w-auto shrink-0">
               {filterMode === 'harian'
                 ? <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
@@ -591,7 +616,7 @@ const DashboardHR = () => {
               }
             </div>
 
-            {/* FILTER DROPDOWN CABANG */}
+            {/* 🔥 FILTER DROPDOWN CABANG (Lebih rapi mengelompokkan Outlet dan Kantor) 🔥 */}
             <div 
               className="relative w-full md:w-48 shrink-0"
               tabIndex={0}
@@ -607,7 +632,7 @@ const DashboardHR = () => {
               >
                 <div className="flex items-center gap-3">
                   <i className="fa-solid fa-store text-white/50" />
-                  <span className="text-white font-bold text-xs md:text-sm truncate max-w-[100px]">
+                  <span className="text-white font-bold text-xs md:text-sm truncate max-w-[120px]">
                     {activeBranch}
                   </span>
                 </div>
@@ -616,16 +641,19 @@ const DashboardHR = () => {
 
               {isDropdownOpen && (
                 <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
-                  <div className="max-h-60 overflow-y-auto">
-                    {uniqueBranches.map(b => (
-                      <div
-                        key={b}
-                        onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }}
-                        className={`px-4 py-3 text-xs md:text-sm font-bold cursor-pointer transition-colors ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}
-                      >
-                        {b}
-                      </div>
+                  <div className="max-h-60 overflow-y-auto py-2">
+                    <div onClick={() => { setActiveBranch('Semua Lokasi'); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors ${activeBranch === 'Semua Lokasi' ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>Semua Lokasi</div>
+                    
+                    <div className="px-4 py-1.5 mt-2 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 border-y border-gray-100">Kantor</div>
+                    {kantorLocations.map(b => (
+                      <div key={b} onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>{b}</div>
                     ))}
+                    
+                    <div className="px-4 py-1.5 mt-2 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 border-y border-gray-100">Outlet</div>
+                    {outletLocations.map(b => (
+                      <div key={b} onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>{b}</div>
+                    ))}
+                    <div onClick={() => { setActiveBranch('Outlet Lainnya'); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === 'Outlet Lainnya' ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>Lainnya</div>
                   </div>
                 </div>
               )}
@@ -797,6 +825,7 @@ const DashboardHR = () => {
       {/* ── MODAL DETAIL ── */}
       {detailModal && (() => {
         const emp = detailModal;
+        const isOutlet = emp.branch !== 'PH Klaten' && emp.branch !== 'Jakarta';
 
         if (filterMode === 'harian') {
           // MODAL HARIAN
@@ -810,7 +839,7 @@ const DashboardHR = () => {
           if (todayLog.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) durasiTelat = s; }
           if (todayLog.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) durasiCepat = s; }
 
-          // Cari izin hari ini sekali saja
+          // Cari izin hari ini
           const izinHariIniData = (() => {
             if (leaveMap[emp.employee] !== 1) return null;
             const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
@@ -826,7 +855,7 @@ const DashboardHR = () => {
             <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
               <div className="bg-white w-full md:max-w-6xl h-[90vh] md:h-[85vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
 
-                {/* ── HEADER mobile: nama + tombol tutup (sticky) ── */}
+                {/* HEADER mobile */}
                 <div className="bg-[#3e2723] px-5 py-4 flex items-center gap-3 shrink-0 md:hidden">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-[#fff8e1] shrink-0 border-2 border-white/30">
                     {todayLog.in?.custom_foto_absen
@@ -843,12 +872,9 @@ const DashboardHR = () => {
                   </button>
                 </div>
 
-                {/* ── Content Wrapper (Scrollable Area) ── */}
                 <div className="flex-1 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row">
-
-                  {/* ── KOLOM KIRI (Info) ── */}
+                  {/* KOLOM KIRI (Info) */}
                   <div className="md:w-1/3 flex flex-col shrink-0 md:overflow-y-auto bg-white md:border-r border-gray-100">
-                    {/* Avatar + nama — hanya desktop */}
                     <div className="hidden md:block p-8 border-b border-gray-100 relative shrink-0">
                       <button onClick={tutupModal} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 hover:text-red-500 text-gray-400 flex items-center justify-center transition-colors">
                         <i className="fa-solid fa-xmark text-lg" />
@@ -863,7 +889,6 @@ const DashboardHR = () => {
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emp.employee} • <span className="text-[#fbc02d]">{emp.branch}</span></p>
                     </div>
 
-                    {/* Info: shift, masuk/keluar, izin, peta */}
                     <div className="p-4 md:p-8 shrink-0">
                       <div className="bg-[#fff8e1] px-4 py-3 rounded-2xl border border-[#fbc02d]/30 mb-3 flex items-center gap-3">
                         <i className="fa-solid fa-calendar-check text-[#fbc02d] shrink-0" />
@@ -898,6 +923,7 @@ const DashboardHR = () => {
                         </div>
                       )}
 
+                      {/* 🔥 PERBAIKAN LINK MAPS HARIAN 🔥 */}
                       <div className="flex flex-col gap-2">
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
                           <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
@@ -915,7 +941,7 @@ const DashboardHR = () => {
                     </div>
                   </div>
 
-                  {/* ── KOLOM KANAN: Galeri foto (Layout Konsisten By Event IN/OUT) ── */}
+                  {/* ── KOLOM KANAN: Galeri Foto Diperbaiki agar rapi (Flex wrap) ── */}
                   <div className="flex-1 md:overflow-y-auto p-4 md:p-8 bg-gray-50 flex flex-col lg:flex-row items-start gap-6 pb-10">
                     
                     {/* CONTAINER MASUK */}
@@ -926,9 +952,9 @@ const DashboardHR = () => {
                         </div>
                         
                         {todayLog.in ? (
-                          <div className="flex overflow-x-auto lg:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
-                            <FotoSlot src={todayLog.in?.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
-                            {emp.branch === 'Outlet' && <FotoSlot src={todayLog.in?.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
+                          <div className="flex overflow-x-auto md:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
+                            <FotoSlot src={todayLog.in?.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
+                            {isOutlet && <FotoSlot src={todayLog.in?.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
                             <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
                                 <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-[3/4] md:aspect-square">
@@ -953,9 +979,9 @@ const DashboardHR = () => {
                         </div>
                         
                         {todayLog.out ? (
-                          <div className="flex overflow-x-auto lg:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
-                            <FotoSlot src={todayLog.out?.custom_foto_absen} label={emp.branch === 'Outlet' ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
-                            {emp.branch === 'Outlet' && <FotoSlot src={todayLog.out?.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
+                          <div className="flex overflow-x-auto md:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
+                            <FotoSlot src={todayLog.out?.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
+                            {isOutlet && <FotoSlot src={todayLog.out?.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
                             <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
                                 <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-[3/4] md:aspect-square">
@@ -978,13 +1004,12 @@ const DashboardHR = () => {
             </div>
           );
         } else {
-          // MODAL BULANAN DENGAN AKORDION FOTO
+          // MODAL BULANAN
           const sortedDates = Object.keys(emp.logsByDate).sort((a,b) => b.localeCompare(a));
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.85)', backdropFilter: 'blur(8px)' }}>
               <div className="bg-white w-full max-w-3xl h-[90vh] md:h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-zoomIn">
                 
-                {/* Header Modal Bulanan */}
                 <div className="bg-[#3e2723] p-5 md:p-6 relative flex justify-between items-center shrink-0">
                   <div>
                     <h2 className="text-lg md:text-xl font-black text-[#fbc02d]">{emp.employee_name}</h2>
@@ -995,7 +1020,6 @@ const DashboardHR = () => {
                   </button>
                 </div>
 
-                {/* Body Modal Bulanan - List Akordion */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 flex flex-col gap-3 pb-10">
                   {(() => {
                     const empLeaveData = leaveMap[emp.employee] !== undefined
@@ -1043,7 +1067,6 @@ const DashboardHR = () => {
 
                       return (
                         <div key={date} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden shrink-0">
-                          {/* Akordion Header */}
                           <div
                             onClick={() => setExpandedDateHR(isExpanded ? null : date)}
                             className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
@@ -1074,7 +1097,6 @@ const DashboardHR = () => {
                             </div>
                           </div>
 
-                          {/* Akordion Body (Expanded Foto & TTD By Event) */}
                           {isExpanded && (
                             <div className="p-4 bg-gray-50 border-t border-gray-100">
                               <div className="sm:hidden flex justify-between mb-4 bg-white p-2 rounded-xl border border-gray-100">
@@ -1088,7 +1110,7 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
-                              {/* Tombol Map Bulanan */}
+                              {/* 🔥 PERBAIKAN LINK MAPS BULANAN 🔥 */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
                                   <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
