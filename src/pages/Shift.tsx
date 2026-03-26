@@ -386,8 +386,8 @@ const Shift = () => {
                         >
                           {/* Baris atas: shift name + badge status */}
                           <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="font-black text-[#3e2723] text-sm leading-tight truncate">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-black text-[#3e2723] text-sm leading-tight break-words">
                                 {item.shift_type}
                               </p>
                               <p className="text-[10px] text-gray-400 font-bold mt-0.5">

@@ -240,8 +240,8 @@ const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): 
   const isBranchKlaten  = branch.includes('klaten') || branch.includes('ph');
   const isBranchJakarta = branch.includes('jakarta');
 
-  if (isLokasiKlaten  && !isBranchKlaten)  return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
-  if (isLokasiJakarta && !isBranchJakarta) return `Ditolak! Branch kamu (${branchUser}) tidak terdaftar di lokasi ini`;
+  if (isLokasiKlaten  && !isBranchKlaten)  return `Bukan lokasi kamu`;
+  if (isLokasiJakarta && !isBranchJakarta) return `Bukan lokasi kamu`;
   return null;
 };
 
@@ -698,8 +698,8 @@ const Absen = () => {
           }
         } else {
           setNamaLokasi('Lokasi Ditolak');
-          let pesanError = `Jarak ${terdekat.jarak}m (Maks: ${terdekat.radius}m).`;
-          if (akurasi > MAX_AKURASI) pesanError = `Akurasi lemah (${Math.round(akurasi)}m). Butuh < ${MAX_AKURASI}m.`;
+          let pesanError = `Kamu di luar area (${terdekat.jarak}m, maks ${terdekat.radius}m)`;
+          if (akurasi > MAX_AKURASI) pesanError = `Sinyal GPS lemah, pindah ke area terbuka`;
           
           setGpsStatus({ tipe: 'error', pesan: pesanError });
           setJepretState({ aktif: false, teks: 'Ditolak' });
@@ -707,7 +707,7 @@ const Absen = () => {
       },
       async () => {
         setNamaLokasi('GPS Nonaktif');
-        setGpsStatus({ tipe: 'error', pesan: 'Mohon izinkan akses GPS dari browser.' });
+        setGpsStatus({ tipe: 'error', pesan: 'Izinkan akses lokasi di browser' });
         setJepretState({ aktif: false, teks: 'Akses Ditolak' });
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
