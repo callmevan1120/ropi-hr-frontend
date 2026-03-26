@@ -14,9 +14,6 @@ interface RiwayatAbsen {
   shift?: string;
   latitude?: string;
   longitude?: string;
-  custom_latitude?: string;
-  custom_longitude?: string;
-  [key: string]: any;
 }
 
 interface DayLog {
@@ -108,18 +105,6 @@ const hitungJarak = (lat1: number, lng1: number, lat2: number, lng2: number) => 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// Ambil koordinat dari berbagai kemungkinan nama field ERPNext
-const getLatLng = (record: any): { lat: string | null; lng: string | null } => {
-  const lat = record?.custom_latitude || record?.latitude || record?.device_latitude || null;
-  const lng = record?.custom_longitude || record?.longitude || record?.device_longitude || null;
-  const latN = parseFloat(lat);
-  const lngN = parseFloat(lng);
-  if (lat && lng && !isNaN(latN) && !isNaN(lngN) && latN !== 0 && lngN !== 0) {
-    return { lat: String(lat), lng: String(lng) };
-  }
-  return { lat: null, lng: null };
-};
-
 const DashboardHR = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
@@ -171,7 +156,7 @@ const DashboardHR = () => {
       const res = await fetch(`${BACKEND}/api/locations`);
       const data = await res.json();
       if (data.success && data.locations?.length > 0) {
-        // 🔥 NORMALISASI NAMA LOKASI (Hindari spasi dobel seperti 'PH  KLATEN')
+        // NORMALISASI NAMA LOKASI (Hindari spasi dobel seperti 'PH  KLATEN')
         const cleanedLocations = data.locations.map((l: any) => {
           let namaBersih = l.nama.replace(/\s+/g, ' ').trim();
           if (namaBersih.toLowerCase() === 'ph klaten') namaBersih = 'PH Klaten';
@@ -221,17 +206,6 @@ const DashboardHR = () => {
         const locs = lokasiKantorRef.current;
 
         result.data.forEach((item: RiwayatAbsen) => {
-          // Normalisasi koordinat dari berbagai kemungkinan nama field ERPNext
-          const { lat: normLat, lng: normLng } = getLatLng(item);
-          if (normLat && normLng) { item.latitude = normLat; item.longitude = normLng; }
-
-          // DEBUG (hapus setelah field koordinat dikonfirmasi)
-          if (!(window as any).__hrDebugDone && item.log_type === 'IN') {
-            console.log('[HR-DEBUG] Field dari API:', Object.keys(item));
-            console.log('[HR-DEBUG] Koordinat ditemukan:', normLat, normLng);
-            (window as any).__hrDebugDone = true;
-          }
-
           if (!grouped[item.employee]) {
             let branchAsumsi = 'Outlet';
             
@@ -511,31 +485,14 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
     
     dataExcel.sort((a, b) => a.Tanggal.localeCompare(b.Tanggal) || a['Nama Karyawan'].localeCompare(b['Nama Karyawan']));
     const worksheet = XLSX.utils.json_to_sheet(dataExcel);
-
-    // Jadikan kolom Lokasi Masuk & Keluar sebagai hyperlink yang bisa diklik
-    const wsRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-    const headers = dataExcel.length > 0 ? Object.keys(dataExcel[0]) : [];
-    const colLokasiMasuk = headers.indexOf('Lokasi Masuk');
-    const colLokasiKeluar = headers.indexOf('Lokasi Keluar');
-    for (let R = wsRange.s.r + 1; R <= wsRange.e.r; R++) {
-      [colLokasiMasuk, colLokasiKeluar].forEach(C => {
-        if (C < 0) return;
-        const addr = XLSX.utils.encode_cell({ r: R, c: C });
-        const cell = worksheet[addr];
-        if (cell && typeof cell.v === 'string' && cell.v.startsWith('http')) {
-          cell.l = { Target: cell.v, Tooltip: 'Buka di Google Maps' };
-        }
-      });
-    }
-
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
@@ -553,7 +510,7 @@ const DashboardHR = () => {
     }
 
     const namaFile = filterMode === 'harian' ? `Laporan_Harian_${tanggalAktif}.xlsx` : `Laporan_Bulanan_${bulanAktif}.xlsx`;
-    XLSX.writeFile(workbook, namaFile, { cellStyles: true });
+    XLSX.writeFile(workbook, namaFile);
   };
 
   const handleLogout = () => {
@@ -983,13 +940,13 @@ const DashboardHR = () => {
                       <div className="flex flex-col gap-2">
                         {/* PERBAIKAN LINK GOOGLE MAPS */}
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://maps.google.com/?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://maps.google.com/?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-400" />
                           </a>
@@ -1167,16 +1124,16 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
-                              {/* 🔥 PERBAIKAN LINK GOOGLE MAPS BULANAN 🔥 */}
+                              {/* PERBAIKAN LINK GOOGLE MAPS BULANAN */}
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://maps.google.com/?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                     <i className="fa-solid fa-arrow-up-right-from-square text-gray-400 ml-1" />
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://maps.google.com/?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                     <i className="fa-solid fa-arrow-up-right-from-square text-gray-400 ml-1" />
                                   </a>
@@ -1190,42 +1147,72 @@ const DashboardHR = () => {
                               ) : (!log.in && !log.out) ? (
                                 <div className="text-xs font-bold text-gray-400 text-center py-4">Belum ada absen</div>
                               ) : (
-                                <div className="flex flex-col md:flex-row gap-4 overflow-hidden">
+                                <div className="grid grid-cols-2 gap-4">
                                   {/* MASUK */}
-                                  {log.in && (
-                                    <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-gray-100 overflow-hidden w-full">
-                                      <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Data Masuk</p>
-                                      <div className="flex overflow-x-auto flex-nowrap lg:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
-                                        <FotoSlot src={log.in.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
-                                        {isOutlet && <FotoSlot src={log.in.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />}
-                                        <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
-                                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
-                                          <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-[3/4] md:aspect-square">
-                                            {log.in.custom_signature ? <img src={prosesUrlFoto(log.in.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
-                                            <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Masuk</div>
+                                  <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                    <p className="text-[10px] font-black text-green-600 uppercase tracking-wider mb-2 border-b border-gray-100 pb-1 flex items-center gap-1.5">
+                                      <i className="fa-solid fa-arrow-right-to-bracket" /> Data Masuk
+                                    </p>
+                                    {log.in ? (
+                                      <div className="flex flex-col items-center gap-3">
+                                        <div className="w-full flex justify-center">
+                                          <FotoSlot src={log.in.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Masuk" badgeColor="bg-green-500" />
+                                        </div>
+                                        {isOutlet && (
+                                          <div className="w-full flex justify-center">
+                                            <FotoSlot src={log.in.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />
+                                          </div>
+                                        )}
+                                        <div className="w-full flex justify-center">
+                                          <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px]">
+                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide text-center">Tanda Tangan</p>
+                                            <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-square">
+                                              {log.in.custom_signature ? <img src={prosesUrlFoto(log.in.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Masuk" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                              <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Masuk</div>
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  )}
-                                  
+                                    ) : (
+                                      <div className="flex flex-col items-center justify-center py-8 gap-2 text-gray-300">
+                                        <i className="fa-solid fa-clock text-3xl" />
+                                        <p className="text-[10px] font-bold text-gray-400">Belum Absen Masuk</p>
+                                      </div>
+                                    )}
+                                  </div>
+
                                   {/* KELUAR */}
-                                  {log.out && (
-                                    <div className="flex-1 bg-white p-3 rounded-2xl shadow-sm border border-gray-100 overflow-hidden w-full">
-                                      <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Data Keluar</p>
-                                      <div className="flex overflow-x-auto flex-nowrap lg:flex-wrap gap-4 pb-2 pt-1 snap-x snap-mandatory hide-scrollbar">
-                                        <FotoSlot src={log.out.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
-                                        {isOutlet && <FotoSlot src={log.out.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />}
-                                        <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
-                                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
-                                          <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-[3/4] md:aspect-square">
-                                            {log.out.custom_signature ? <img src={prosesUrlFoto(log.out.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Keluar" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
-                                            <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Keluar</div>
+                                  <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                    <p className="text-[10px] font-black text-orange-500 uppercase tracking-wider mb-2 border-b border-gray-100 pb-1 flex items-center gap-1.5">
+                                      <i className="fa-solid fa-arrow-right-from-bracket" /> Data Keluar
+                                    </p>
+                                    {log.out ? (
+                                      <div className="flex flex-col items-center gap-3">
+                                        <div className="w-full flex justify-center">
+                                          <FotoSlot src={log.out.custom_foto_absen} label={isOutlet ? "Wajah + Kanan" : "Selfie Wajah"} badge="Keluar" badgeColor="bg-orange-500" />
+                                        </div>
+                                        {isOutlet && (
+                                          <div className="w-full flex justify-center">
+                                            <FotoSlot src={log.out.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />
+                                          </div>
+                                        )}
+                                        <div className="w-full flex justify-center">
+                                          <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px]">
+                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide text-center">Tanda Tangan</p>
+                                            <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-square">
+                                              {log.out.custom_signature ? <img src={prosesUrlFoto(log.out.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Keluar" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                              <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Keluar</div>
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  )}
+                                    ) : (
+                                      <div className="flex flex-col items-center justify-center py-8 gap-2 text-gray-300">
+                                        <i className="fa-solid fa-clock text-3xl" />
+                                        <p className="text-[10px] font-bold text-gray-400">Belum Absen Keluar</p>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
