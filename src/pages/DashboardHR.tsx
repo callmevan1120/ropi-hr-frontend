@@ -361,7 +361,7 @@ const DashboardHR = () => {
             const year = parseInt(bulanAktif.split('-')[0]);
             const month = parseInt(bulanAktif.split('-')[1]) - 1;
             startDateObj = new Date(year, month, 1);
-            endDateObj = new Date(year, month, 0);
+            endDateObj = new Date(year, month + 1, 0);
           } else {
             startDateObj = new Date(periodeMulai);
             endDateObj = new Date(periodeAkhir);
@@ -370,10 +370,6 @@ const DashboardHR = () => {
           leaveResults.forEach(result => {
             if (result.status === 'fulfilled') {
               const { employee, data } = result.value;
-              // DEBUG: log status values dari API
-              if ((data as any[]).length > 0) {
-                console.log('[IZIN DEBUG] employee:', employee, 'statuses:', (data as any[]).map((r:any) => r.status));
-              }
               let totalIzin = 0;
               (data as any[]).filter(r => r.status?.toLowerCase() === 'approved').forEach((r: any) => {
                 const from = new Date(r.from_date);
