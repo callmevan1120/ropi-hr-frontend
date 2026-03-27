@@ -31,14 +31,12 @@ const formatJamLokal = (timeString?: string): string => {
   return timeString.substring(0, 5);
 };
 
-// HELPER: Cek apakah user karyawan outlet
 const isKaryawanOutlet = (branch?: string): boolean => {
   if (!branch) return true; 
   const b = branch.toLowerCase();
   return !(b.includes('klaten') || b.includes('ph') || b.includes('jakarta'));
 };
 
-// HELPER: Waktu Relatif (Contoh: "2 menit yang lalu")
 const timeAgo = (dateStr: string) => {
   const date = new Date(dateStr);
   const now = new Date();
@@ -90,7 +88,6 @@ const Home = () => {
     fetchNotifications(parsedUser.employee_id);
   }, [navigate]);
 
-  // Menutup dropdown notif jika klik di luar
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
@@ -109,7 +106,6 @@ const Home = () => {
       if (data.success && data.data) {
         setNotifications(data.data);
         
-        // Hitung unread (notifikasi yang lebih baru dari last_read)
         const lastReadTime = localStorage.getItem('ropi_last_read_notif');
         if (!lastReadTime) {
           setUnreadCount(data.data.length);
@@ -127,7 +123,6 @@ const Home = () => {
   const handleOpenNotif = () => {
     setShowNotif(!showNotif);
     if (!showNotif) {
-      // Saat dibuka, tandai semua sebagai dibaca
       setUnreadCount(0);
       localStorage.setItem('ropi_last_read_notif', new Date().toISOString());
     }
@@ -337,7 +332,7 @@ const Home = () => {
 
         {/* BAGIAN KANAN: APLIKASI MOBILE */}
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
-          <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto">
+          <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
             {/* HEADER */}
             <div className="bg-[#3e2723] pt-12 pb-24 px-6 rounded-b-[2.5rem] shrink-0 shadow-sm relative z-40">
@@ -348,58 +343,58 @@ const Home = () => {
                   </h2>
                   <p className="text-white/70 text-sm mt-0.5">{user.role || 'Staff Roti Ropi'}</p>
                 </div>
-                <div className="flex items-center gap-3" ref={notifRef}>
-                  
-                  {/* ICON LONCENG NOTIFIKASI */}
-                  <div className="relative">
-                    <button 
-                      onClick={handleOpenNotif} 
-                      className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white text-xl active:scale-95 transition-transform border border-white/10 hover:bg-white/20"
-                    >
-                      <i className="fa-regular fa-bell"></i>
-                      {unreadCount > 0 && (
-                        <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full border-2 border-[#3e2723] animate-pulse"></span>
-                      )}
-                    </button>
-
-                    {/* DROPDOWN NOTIFIKASI */}
-                    {showNotif && (
-                      <div className="absolute top-14 right-0 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col z-50 animate-fade-in-down origin-top-right">
-                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                          <h3 className="font-black text-[#3e2723] text-sm"><i className="fa-solid fa-bell text-[#fbc02d] mr-1.5"></i>Notifikasi</h3>
-                          <button onClick={() => setShowNotif(false)} className="text-gray-400 hover:text-red-500"><i className="fa-solid fa-xmark"></i></button>
-                        </div>
-                        <div className="max-h-64 overflow-y-auto no-scrollbar flex flex-col bg-white">
-                          {notifications.length === 0 ? (
-                            <div className="py-8 text-center flex flex-col items-center">
-                              <i className="fa-solid fa-box-open text-3xl text-gray-200 mb-2"></i>
-                              <p className="text-xs text-gray-400 font-bold">Belum ada notifikasi.</p>
-                            </div>
-                          ) : (
-                            notifications.map((notif) => (
-                              <div key={notif.id} className="px-4 py-3 border-b border-gray-50 hover:bg-gray-50/50 transition-colors flex gap-3 items-start">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm
-                                  ${notif.type === 'success' ? 'bg-green-100 text-green-500' : 
-                                    notif.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-600'}`}>
-                                  <i className={`fa-solid ${notif.type === 'success' ? 'fa-check' : notif.type === 'error' ? 'fa-xmark' : 'fa-clock'}`}></i>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-black text-[#3e2723] truncate leading-tight">{notif.title}</p>
-                                  <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">{notif.message}</p>
-                                  <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase">{timeAgo(notif.time)}</p>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
+                
+                {/* LONCENG NOTIFIKASI MENGGANTIKAN PROFIL */}
+                <div className="relative" ref={notifRef}>
+                  <button 
+                    onClick={handleOpenNotif} 
+                    className="w-14 h-14 rounded-full bg-[#fff8e1] border-2 border-[#fbc02d] flex items-center justify-center text-[#3e2723] text-2xl shadow-lg active:scale-95 transition-transform"
+                  >
+                    <i className="fa-solid fa-bell"></i>
+                    {unreadCount > 0 && (
+                      <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-[#fff8e1] animate-pulse"></span>
                     )}
-                  </div>
+                  </button>
 
-                  {/* PROFIL */}
-                  <Link to="/profil" className="w-12 h-12 rounded-full bg-[#fff8e1] border-2 border-[#fbc02d] flex items-center justify-center text-[#3e2723] font-black text-xl shadow-lg active:scale-95 transition-transform">
-                    <span>{(user.name || 'K').charAt(0).toUpperCase()}</span>
-                  </Link>
+                  {/* DROPDOWN NOTIFIKASI YANG RAPI */}
+                  {showNotif && (
+                    <div className="absolute top-[65px] right-0 w-[300px] max-w-[85vw] bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col z-50 transform origin-top-right transition-all duration-200 scale-100 opacity-100">
+                      <div className="bg-gray-50 px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+                        <h3 className="font-black text-[#3e2723] text-sm flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-[#fff8e1] flex items-center justify-center">
+                            <i className="fa-solid fa-bell text-[#fbc02d] text-[10px]"></i>
+                          </div>
+                          Notifikasi
+                        </h3>
+                        <button onClick={() => setShowNotif(false)} className="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors">
+                          <i className="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                      </div>
+                      <div className="max-h-[50vh] overflow-y-auto no-scrollbar flex flex-col bg-white">
+                        {notifications.length === 0 ? (
+                          <div className="py-10 text-center flex flex-col items-center">
+                            <i className="fa-regular fa-bell-slash text-4xl text-gray-200 mb-3"></i>
+                            <p className="text-xs text-gray-400 font-bold">Belum ada notifikasi.</p>
+                          </div>
+                        ) : (
+                          notifications.map((notif) => (
+                            <div key={notif.id} className="px-5 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 items-start">
+                              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm
+                                ${notif.type === 'success' ? 'bg-green-100 text-green-500' : 
+                                  notif.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-600'}`}>
+                                <i className={`fa-solid ${notif.type === 'success' ? 'fa-check' : notif.type === 'error' ? 'fa-xmark' : 'fa-clock'}`}></i>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-black text-[#3e2723] truncate leading-tight">{notif.title}</p>
+                                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed font-medium">{notif.message}</p>
+                                <p className="text-[9px] text-gray-400 font-bold mt-1.5 uppercase tracking-wide">{timeAgo(notif.time)}</p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
