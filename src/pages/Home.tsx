@@ -51,7 +51,7 @@ const isRamadhan = (): boolean => {
   const now = new Date();
   const curr = (now.getMonth() + 1) * 100 + now.getDate();
   const tahun = now.getFullYear();
-  // Mengikuti periode Ramadhan 2026 sesuai logika Absen.tsx
+  // Mengikuti periode Ramadhan 2026
   if (tahun === 2026 && curr >= 218 && curr <= 319) return true;
   return false;
 };
@@ -277,18 +277,10 @@ const Home = () => {
       id: 'shift', title: '1. Aturan Pengajuan Shift (Wajib)',
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
-          <li>
-            Anda <strong>tidak bisa absen</strong> jika belum memiliki jadwal shift yang di-ACC HRD untuk hari ini.
-          </li>
-          <li>
-            Masuk ke menu <strong>Pengajuan Shift</strong> untuk mengatur jadwal 1 hari atau beberapa hari ke depan.
-          </li>
-          <li>
-            Jika ingin bertukar shift dengan teman, wajib mengajukan dari aplikasi agar HRD bisa mengubah jadwal resmi Anda di sistem.
-          </li>
-          <li>
-            Tunggu hingga HRD melakukan <em>Approval</em>. Setelah di-ACC, Anda baru bisa membuka kamera absen.
-          </li>
+          <li>Anda <strong>tidak bisa absen</strong> jika belum memiliki jadwal shift yang di-ACC HRD untuk hari ini.</li>
+          <li>Masuk ke menu <strong>Pengajuan Shift</strong> untuk mengatur jadwal 1 hari atau beberapa hari ke depan.</li>
+          <li>Jika ingin bertukar shift dengan teman, wajib mengajukan dari aplikasi agar HRD bisa mengubah jadwal resmi Anda di sistem.</li>
+          <li>Tunggu hingga HRD melakukan <em>Approval</em>. Setelah di-ACC, Anda baru bisa membuka kamera absen.</li>
         </ul>
       )
     },
@@ -296,24 +288,12 @@ const Home = () => {
       id: 'absen', title: '2. Cara Absen Harian',
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
-          <li>
-            <strong>Validasi GPS:</strong> Klik tombol absen. Pastikan Anda berada di area Outlet.
-          </li>
-          <li>
-            <strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah.
-          </li>
-          <li>
-            <strong>Foto Pertama:</strong> Jepret foto <strong>Wajah + Tangan Kanan</strong> Anda.
-          </li>
-          <li>
-            <strong>Foto Kedua:</strong> Setelah itu, jepret foto tambahan untuk <strong>Wajah + Tangan Kiri</strong> Anda.
-          </li>
-          <li>
-            <strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.
-          </li>
-          <li>
-            <strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu notifikasi berhasil.
-          </li>
+          <li><strong>Validasi GPS:</strong> Klik tombol absen. Pastikan Anda berada di area Outlet.</li>
+          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah.</li>
+          <li><strong>Foto Pertama:</strong> Jepret foto <strong>Wajah + Tangan Kanan</strong> Anda.</li>
+          <li><strong>Foto Kedua:</strong> Setelah itu, jepret foto tambahan untuk <strong>Wajah + Tangan Kiri</strong> Anda.</li>
+          <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
+          <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu notifikasi berhasil.</li>
         </ul>
       )
     },
@@ -323,12 +303,8 @@ const Home = () => {
         <>
           <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
           <ul className="list-disc pl-4 space-y-1.5">
-            <li>
-              <strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti.
-            </li>
-            <li>
-              <strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.
-            </li>
+            <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti.</li>
+            <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.</li>
           </ul>
         </>
       )
@@ -337,12 +313,8 @@ const Home = () => {
       id: 'error', title: '4. Solusi Jika Error',
       content: (
         <ul className="list-disc pl-4 space-y-2">
-          <li>
-            <strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba lagi.
-          </li>
-          <li>
-            <strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.
-          </li>
+          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba lagi.</li>
+          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.</li>
         </ul>
       )
     }
@@ -353,21 +325,11 @@ const Home = () => {
       id: 'absen', title: '1. Cara Absen Harian',
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
-          <li>
-            <strong>Validasi GPS:</strong> Klik tombol absen (Masuk/Keluar). Pastikan Anda berada di area kantor.
-          </li>
-          <li>
-            <strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah.
-          </li>
-          <li>
-            <strong>Foto Selfie:</strong> Jepret foto Selfie Wajah Anda dengan jelas.
-          </li>
-          <li>
-            <strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.
-          </li>
-          <li>
-            <strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu hingga ada notifikasi berhasil.
-          </li>
+          <li><strong>Validasi GPS:</strong> Klik tombol absen (Masuk/Keluar). Pastikan Anda berada di area kantor.</li>
+          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah.</li>
+          <li><strong>Foto Selfie:</strong> Jepret foto Selfie Wajah Anda dengan jelas.</li>
+          <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
+          <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
         </ul>
       )
     },
@@ -377,12 +339,8 @@ const Home = () => {
         <>
           <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
           <ul className="list-disc pl-4 space-y-1.5">
-            <li>
-              <strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti.
-            </li>
-            <li>
-              <strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.
-            </li>
+            <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti.</li>
+            <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.</li>
           </ul>
         </>
       )
@@ -391,12 +349,8 @@ const Home = () => {
       id: 'error', title: '3. Solusi Jika Error',
       content: (
         <ul className="list-disc pl-4 space-y-2">
-          <li>
-            <strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba absen lagi.
-          </li>
-          <li>
-            <strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.
-          </li>
+          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba absen lagi.</li>
+          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.</li>
         </ul>
       )
     }
@@ -405,7 +359,7 @@ const Home = () => {
   const listBukuPanduan = outlet ? panduanOutlet : panduanKantor;
 
   return (
-    <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden text-left">
+    <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -431,14 +385,14 @@ const Home = () => {
 
       <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
 
-        {/* PANEL KIRI (DESKTOP) */}
+        {/* BAGIAN KIRI: ILLUSTRASI PC */}
         <div className="hidden md:flex flex-col w-1/2 bg-[#3e2723] relative p-12 lg:p-16 justify-between overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
             <div className="absolute -top-20 -left-20 w-96 h-96 bg-[#fbc02d] rounded-full blur-3xl"></div>
             <div className="absolute bottom-10 -right-10 w-72 h-72 bg-orange-400 rounded-full blur-3xl"></div>
           </div>
           <div className="relative z-10">
-            <div className="w-20 h-20 bg-[#fbc02d] rounded-2xl flex items-center justify-center mb-8 rotate-3 shadow-lg shadow-[#fbc02d]/20">
+            <div className="w-20 h-20 bg-[#fbc02d] rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-[#fbc02d]/20 rotate-3">
               <i className="fa-solid fa-bread-slice text-[#3e2723] text-4xl -rotate-3"></i>
             </div>
             <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
@@ -461,22 +415,22 @@ const Home = () => {
           </div>
         </div>
 
-        {/* PANEL KANAN (MOBILE VIEW) */}
-        <div className="flex-1 flex flex-col bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200 overflow-hidden">
-          
-          {/* AREA SCROLL UTAMA AGAR HEADER DAN CARD BERGERAK BERSAMA */}
-          <div className="flex-1 overflow-y-auto no-scrollbar">
+        {/* BAGIAN KANAN: APLIKASI MOBILE */}
+        <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
+          <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
-            {/* HEADER COKELAT */}
-            <div className="bg-[#3e2723] px-5 pb-24 pt-12 rounded-b-[2.5rem] relative z-40">
+            {/* HEADER — safe-area-aware, compact */}
+            <div className="bg-[#3e2723] px-5 pb-10 pt-12 rounded-b-[2rem] shrink-0 shadow-sm relative z-40">
               <div className="flex justify-between items-center">
+                {/* KIRI: Salam & Role */}
                 <div className="flex-1 min-w-0 pr-3">
-                  <h2 className="text-xl font-black text-[#fbc02d] leading-tight truncate text-left">
+                  <h2 className="text-xl font-black text-[#fbc02d] leading-tight truncate">
                     Halo, <span>{user.name.split(' ')[0]}</span> 👋
                   </h2>
-                  <p className="text-white/60 text-xs mt-0.5 truncate text-left">{user.role || 'Staff Roti Ropi'}</p>
+                  <p className="text-white/60 text-xs mt-0.5 truncate">{user.role || 'Staff Roti Ropi'}</p>
                 </div>
 
+                {/* KANAN: Bell Notification — compact & eyecatching */}
                 <div className="relative shrink-0" ref={notifRef}>
                   <button
                     onClick={handleOpenNotif}
@@ -494,7 +448,7 @@ const Home = () => {
 
                     {/* Badge unread count */}
                     {unreadCount > 0 && (
-                      <span className="badge-pop absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-[#3e2723] shadow-md">
+                      <span className="badge-pop absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-[#3e2723] leading-none shadow-md">
                         {unreadCount > 9 ? '9+' : unreadCount}
                       </span>
                     )}
@@ -502,7 +456,7 @@ const Home = () => {
 
                   {/* DROPDOWN NOTIFIKASI */}
                   {showNotif && (
-                    <div className="absolute top-[48px] right-0 w-[300px] max-w-[85vw] bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col z-50 text-left">
+                    <div className="absolute top-[48px] right-0 w-[300px] max-w-[85vw] bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col z-50">
                       <div className="bg-gray-50 px-5 py-3.5 border-b border-gray-100 flex justify-between items-center">
                         <h3 className="font-black text-[#3e2723] text-sm flex items-center gap-2">
                           <div className="w-5 h-5 rounded-full bg-[#fff8e1] flex items-center justify-center">
@@ -525,7 +479,7 @@ const Home = () => {
                           </div>
                         ) : (
                           notifications.map((notif) => (
-                            <div key={notif.id} className="px-5 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 items-start text-left">
+                            <div key={notif.id} className="px-5 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 items-start">
                               <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm
                                 ${notif.type === 'success' ? 'bg-green-100 text-green-500' :
                                   notif.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-600'}`}>
@@ -544,110 +498,115 @@ const Home = () => {
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* AREA KONTEN MENYATU DENGAN HEADER (NEGATIVE MARGIN) */}
-              <div className="px-6 -mt-16 relative z-50">
+            {/* CONTENT AREA */}
+            <div className="flex-1 px-6 -mt-6 relative z-10 overflow-y-auto no-scrollbar pb-24">
 
-                {/* Status Absen Card */}
-                <div className="bg-white rounded-3xl p-6 shadow-2xl border border-gray-100 mb-8 relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300"></div>
-                  <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider mb-1 text-left">Status Hari Ini</p>
-                  <p className="text-[#3e2723] font-bold text-sm mb-5 bg-gray-50 p-3 rounded-xl border border-gray-100 text-left">{statusAbsen}</p>
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300"></div>
+                <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
+                <p className="text-[#3e2723] font-bold text-sm mb-5 bg-gray-50 p-2.5 rounded-xl border border-gray-100 inline-block w-full">{statusAbsen}</p>
 
-                  <button
-                    onClick={() => navigate(`/absen?mode=${btnConfig.mode}&auto=true`)}
-                    className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg ${btnConfig.className}`}
-                  >
-                    <i className={`fa-solid ${btnConfig.icon} fa-fw text-xl`}></i> {btnConfig.text}
-                  </button>
-                </div>
+                <button
+                  onClick={() => navigate(`/absen?mode=${btnConfig.mode}&auto=true`)}
+                  className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg ${btnConfig.className}`}
+                >
+                  <i className={`fa-solid ${btnConfig.icon} fa-fw text-xl`}></i> {btnConfig.text}
+                </button>
+              </div>
 
-                <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide text-left">Menu Laporan</h3>
-                <div className="flex flex-col gap-3 mb-8 text-left">
-                  <Link to="/izin" className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm active:scale-95 transition-all hover:border-[#fbc02d]/50 group">
+              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide">Menu Laporan</h3>
+              <div className="flex flex-col gap-3 mb-8">
+                <Link to="/izin" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50 group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-[#fff8e1] rounded-full flex items-center justify-center text-[#fbc02d] text-xl shrink-0 group-hover:bg-[#fbc02d] group-hover:text-[#3e2723] transition-colors">
+                      <i className="fa-solid fa-envelope-open-text"></i>
+                    </div>
+                    <div>
+                      <p className="font-black text-[#3e2723] text-sm">Pengajuan Izin</p>
+                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Sakit & Keperluan</p>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-[#fff8e1] group-hover:text-[#fbc02d] transition-colors">
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                  </div>
+                </Link>
+
+                <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-blue-400/50 group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-xl shrink-0 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                      <i className="fa-solid fa-calendar-minus"></i>
+                    </div>
+                    <div>
+                      <p className="font-black text-[#3e2723] text-sm">Cuti Tahunan</p>
+                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Cek Sisa Kuota</p>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                  </div>
+                </Link>
+
+                <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#3e2723]/50 group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 text-xl shrink-0 group-hover:bg-[#3e2723] group-hover:text-[#fbc02d] transition-colors">
+                      <i className="fa-solid fa-clipboard-list"></i>
+                    </div>
+                    <div>
+                      <p className="font-black text-[#3e2723] text-sm">Riwayat Absen</p>
+                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Kehadiran Bulanan</p>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-gray-200 group-hover:text-[#3e2723] transition-colors">
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                  </div>
+                </Link>
+
+                {outlet && (
+                  <Link to="/shift" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-purple-400/50 group">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-[#fff8e1] rounded-full flex items-center justify-center text-[#fbc02d] text-xl group-hover:bg-[#fbc02d] group-hover:text-[#3e2723] transition-colors shrink-0">
-                        <i className="fa-solid fa-envelope-open-text"></i>
+                      <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center text-purple-500 text-xl shrink-0 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                        <i className="fa-solid fa-calendar-days"></i>
                       </div>
                       <div>
-                        <p className="font-black text-[#3e2723] text-sm">Pengajuan Izin</p>
-                        <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Sakit & Keperluan</p>
+                        <p className="font-black text-[#3e2723] text-sm">Pengajuan Shift</p>
+                        <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Ubah / Tukar Shift</p>
                       </div>
                     </div>
-                    <i className="fa-solid fa-chevron-right text-xs text-gray-300"></i>
+                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-purple-50 group-hover:text-purple-500 transition-colors">
+                      <i className="fa-solid fa-chevron-right text-xs"></i>
+                    </div>
                   </Link>
+                )}
+              </div>
 
-                  <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm active:scale-95 transition-all hover:border-blue-400/50 group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-xl group-hover:bg-blue-500 group-hover:text-white transition-colors shrink-0">
-                        <i className="fa-solid fa-calendar-minus"></i>
+              {/* BUKU PANDUAN */}
+              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide flex items-center gap-2">
+                <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
+              </h3>
+              <div className="flex flex-col gap-2">
+                {listBukuPanduan.map(({ id, title, content }) => (
+                  <div key={id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                    <button onClick={() => togglePanduan(id)} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
+                      <span className="font-bold text-[#3e2723] text-sm text-left">{title}</span>
+                      <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === id ? 'rotate-180' : ''}`}></i>
+                    </button>
+                    {bukaPanduan === id && (
+                      <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                        {content}
                       </div>
-                      <div>
-                        <p className="font-black text-[#3e2723] text-sm">Cuti Tahunan</p>
-                        <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Cek Sisa Kuota</p>
-                      </div>
-                    </div>
-                    <i className="fa-solid fa-chevron-right text-xs text-gray-300"></i>
-                  </Link>
-
-                  <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm active:scale-95 transition-all hover:border-[#3e2723]/50 group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 text-xl group-hover:bg-[#3e2723] group-hover:text-[#fbc02d] transition-colors shrink-0">
-                        <i className="fa-solid fa-clipboard-list"></i>
-                      </div>
-                      <div>
-                        <p className="font-black text-[#3e2723] text-sm">Riwayat Absen</p>
-                        <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Kehadiran Bulanan</p>
-                      </div>
-                    </div>
-                    <i className="fa-solid fa-chevron-right text-xs text-gray-300"></i>
-                  </Link>
-
-                  {outlet && (
-                    <Link to="/shift" className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm active:scale-95 transition-all hover:border-purple-400/50 group">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center text-purple-500 text-xl group-hover:bg-purple-500 group-hover:text-white transition-colors shrink-0">
-                          <i className="fa-solid fa-calendar-days"></i>
-                        </div>
-                        <div>
-                          <p className="font-black text-[#3e2723] text-sm">Pengajuan Shift</p>
-                          <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Ubah / Tukar Shift</p>
-                        </div>
-                      </div>
-                      <i className="fa-solid fa-chevron-right text-xs text-gray-300"></i>
-                    </Link>
-                  )}
-                </div>
-
-                {/* BUKU PANDUAN (LENGKAP TANPA SUMMARIZE) */}
-                <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide flex items-center gap-2 text-left">
-                  <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
-                </h3>
-                <div className="flex flex-col gap-2 pb-10">
-                  {listBukuPanduan.map(({ id, title, content }) => (
-                    <div key={id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                      <button onClick={() => togglePanduan(id)} className="w-full px-4 py-3.5 flex justify-between items-center bg-gray-50/50 text-left">
-                        <span className="font-bold text-[#3e2723] text-sm">{title}</span>
-                        <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === id ? 'rotate-180' : ''}`}></i>
-                      </button>
-                      {bukaPanduan === id && (
-                        <div className="px-5 py-4 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white text-left">
-                          {content}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
 
-          {/* BOTTOM NAV (DIKUNCI DI BAWAH KONTAINER MOBILE) */}
-          <div className="shrink-0 z-50">
             <BottomNav />
-          </div>
 
+          </div>
         </div>
+
       </div>
     </div>
   );
