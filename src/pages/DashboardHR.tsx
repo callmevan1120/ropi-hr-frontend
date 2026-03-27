@@ -39,6 +39,20 @@ interface Lokasi {
   radius: number;
 }
 
+interface LeaveRequest {
+  name: string;
+  employee: string;
+  employee_name: string;
+  leave_type: string;
+  from_date: string;
+  to_date: string;
+  description: string;
+  status: string;
+  total_leave_days: number;
+  attachment?: string;
+  [key: string]: any;
+}
+
 // ── HELPER ──
 const formatJamLokal = (timeString?: string) => {
   if (!timeString) return '-';
@@ -155,13 +169,15 @@ const DashboardHR = () => {
   const [periodeMulai, setPeriodeMulai] = useState(localISOTime);
   const [periodeAkhir, setPeriodeAkhir] = useState(localISOTime);
 
+  // STATE PAGINATION 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
+  // STATE MOBILE FILTER TOGGLE
+  const [showFilters, setShowFilters] = useState(false);
+
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
   const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
-
-  // STATE UNTUK PREVIEW GAMBAR (Bukti Izin)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -490,7 +506,6 @@ const DashboardHR = () => {
     return url;
   };
 
-  // HELPER MENCARI LAMPIRAN BUKTI IZIN
   const getAttachmentIzin = (leaveData: any): string | undefined => {
     if (!leaveData) return undefined;
     const fields = ['attachment', 'custom_attachment', 'leave_attachment', 'custom_foto_bukti', 'custom_bukti', 'custom_file'];
@@ -524,7 +539,10 @@ const DashboardHR = () => {
           const end = to > endDateObj ? endDateObj : to;
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             if (d.getDay() !== 0 && d.getDay() !== 6) {
-              const key = d.toISOString().substring(0, 10);
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              const key = `${yyyy}-${mm}-${dd}`;
               empIzinDates[key] = r.leave_type;
             }
           }
@@ -588,8 +606,8 @@ const DashboardHR = () => {
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=$${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=$${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
@@ -782,27 +800,27 @@ const DashboardHR = () => {
   return (
     <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
 
-      {/* ── HEADER ── */}
-      <div className="bg-[#3e2723] pt-6 pb-6 px-5 md:px-10 shadow-lg sticky top-0 z-20 w-full rounded-b-[2rem]">
-        <div className="max-w-7xl mx-auto flex flex-col gap-4 md:gap-5">
+      {/* ── HEADER (PERBAIKAN UI MOBILE) ── */}
+      <div className="bg-[#3e2723] pt-5 pb-6 px-5 md:px-10 shadow-lg relative z-20 w-full rounded-b-[2rem]">
+        <div className="max-w-7xl mx-auto flex flex-col gap-4">
           
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-3">
-              <button onClick={handleLogout} title="Logout" className="w-10 h-10 bg-white/10 hover:bg-red-500/30 border border-white/20 hover:border-red-400/50 text-white/60 hover:text-red-300 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0">
-                <i className="fa-solid fa-arrow-right-from-bracket text-base" />
+              <button onClick={handleLogout} title="Logout" className="w-9 h-9 bg-white/10 hover:bg-red-500/30 border border-white/20 hover:border-red-400/50 text-white/60 hover:text-red-300 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0">
+                <i className="fa-solid fa-arrow-right-from-bracket text-sm" />
               </button>
               <div>
-                <h1 className="text-xl md:text-2xl font-black text-[#fbc02d] leading-tight">HR Command Center</h1>
-                <p className="text-[10px] md:text-xs text-white/70 font-bold uppercase tracking-widest mt-0.5">Laporan Kehadiran</p>
+                <h1 className="text-lg md:text-2xl font-black text-[#fbc02d] leading-tight">HR Command Center</h1>
+                <p className="text-[9px] md:text-xs text-white/70 font-bold uppercase tracking-widest mt-0.5">Laporan Kehadiran</p>
               </div>
             </div>
             
-            <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-4 py-2 rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 text-xs md:text-sm shrink-0">
+            <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-3 md:px-4 py-2 rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 text-xs md:text-sm shrink-0">
               <i className="fa-solid fa-file-excel" /> <span className="hidden sm:inline">Export Excel</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 md:gap-4 w-full">
+          <div className="grid grid-cols-3 gap-2 md:gap-4 w-full mt-1">
             <div className="bg-green-500/20 rounded-xl px-2 py-2 md:py-3 border border-green-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
               <p className="text-[9px] md:text-xs text-green-300 font-bold uppercase tracking-wide">Hadir</p>
               <p className="font-black text-xl md:text-3xl leading-none mt-1">{globalHadir}</p>
@@ -817,84 +835,96 @@ const DashboardHR = () => {
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full">
-            <div className="flex bg-white/10 rounded-xl p-1 border border-white/10 shadow-inner md:w-auto shrink-0">
-              <button onClick={() => setFilterMode('harian')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Harian</button>
-              <button onClick={() => setFilterMode('bulanan')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Bulanan</button>
-              <button onClick={() => setFilterMode('periode')} className={`flex-1 md:px-6 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'periode' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Periode</button>
-            </div>
-
-            <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 md:py-2.5 border border-white/10 shadow-sm w-full md:w-auto shrink-0 gap-2 overflow-x-auto">
-              {filterMode === 'harian' && (
-                <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
-              )}
-              {filterMode === 'bulanan' && (
-                <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
-              )}
-              {filterMode === 'periode' && (
-                <>
-                  <input type="date" value={periodeMulai} onChange={(e) => setPeriodeMulai(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-28 md:w-auto text-center" style={{ colorScheme: 'dark' }} />
-                  <span className="text-white/50 font-bold">-</span>
-                  <input type="date" value={periodeAkhir} onChange={(e) => setPeriodeAkhir(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-28 md:w-auto text-center" style={{ colorScheme: 'dark' }} />
-                </>
-              )}
-            </div>
-
-            <div 
-              className="relative w-full md:w-48 shrink-0"
-              tabIndex={0}
-              onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget)) {
-                  setIsDropdownOpen(false);
-                }
-              }}
-            >
-              <div 
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center justify-between bg-white/10 rounded-xl px-4 py-2 md:py-2.5 border border-white/10 shadow-sm cursor-pointer hover:bg-white/20 transition-colors h-full"
+          {/* SEARCH & TOGGLE FILTER (MOBILE) */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full">
+            <div className="flex gap-2 w-full md:w-auto md:flex-1">
+              <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 w-full border border-white/10 shadow-sm relative group focus-within:bg-white/20 transition-colors">
+                <i className="fa-solid fa-search text-white/50 group-focus-within:text-white transition-colors mr-3" />
+                <input 
+                  type="text" 
+                  placeholder="Cari nama / ID..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-transparent text-white placeholder-white/40 font-bold text-xs md:text-sm outline-none w-full" 
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 text-white/50 hover:text-white">
+                    <i className="fa-solid fa-circle-xmark text-sm" />
+                  </button>
+                )}
+              </div>
+              <button 
+                onClick={() => setShowFilters(!showFilters)} 
+                className={`md:hidden shrink-0 px-4 rounded-xl border border-white/10 flex items-center justify-center transition-colors shadow-sm ${showFilters ? 'bg-[#fbc02d] text-[#3e2723]' : 'bg-white/10 text-white'}`}
               >
-                <div className="flex items-center gap-3">
-                  <i className="fa-solid fa-store text-white/50" />
-                  <span className="text-white font-bold text-xs md:text-sm truncate max-w-[120px]">
-                    {activeBranch}
-                  </span>
-                </div>
-                <i className={`fa-solid fa-chevron-down text-white/50 text-[10px] transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                <i className="fa-solid fa-sliders"></i>
+              </button>
+            </div>
+
+            {/* FILTER PANEL (Sembunyi di HP kalau tidak di-klik) */}
+            <div className={`${showFilters ? 'flex' : 'hidden'} md:flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto`}>
+              <div className="flex bg-white/10 rounded-xl p-1 border border-white/10 shadow-inner shrink-0">
+                <button onClick={() => setFilterMode('harian')} className={`flex-1 md:px-4 py-2 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Harian</button>
+                <button onClick={() => setFilterMode('bulanan')} className={`flex-1 md:px-4 py-2 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'bulanan' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Bulanan</button>
+                <button onClick={() => setFilterMode('periode')} className={`flex-1 md:px-4 py-2 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'periode' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Periode</button>
               </div>
 
-              {isDropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
-                  <div className="max-h-60 overflow-y-auto py-2">
-                    <div onClick={() => { setActiveBranch('Semua Lokasi'); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors ${activeBranch === 'Semua Lokasi' ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>Semua Lokasi</div>
-                    
-                    <div className="px-4 py-1.5 mt-2 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 border-y border-gray-100">Kantor</div>
-                    {kantorLocations.map(b => (
-                      <div key={b} onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>{b}</div>
-                    ))}
-                    
-                    <div className="px-4 py-1.5 mt-2 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 border-y border-gray-100">Outlet</div>
-                    {outletLocations.map(b => (
-                      <div key={b} onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>{b}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+              <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 border border-white/10 shadow-sm shrink-0 gap-2 overflow-x-auto">
+                {filterMode === 'harian' && (
+                  <input type="date" value={tanggalAktif} onChange={(e) => setTanggalAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
+                )}
+                {filterMode === 'bulanan' && (
+                  <input type="month" value={bulanAktif} onChange={(e) => setBulanAktif(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-full text-center md:text-left" style={{ colorScheme: 'dark' }} />
+                )}
+                {filterMode === 'periode' && (
+                  <>
+                    <input type="date" value={periodeMulai} onChange={(e) => setPeriodeMulai(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-28 md:w-auto text-center" style={{ colorScheme: 'dark' }} />
+                    <span className="text-white/50 font-bold">-</span>
+                    <input type="date" value={periodeAkhir} onChange={(e) => setPeriodeAkhir(e.target.value)} className="bg-transparent text-white font-bold text-xs md:text-sm outline-none cursor-pointer w-28 md:w-auto text-center" style={{ colorScheme: 'dark' }} />
+                  </>
+                )}
+              </div>
 
-            <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 md:py-2.5 w-full md:flex-1 border border-white/10 shadow-sm relative group focus-within:bg-white/20 transition-colors">
-              <i className="fa-solid fa-search text-white/50 group-focus-within:text-white transition-colors mr-3" />
-              <input 
-                type="text" 
-                placeholder="Cari nama / ID karyawan..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent text-white placeholder-white/40 font-bold text-xs md:text-sm outline-none w-full" 
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-3 text-white/50 hover:text-white">
-                  <i className="fa-solid fa-circle-xmark text-sm" />
-                </button>
-              )}
+              <div 
+                className="relative shrink-0"
+                tabIndex={0}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setIsDropdownOpen(false);
+                  }
+                }}
+              >
+                <div 
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center justify-between bg-white/10 rounded-xl px-4 py-2 border border-white/10 shadow-sm cursor-pointer hover:bg-white/20 transition-colors h-full"
+                >
+                  <div className="flex items-center gap-3">
+                    <i className="fa-solid fa-store text-white/50" />
+                    <span className="text-white font-bold text-xs md:text-sm truncate max-w-[120px]">
+                      {activeBranch}
+                    </span>
+                  </div>
+                  <i className={`fa-solid fa-chevron-down text-white/50 text-[10px] transition-transform ml-2 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                </div>
+
+                {isDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+                    <div className="max-h-60 overflow-y-auto py-2">
+                      <div onClick={() => { setActiveBranch('Semua Lokasi'); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors ${activeBranch === 'Semua Lokasi' ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>Semua Lokasi</div>
+                      
+                      <div className="px-4 py-1.5 mt-2 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 border-y border-gray-100">Kantor</div>
+                      {kantorLocations.map(b => (
+                        <div key={b} onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>{b}</div>
+                      ))}
+                      
+                      <div className="px-4 py-1.5 mt-2 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 border-y border-gray-100">Outlet</div>
+                      {outletLocations.map(b => (
+                        <div key={b} onClick={() => { setActiveBranch(b); setIsDropdownOpen(false); }} className={`px-4 py-2 text-xs md:text-sm font-bold cursor-pointer transition-colors pl-6 ${activeBranch === b ? 'bg-[#fff8e1] text-[#fbc02d]' : 'text-gray-600 hover:bg-gray-50'}`}>{b}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1037,6 +1067,7 @@ const DashboardHR = () => {
               })}
             </div>
 
+            {/* KONTROL PAGINATION */}
             {totalPages > 1 && (
               <div className="flex justify-center items-center gap-4 mt-8 mb-4">
                 <button
@@ -1507,7 +1538,7 @@ const DashboardHR = () => {
               <p className="text-white font-black text-sm drop-shadow-md"><i className="fa-regular fa-image mr-2 text-[#fbc02d]"></i>Bukti Lampiran</p>
               <button onClick={() => setPreviewUrl(null)}
                 className="w-10 h-10 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors border border-white/20">
-                <i className="fa-solid fa-xmark text-lg"></i>
+                <i className="fa-solid fa-xmark text-lg" />
               </button>
             </div>
             <div className="rounded-[2rem] overflow-hidden bg-black/40 max-h-[85vh] flex items-center justify-center shadow-2xl border border-white/10 mt-14">
