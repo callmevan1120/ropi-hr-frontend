@@ -29,7 +29,8 @@ const Cuti = () => {
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
 
   const [user, setUser] = useState<User | null>(null);
-  const [leaveBalance, setLeaveBalance] = useState<string>('-');
+  const [leaveBalance, setLeaveBalance] = useState<number>(0);
+  const [leaveTotal, setLeaveTotal] = useState<number>(0);
   const [leaveHistory, setLeaveHistory] = useState<LeaveHistory[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -72,16 +73,16 @@ const Cuti = () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      // Mengambil saldo cuti
       const resBalance = await fetch(`${BACKEND}/api/leaves?employee_id=${encodeURIComponent(employeeId)}`);
       const dataBalance = await resBalance.json();
       if (dataBalance.success) {
-        setLeaveBalance(dataBalance.balance !== undefined ? String(dataBalance.balance) : '0');
+        setLeaveBalance(dataBalance.balance !== undefined ? Number(dataBalance.balance) : 0);
+        setLeaveTotal(dataBalance.total !== undefined ? Number(dataBalance.total) : 0);
       } else {
-        setLeaveBalance('0');
+        setLeaveBalance(0);
+        setLeaveTotal(0);
       }
 
-      // Mengambil riwayat pengajuan cuti
       const resHistory = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(employeeId)}`);
       const dataHistory = await resHistory.json();
       
@@ -100,7 +101,6 @@ const Cuti = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validasi super ketat agar karyawan tidak seenaknya
     if (!user || !fromDate || !toDate || !reason.trim()) {
       alert('Peringatan: Tanggal dan Alasan Cuti WAJIB diisi dengan jelas!');
       return;
@@ -165,6 +165,24 @@ const Cuti = () => {
       </span>
     );
   };
+
+  // LOGIKA WARNA KUOTA DINAMIS
+  const getBalanceColorTheme = () => {
+    if (leaveTotal === 0) return { bg: 'bg-gray-50', text: 'text-gray-400', border: 'border-gray-200', icon: 'text-gray-400', stroke: 'border-gray-300' };
+    
+    const ratio = leaveBalance / leaveTotal;
+    
+    // Sisa di atas 50% -> Hijau (Aman)
+    if (ratio >= 0.5) return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', icon: 'text-green-500', stroke: 'border-green-500' };
+    
+    // Sisa di antara 25% - 50% -> Oranye/Kuning (Peringatan)
+    if (ratio >= 0.25) return { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: 'text-orange-500', stroke: 'border-orange-400' };
+    
+    // Sisa di bawah 25% (atau habis) -> Merah (Bahaya)
+    return { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', icon: 'text-red-500', stroke: 'border-red-500' };
+  };
+
+  const theme = getBalanceColorTheme();
 
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
@@ -253,8 +271,11 @@ const Cuti = () => {
                         <li>Hanya berlaku bagi karyawan dengan <b className="text-[#3e2723]">masa kerja &gt; 1 tahun</b>.</li>
                         <li>Alasan cuti <b className="text-[#3e2723]">wajib</b> diisi dengan jelas.</li>
                       </ul>
-                      <p className="text-[11px] text-[#3e2723] font-medium leading-relaxed pt-2 border-t border-[#fbc02d]/20">
-                        Sisa kuota cuti Anda saat ini: <span className="font-black text-red-500">{leaveBalance} Hari</span>.
+                      <p className="text-[11px] text-[#3e2723] font-medium leading-relaxed pt-2 border-t border-[#fbc02d]/20 flex items-center gap-1.5">
+                        Kuota Cuti Tahunan: 
+                        <span className={`font-black px-1.5 py-0.5 rounded-md ${theme.bg} ${theme.text} ${theme.border} border`}>
+                          {leaveBalance} dari {leaveTotal} Hari
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -283,16 +304,15 @@ const Cuti = () => {
                         required></textarea>
                     </div>
 
-                    {/* TOMBOL TERKUNCI JIKA SALDO 0 */}
-                    <button type="submit" disabled={isSubmitting || Number(leaveBalance) <= 0}
+                    <button type="submit" disabled={isSubmitting || leaveBalance <= 0}
                       className={`w-full font-black text-base py-4 rounded-2xl active:scale-95 transition-all mt-4 flex justify-center items-center gap-2 shadow-md ${
-                        Number(leaveBalance) <= 0 
+                        leaveBalance <= 0 
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' 
                         : 'bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] shadow-[#fbc02d]/30'
                       }`}>
                       {isSubmitting
                         ? <><i className="fa-solid fa-spinner fa-spin"></i> Memproses...</>
-                        : <><i className="fa-solid fa-calendar-check"></i> {Number(leaveBalance) <= 0 ? 'Belum Memenuhi Syarat / Kuota Habis' : 'Kirim Pengajuan Cuti'}</>}
+                        : <><i className="fa-solid fa-calendar-check"></i> {leaveBalance <= 0 ? 'Belum Memenuhi Syarat / Kuota Habis' : 'Kirim Pengajuan Cuti'}</>}
                     </button>
                   </form>
                 </div>
@@ -301,14 +321,20 @@ const Cuti = () => {
                 <>
                   <div className="px-6 pt-5">
                     <h3 className="font-black text-[#3e2723] text-sm uppercase tracking-wider mb-3">Sisa Kuota Cuti Tahunan</h3>
-                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
+                    
+                    {/* WIDGET SALDO DINAMIS */}
+                    <div className={`p-5 rounded-3xl shadow-sm border flex items-center justify-between transition-colors ${theme.bg} ${theme.border}`}>
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full border-4 border-[#fbc02d] flex items-center justify-center bg-[#fff8e1]">
-                          <i className="fa-solid fa-plane-departure text-[#fbc02d] text-lg"></i>
+                        <div className={`w-14 h-14 rounded-full border-4 flex items-center justify-center bg-white ${theme.stroke}`}>
+                          <i className={`fa-solid fa-plane-departure text-lg ${theme.icon}`}></i>
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide">Tersedia</p>
-                          <p className="text-3xl font-black text-[#3e2723] leading-none">{leaveBalance} <span className="text-xs text-gray-500 font-bold ml-1">Hari</span></p>
+                          <p className={`text-[10px] font-black uppercase tracking-wide opacity-70 ${theme.text}`}>
+                            {leaveBalance <= 0 ? 'Tidak Tersedia' : 'Tersedia'}
+                          </p>
+                          <p className={`text-3xl font-black leading-none mt-0.5 ${theme.text}`}>
+                            {leaveBalance} <span className="text-sm opacity-80 font-bold ml-1">/ {leaveTotal} Hari</span>
+                          </p>
                         </div>
                       </div>
                     </div>
