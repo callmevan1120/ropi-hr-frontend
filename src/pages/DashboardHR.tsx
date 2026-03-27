@@ -390,7 +390,7 @@ const DashboardHR = () => {
             const year = parseInt(bulanAktif.split('-')[0]);
             const month = parseInt(bulanAktif.split('-')[1]) - 1;
             startDateObj = new Date(year, month, 1);
-            endDateObj = new Date(year, month, 0);
+            endDateObj = new Date(year, month + 1, 0); // hari terakhir bulan aktif
           } else {
             startDateObj = parseLokalDate(periodeMulai);
             endDateObj = parseLokalDate(periodeAkhir);
