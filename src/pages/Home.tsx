@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 
@@ -16,6 +16,14 @@ interface BtnConfig {
   mode: string;
 }
 
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  type: 'success' | 'error' | 'info';
+}
+
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
@@ -25,9 +33,25 @@ const formatJamLokal = (timeString?: string): string => {
 
 // HELPER: Cek apakah user karyawan outlet
 const isKaryawanOutlet = (branch?: string): boolean => {
-  if (!branch) return true; // Default to true if no branch
+  if (!branch) return true; 
   const b = branch.toLowerCase();
   return !(b.includes('klaten') || b.includes('ph') || b.includes('jakarta'));
+};
+
+// HELPER: Waktu Relatif (Contoh: "2 menit yang lalu")
+const timeAgo = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (seconds < 60) return 'Baru saja';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} mnt lalu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} hari lalu`;
+  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 };
 
 const Home = () => {
@@ -44,6 +68,12 @@ const Home = () => {
   });
 
   const [bukaPanduan, setBukaPanduan] = useState<string | null>(null);
+  
+  // STATE NOTIFIKASI
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotif, setShowNotif] = useState<boolean>(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
@@ -57,7 +87,51 @@ const Home = () => {
     }
 
     ambilStatusHariIni(parsedUser.employee_id);
+    fetchNotifications(parsedUser.employee_id);
   }, [navigate]);
+
+  // Menutup dropdown notif jika klik di luar
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotif(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const fetchNotifications = async (employeeId: string) => {
+    try {
+      const res = await fetch(`${BACKEND}/api/notifications?employee_id=${encodeURIComponent(employeeId)}`);
+      const data = await res.json();
+      
+      if (data.success && data.data) {
+        setNotifications(data.data);
+        
+        // Hitung unread (notifikasi yang lebih baru dari last_read)
+        const lastReadTime = localStorage.getItem('ropi_last_read_notif');
+        if (!lastReadTime) {
+          setUnreadCount(data.data.length);
+        } else {
+          const lastReadDate = new Date(lastReadTime).getTime();
+          const unread = data.data.filter((n: Notification) => new Date(n.time).getTime() > lastReadDate);
+          setUnreadCount(unread.length);
+        }
+      }
+    } catch (e) {
+      console.error('Gagal fetch notifikasi', e);
+    }
+  };
+
+  const handleOpenNotif = () => {
+    setShowNotif(!showNotif);
+    if (!showNotif) {
+      // Saat dibuka, tandai semua sebagai dibaca
+      setUnreadCount(0);
+      localStorage.setItem('ropi_last_read_notif', new Date().toISOString());
+    }
+  };
 
   const ambilStatusHariIni = async (employeeId: string) => {
     try {
@@ -139,9 +213,6 @@ const Home = () => {
 
   const outlet = isKaryawanOutlet(user.branch);
 
-  // ─────────────────────────────────────────────────────────────────
-  // DATA BUKU PANDUAN (DIBEDAKAN ANTARA OUTLET DAN KANTOR/SATPAM)
-  // ─────────────────────────────────────────────────────────────────
   const panduanOutlet = [
     {
       id: 'shift', title: '1. Aturan Pengajuan Shift (Wajib)',
@@ -159,8 +230,8 @@ const Home = () => {
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
           <li><strong>Validasi GPS:</strong> Klik tombol absen. Pastikan Anda berada di area Outlet.</li>
-          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah (muncul teks "Jepret!").</li>
-          <li><strong>Foto Pertama:</strong> Jepret foto <strong>Wajah + Tangan Kanan</strong> Anda (pastikan terlihat jelas sesuai instruksi).</li>
+          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah.</li>
+          <li><strong>Foto Pertama:</strong> Jepret foto <strong>Wajah + Tangan Kanan</strong> Anda.</li>
           <li><strong>Foto Kedua:</strong> Setelah itu, jepret foto tambahan untuk <strong>Wajah + Tangan Kiri</strong> Anda.</li>
           <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
           <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu notifikasi berhasil.</li>
@@ -195,8 +266,8 @@ const Home = () => {
       id: 'absen', title: '1. Cara Absen Harian',
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
-          <li><strong>Validasi GPS:</strong> Klik tombol absen (Masuk/Keluar). Pastikan Anda berada di area kantor (PH Klaten / Jakarta).</li>
-          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah (muncul teks "Jepret!").</li>
+          <li><strong>Validasi GPS:</strong> Klik tombol absen (Masuk/Keluar). Pastikan Anda berada di area kantor.</li>
+          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah.</li>
           <li><strong>Foto Selfie:</strong> Jepret foto Selfie Wajah Anda dengan jelas.</li>
           <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
           <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
@@ -269,7 +340,7 @@ const Home = () => {
           <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto">
 
             {/* HEADER */}
-            <div className="bg-[#3e2723] pt-12 pb-24 px-6 rounded-b-[2.5rem] shrink-0 shadow-sm relative z-0">
+            <div className="bg-[#3e2723] pt-12 pb-24 px-6 rounded-b-[2.5rem] shrink-0 shadow-sm relative z-40">
               <div className="flex justify-between items-center">
                 <div>
                   <h2 className="text-2xl font-black text-[#fbc02d] leading-tight">
@@ -277,9 +348,59 @@ const Home = () => {
                   </h2>
                   <p className="text-white/70 text-sm mt-0.5">{user.role || 'Staff Roti Ropi'}</p>
                 </div>
-                <Link to="/profil" className="w-14 h-14 rounded-full bg-[#fff8e1] border-2 border-[#fbc02d] flex items-center justify-center text-[#3e2723] font-black text-2xl shadow-lg active:scale-95 transition-transform">
-                  <span>{(user.name || 'K').charAt(0).toUpperCase()}</span>
-                </Link>
+                <div className="flex items-center gap-3" ref={notifRef}>
+                  
+                  {/* ICON LONCENG NOTIFIKASI */}
+                  <div className="relative">
+                    <button 
+                      onClick={handleOpenNotif} 
+                      className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white text-xl active:scale-95 transition-transform border border-white/10 hover:bg-white/20"
+                    >
+                      <i className="fa-regular fa-bell"></i>
+                      {unreadCount > 0 && (
+                        <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full border-2 border-[#3e2723] animate-pulse"></span>
+                      )}
+                    </button>
+
+                    {/* DROPDOWN NOTIFIKASI */}
+                    {showNotif && (
+                      <div className="absolute top-14 right-0 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col z-50 animate-fade-in-down origin-top-right">
+                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                          <h3 className="font-black text-[#3e2723] text-sm"><i className="fa-solid fa-bell text-[#fbc02d] mr-1.5"></i>Notifikasi</h3>
+                          <button onClick={() => setShowNotif(false)} className="text-gray-400 hover:text-red-500"><i className="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto no-scrollbar flex flex-col bg-white">
+                          {notifications.length === 0 ? (
+                            <div className="py-8 text-center flex flex-col items-center">
+                              <i className="fa-solid fa-box-open text-3xl text-gray-200 mb-2"></i>
+                              <p className="text-xs text-gray-400 font-bold">Belum ada notifikasi.</p>
+                            </div>
+                          ) : (
+                            notifications.map((notif) => (
+                              <div key={notif.id} className="px-4 py-3 border-b border-gray-50 hover:bg-gray-50/50 transition-colors flex gap-3 items-start">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm
+                                  ${notif.type === 'success' ? 'bg-green-100 text-green-500' : 
+                                    notif.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-600'}`}>
+                                  <i className={`fa-solid ${notif.type === 'success' ? 'fa-check' : notif.type === 'error' ? 'fa-xmark' : 'fa-clock'}`}></i>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-[#3e2723] truncate leading-tight">{notif.title}</p>
+                                  <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">{notif.message}</p>
+                                  <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase">{timeAgo(notif.time)}</p>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* PROFIL */}
+                  <Link to="/profil" className="w-12 h-12 rounded-full bg-[#fff8e1] border-2 border-[#fbc02d] flex items-center justify-center text-[#3e2723] font-black text-xl shadow-lg active:scale-95 transition-transform">
+                    <span>{(user.name || 'K').charAt(0).toUpperCase()}</span>
+                  </Link>
+                </div>
               </div>
             </div>
 
@@ -346,7 +467,6 @@ const Home = () => {
                   </div>
                 </Link>
 
-                {/* Menu Pengajuan Shift hanya muncul untuk Outlet */}
                 {outlet && (
                   <Link to="/shift" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-purple-400/50 group">
                     <div className="flex items-center gap-4">
@@ -386,7 +506,6 @@ const Home = () => {
               </div>
             </div>
 
-            {/* BottomNav component */}
             <BottomNav />
 
           </div>
