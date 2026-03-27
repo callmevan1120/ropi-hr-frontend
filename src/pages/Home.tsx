@@ -24,11 +24,54 @@ interface Notification {
   type: 'success' | 'error' | 'info';
 }
 
+// ─────────────────────────────────────────────────────────────────
+// HELPER LOGIKA WAKTU (PORTED FROM ABSEN.TSX)
+// ─────────────────────────────────────────────────────────────────
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
   if (parts.length > 1) return parts[1].substring(0, 5);
   return timeString.substring(0, 5);
+};
+
+const toMenit = (jam: string): number => {
+  if (!jam || jam === '-') return 0;
+  const [h, m] = jam.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
+const formatDurasi = (totalMenit: number): string => {
+  if (totalMenit < 60) return `${totalMenit}m`;
+  const jam = Math.floor(totalMenit / 60);
+  const sisaMenit = totalMenit % 60;
+  return sisaMenit > 0 ? `${jam}j ${sisaMenit}m` : `${jam}j`;
+};
+
+const isRamadhan = (): boolean => {
+  const now = new Date();
+  const curr = (now.getMonth() + 1) * 100 + now.getDate();
+  const tahun = now.getFullYear();
+  // Mengikuti periode Ramadhan 2026
+  if (tahun === 2026 && curr >= 218 && curr <= 319) return true;
+  return false;
+};
+
+const getJamMasukJadwal = (branch?: string, role?: string): string => {
+  const b = (branch || '').toLowerCase();
+  const isKantor = b.includes('klaten') || b.includes('ph') || b.includes('jakarta');
+  if (!isKantor) return '07:00'; // Default Outlet
+
+  const ramadhan = isRamadhan();
+  const isSatpam = (role || '').toLowerCase().includes('satpam');
+  let jamIn = ramadhan ? '07:00' : '07:30';
+
+  if (isSatpam) {
+    const total = toMenit(jamIn) - 30;
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+  return jamIn;
 };
 
 const isKaryawanOutlet = (branch?: string): boolean => {
@@ -84,7 +127,7 @@ const Home = () => {
       return;
     }
 
-    ambilStatusHariIni(parsedUser.employee_id);
+    ambilStatusHariIni(parsedUser.employee_id, parsedUser);
     fetchNotifications(parsedUser.employee_id);
   }, [navigate]);
 
@@ -100,7 +143,7 @@ const Home = () => {
 
   const fetchNotifications = async (employeeId: string) => {
     try {
-      const res = await fetch(`${BACKEND}/api/notifications?employee_id=${encodeURIComponent(employeeId)}`);
+      const res = await fetch(`${BACKEND}/api/notifications?employee_id=${encodeURIComponent(employeeId)}&_t=${Date.now()}`);
       const data = await res.json();
 
       if (data.success && data.data) {
@@ -128,7 +171,7 @@ const Home = () => {
     }
   };
 
-  const ambilStatusHariIni = async (employeeId: string) => {
+  const ambilStatusHariIni = async (employeeId: string, userData: User) => {
     try {
       const now = new Date();
       const yyyy = now.getFullYear();
@@ -158,31 +201,52 @@ const Home = () => {
 
         if (absenHariIni.length > 0) {
           const sorted = absenHariIni.sort((a: any, b: any) => b.time.localeCompare(a.time));
-          const sudahMasuk = sorted.some((d: any) => d.log_type === 'IN');
+          const checkInLog = sorted.find((d: any) => d.log_type === 'IN');
           const sudahKeluar = sorted.some((d: any) => d.log_type === 'OUT');
 
-          const terakhir = sorted[0];
-          const jam = formatJamLokal(terakhir.time);
-          const tipe = terakhir.log_type === 'IN' ? 'MASUK' : 'KELUAR';
+          if (checkInLog) {
+            const jamAbsen = formatJamLokal(checkInLog.time);
+            const statusText = `✓ Absen MASUK terakhir pukul ${jamAbsen}`;
+            setStatusAbsen(statusText);
+            localStorage.setItem('ropi_status_absen', statusText);
 
-          const statusText = `✓ Absen ${tipe} terakhir pukul ${jam}`;
-          setStatusAbsen(statusText);
-          localStorage.setItem('ropi_status_absen', statusText);
+            // LOGIKA DETEKSI TELAT HARI INI
+            const jamJadwal = getJamMasukJadwal(userData.branch, userData.role);
+            const selisih = toMenit(jamAbsen) - toMenit(jamJadwal);
+            
+            if (selisih > 0) {
+              const lateId = `late-${tglHariIni}`;
+              const lateNotif: Notification = {
+                id: lateId,
+                title: 'Absen Terlambat',
+                message: `Waduh, kamu telat ${formatDurasi(selisih)} hari ini. Yuk besok lebih pagi lagi!`,
+                time: checkInLog.time,
+                type: 'error'
+              };
 
-          if (sudahMasuk && !sudahKeluar) {
-            setBtnConfig({
-              text: 'Absen Keluar Sekarang',
-              icon: 'fa-right-from-bracket',
-              className: 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30',
-              mode: 'KELUAR',
-            });
+              setNotifications(prev => {
+                if (prev.find(n => n.id === lateId)) return prev;
+                return [lateNotif, ...prev];
+              });
+            }
+
+            if (!sudahKeluar) {
+              setBtnConfig({
+                text: 'Absen Keluar Sekarang',
+                icon: 'fa-right-from-bracket',
+                className: 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30',
+                mode: 'KELUAR',
+              });
+            } else {
+              setBtnConfig({
+                text: 'Absen Masuk Sekarang',
+                icon: 'fa-right-to-bracket',
+                className: 'bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-500/30',
+                mode: 'MASUK',
+              });
+            }
           } else {
-            setBtnConfig({
-              text: 'Absen Masuk Sekarang',
-              icon: 'fa-right-to-bracket',
-              className: 'bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-500/30',
-              mode: 'MASUK',
-            });
+            setTombolMasukAwal();
           }
         } else {
           setTombolMasukAwal();
@@ -356,7 +420,7 @@ const Home = () => {
           <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
             {/* HEADER — safe-area-aware, compact */}
-            <div className="bg-[#3e2723] px-5 pb-10 rounded-b-[2rem] shrink-0 shadow-sm relative z-40" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 1rem)' }}>
+            <div className="bg-[#3e2723] px-5 pb-10 pt-12 rounded-b-[2rem] shrink-0 shadow-sm relative z-40">
               <div className="flex justify-between items-center">
                 {/* KIRI: Salam & Role */}
                 <div className="flex-1 min-w-0 pr-3">
@@ -372,10 +436,10 @@ const Home = () => {
                     onClick={handleOpenNotif}
                     className={`
                       relative w-10 h-10 rounded-2xl flex items-center justify-center
-                      transition-all duration-200 active:scale-90
+                      transition-all duration-200 active:scale-90 border border-[#fbc02d]/30
                       ${showNotif
                         ? 'bg-[#fbc02d] text-[#3e2723] shadow-lg shadow-[#fbc02d]/40'
-                        : 'bg-white/15 text-white hover:bg-white/25 border border-white/20'
+                        : 'bg-[#fbc02d]/10 text-[#fbc02d] hover:bg-[#fbc02d]/20 shadow-[0_0_15px_rgba(251,192,45,0.1)]'
                       }
                     `}
                     aria-label="Notifikasi"
@@ -419,7 +483,7 @@ const Home = () => {
                               <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm
                                 ${notif.type === 'success' ? 'bg-green-100 text-green-500' :
                                   notif.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-600'}`}>
-                                <i className={`fa-solid ${notif.type === 'success' ? 'fa-check' : notif.type === 'error' ? 'fa-xmark' : 'fa-clock'}`}></i>
+                                <i className={`fa-solid ${notif.type === 'success' ? 'fa-check' : notif.type === 'error' ? 'fa-triangle-exclamation' : 'fa-clock'}`}></i>
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs font-black text-[#3e2723] truncate leading-tight">{notif.title}</p>
