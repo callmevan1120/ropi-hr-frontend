@@ -32,7 +32,7 @@ const formatJamLokal = (timeString?: string): string => {
 };
 
 const isKaryawanOutlet = (branch?: string): boolean => {
-  if (!branch) return true; 
+  if (!branch) return true;
   const b = branch.toLowerCase();
   return !(b.includes('klaten') || b.includes('ph') || b.includes('jakarta'));
 };
@@ -41,7 +41,7 @@ const timeAgo = (dateStr: string) => {
   const date = new Date(dateStr);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
+
   if (seconds < 60) return 'Baru saja';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes} mnt lalu`;
@@ -66,7 +66,7 @@ const Home = () => {
   });
 
   const [bukaPanduan, setBukaPanduan] = useState<string | null>(null);
-  
+
   // STATE NOTIFIKASI
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotif, setShowNotif] = useState<boolean>(false);
@@ -102,10 +102,10 @@ const Home = () => {
     try {
       const res = await fetch(`${BACKEND}/api/notifications?employee_id=${encodeURIComponent(employeeId)}`);
       const data = await res.json();
-      
+
       if (data.success && data.data) {
         setNotifications(data.data);
-        
+
         const lastReadTime = localStorage.getItem('ropi_last_read_notif');
         if (!lastReadTime) {
           setUnreadCount(data.data.length);
@@ -296,7 +296,28 @@ const Home = () => {
 
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
-      <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes bell-shake {
+          0%, 100% { transform: rotate(0deg); }
+          15% { transform: rotate(12deg); }
+          30% { transform: rotate(-10deg); }
+          45% { transform: rotate(8deg); }
+          60% { transform: rotate(-6deg); }
+          75% { transform: rotate(4deg); }
+        }
+        .bell-ring {
+          animation: bell-shake 1.2s ease-in-out;
+          transform-origin: top center;
+        }
+        @keyframes badge-pop {
+          0% { transform: scale(0); }
+          60% { transform: scale(1.3); }
+          100% { transform: scale(1); }
+        }
+        .badge-pop { animation: badge-pop 0.3s ease-out forwards; }
+      `}</style>
 
       <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
 
@@ -334,39 +355,55 @@ const Home = () => {
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
           <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
-            {/* HEADER */}
-            <div className="bg-[#3e2723] pt-12 pb-24 px-6 rounded-b-[2.5rem] shrink-0 shadow-sm relative z-40">
+            {/* HEADER — safe-area-aware, no double padding */}
+            <div className="bg-[#3e2723] pt-safe-top pb-20 px-5 rounded-b-[2.5rem] shrink-0 shadow-sm relative z-40" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 1.25rem)' }}>
               <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-2xl font-black text-[#fbc02d] leading-tight">
+                {/* KIRI: Salam & Role */}
+                <div className="flex-1 min-w-0 pr-3">
+                  <h2 className="text-xl font-black text-[#fbc02d] leading-tight truncate">
                     Halo, <span>{user.name.split(' ')[0]}</span> 👋
                   </h2>
-                  <p className="text-white/70 text-sm mt-0.5">{user.role || 'Staff Roti Ropi'}</p>
+                  <p className="text-white/60 text-xs mt-0.5 truncate">{user.role || 'Staff Roti Ropi'}</p>
                 </div>
-                
-                {/* LONCENG NOTIFIKASI MENGGANTIKAN PROFIL */}
-                <div className="relative" ref={notifRef}>
-                  <button 
-                    onClick={handleOpenNotif} 
-                    className="w-14 h-14 rounded-full bg-[#fff8e1] border-2 border-[#fbc02d] flex items-center justify-center text-[#3e2723] text-2xl shadow-lg active:scale-95 transition-transform"
+
+                {/* KANAN: Bell Notification — compact & eyecatching */}
+                <div className="relative shrink-0" ref={notifRef}>
+                  <button
+                    onClick={handleOpenNotif}
+                    className={`
+                      relative w-10 h-10 rounded-2xl flex items-center justify-center
+                      transition-all duration-200 active:scale-90
+                      ${showNotif
+                        ? 'bg-[#fbc02d] text-[#3e2723] shadow-lg shadow-[#fbc02d]/40'
+                        : 'bg-white/15 text-white hover:bg-white/25 border border-white/20'
+                      }
+                    `}
+                    aria-label="Notifikasi"
                   >
-                    <i className="fa-solid fa-bell"></i>
+                    <i className={`fa-solid fa-bell text-base ${unreadCount > 0 ? 'bell-ring' : ''}`}></i>
+
+                    {/* Badge unread count */}
                     {unreadCount > 0 && (
-                      <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-[#fff8e1] animate-pulse"></span>
+                      <span className="badge-pop absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-[#3e2723] leading-none shadow-md">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
                     )}
                   </button>
 
-                  {/* DROPDOWN NOTIFIKASI YANG RAPI */}
+                  {/* DROPDOWN NOTIFIKASI */}
                   {showNotif && (
-                    <div className="absolute top-[65px] right-0 w-[300px] max-w-[85vw] bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col z-50 transform origin-top-right transition-all duration-200 scale-100 opacity-100">
-                      <div className="bg-gray-50 px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+                    <div className="absolute top-[48px] right-0 w-[300px] max-w-[85vw] bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col z-50">
+                      <div className="bg-gray-50 px-5 py-3.5 border-b border-gray-100 flex justify-between items-center">
                         <h3 className="font-black text-[#3e2723] text-sm flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-[#fff8e1] flex items-center justify-center">
-                            <i className="fa-solid fa-bell text-[#fbc02d] text-[10px]"></i>
+                          <div className="w-5 h-5 rounded-full bg-[#fff8e1] flex items-center justify-center">
+                            <i className="fa-solid fa-bell text-[#fbc02d] text-[9px]"></i>
                           </div>
                           Notifikasi
                         </h3>
-                        <button onClick={() => setShowNotif(false)} className="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors">
+                        <button
+                          onClick={() => setShowNotif(false)}
+                          className="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
+                        >
                           <i className="fa-solid fa-xmark text-xs"></i>
                         </button>
                       </div>
@@ -380,7 +417,7 @@ const Home = () => {
                           notifications.map((notif) => (
                             <div key={notif.id} className="px-5 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 items-start">
                               <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm
-                                ${notif.type === 'success' ? 'bg-green-100 text-green-500' : 
+                                ${notif.type === 'success' ? 'bg-green-100 text-green-500' :
                                   notif.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-600'}`}>
                                 <i className={`fa-solid ${notif.type === 'success' ? 'fa-check' : notif.type === 'error' ? 'fa-xmark' : 'fa-clock'}`}></i>
                               </div>
@@ -400,7 +437,7 @@ const Home = () => {
             </div>
 
             {/* CONTENT AREA */}
-            <div className="flex-1 px-6 -mt-16 relative z-10 overflow-y-auto no-scrollbar pb-24">
+            <div className="flex-1 px-6 -mt-14 relative z-10 overflow-y-auto no-scrollbar pb-24">
 
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300"></div>
