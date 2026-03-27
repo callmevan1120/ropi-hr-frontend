@@ -39,6 +39,20 @@ interface Lokasi {
   radius: number;
 }
 
+interface LeaveRequest {
+  name: string;
+  employee: string;
+  employee_name: string;
+  leave_type: string;
+  from_date: string;
+  to_date: string;
+  description: string;
+  status: string;
+  total_leave_days: number;
+  attachment?: string;
+  [key: string]: any;
+}
+
 // ── HELPER ──
 const formatJamLokal = (timeString?: string) => {
   if (!timeString) return '-';
@@ -154,6 +168,15 @@ const DashboardHR = () => {
 
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
   const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
+
+  // STATE IZIN PANEL
+  const [izinPanelOpen, setIzinPanelOpen] = useState(false);
+  const [izinList, setIzinList] = useState<LeaveRequest[]>([]);
+  const [izinLoading, setIzinLoading] = useState(false);
+  const [izinFilter, setIzinFilter] = useState<'open' | 'approved' | 'rejected'>('open');
+  const [izinDetail, setIzinDetail] = useState<LeaveRequest | null>(null);
+  const [izinActionLoading, setIzinActionLoading] = useState(false);
+  const [izinPreviewUrl, setIzinPreviewUrl] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeBranch, setActiveBranch] = useState('Semua Lokasi');
@@ -482,6 +505,89 @@ const DashboardHR = () => {
     return url;
   };
 
+  const ambilSemuaIzin = async () => {
+    setIzinLoading(true);
+    try {
+      // Ambil izin dari semua karyawan yang ada di dataAbsen
+      const allEmployees = dataAbsen.length > 0 ? dataAbsen : [];
+      if (allEmployees.length === 0) {
+        // Kalau dataAbsen kosong, fetch semua leave application langsung
+        const res = await fetch(`${BACKEND}/api/attendance/all-leave-requests&_t=${Date.now()}`);
+        const data = await res.json();
+        if (data.success) setIzinList(data.data ?? []);
+      } else {
+        const results = await Promise.allSettled(
+          allEmployees.map(emp =>
+            fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}&_t=${Date.now()}`)
+              .then(r => r.json())
+              .then(d => (d.success ? d.data : []).map((l: any) => ({ ...l, employee: emp.employee, employee_name: emp.employee_name })))
+              .catch(() => [])
+          )
+        );
+        const merged: LeaveRequest[] = [];
+        results.forEach(r => { if (r.status === 'fulfilled') merged.push(...r.value); });
+        merged.sort((a, b) => (b.from_date ?? '').localeCompare(a.from_date ?? ''));
+        setIzinList(merged);
+      }
+    } catch { }
+    setIzinLoading(false);
+  };
+
+  const approveIzin = async (docName: string) => {
+    setIzinActionLoading(true);
+    try {
+      const res = await fetch(`${BACKEND}/api/attendance/leave-request/${encodeURIComponent(docName)}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIzinDetail(null);
+        ambilSemuaIzin();
+        // Refresh leaveMap juga
+        tarikDataSemuaKaryawan();
+      } else {
+        alert(data.message || 'Gagal menyetujui izin.');
+      }
+    } catch { alert('Terjadi kesalahan koneksi.'); }
+    setIzinActionLoading(false);
+  };
+
+  const rejectIzin = async (docName: string) => {
+    if (!confirm('Tolak pengajuan izin ini?')) return;
+    setIzinActionLoading(true);
+    try {
+      const res = await fetch(`${BACKEND}/api/attendance/leave-request/${encodeURIComponent(docName)}/reject`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIzinDetail(null);
+        ambilSemuaIzin();
+        tarikDataSemuaKaryawan();
+      } else {
+        alert(data.message || 'Gagal menolak izin.');
+      }
+    } catch { alert('Terjadi kesalahan koneksi.'); }
+    setIzinActionLoading(false);
+  };
+
+  const getAttachmentIzin = (item: LeaveRequest): string | undefined => {
+    const fields = ['attachment', 'custom_attachment', 'leave_attachment', 'custom_foto_bukti', 'custom_bukti', 'custom_file'];
+    for (const f of fields) { if (item[f]) return item[f]; }
+    return Object.values(item).find(v => typeof v === 'string' && (v.startsWith('/files/') || v.startsWith('data:image')));
+  };
+
+  const isImageUrl = (url: string) => /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(url) || url.startsWith('data:image');
+  const getFileIcon = (url: string) => {
+    const u = (url || '').toLowerCase();
+    if (u.endsWith('.pdf')) return { icon: 'fa-file-pdf', color: 'text-red-500' };
+    if (u.match(/\.docx?$/)) return { icon: 'fa-file-word', color: 'text-blue-600' };
+    if (u.match(/\.xlsx?$/)) return { icon: 'fa-file-excel', color: 'text-green-600' };
+    return { icon: 'fa-file-lines', color: 'text-gray-500' };
+  };
+
   const downloadExcel = () => {
     if (filteredDataAbsen.length === 0) { alert('Tidak ada data untuk di-download!'); return; }
     const dataExcel: any[] = [];
@@ -782,9 +888,16 @@ const DashboardHR = () => {
               </div>
             </div>
             
-            <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-4 py-2 rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 text-xs md:text-sm shrink-0">
-              <i className="fa-solid fa-file-excel" /> <span className="hidden sm:inline">Export Excel</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setIzinPanelOpen(true); ambilSemuaIzin(); }}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-black px-4 py-2 rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 text-xs md:text-sm shrink-0">
+                <i className="fa-solid fa-envelope-open-text" /> <span className="hidden sm:inline">Kelola Izin</span>
+              </button>
+              <button onClick={downloadExcel} className="bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] font-black px-4 py-2 rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 text-xs md:text-sm shrink-0">
+                <i className="fa-solid fa-file-excel" /> <span className="hidden sm:inline">Export Excel</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 md:gap-4 w-full">
@@ -1414,6 +1527,233 @@ const DashboardHR = () => {
           );
         }
       })()}
+
+      {/* ── IZIN PANEL ── */}
+      {izinPanelOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setIzinPanelOpen(false); }}>
+          <div className="bg-white w-full max-w-lg h-full flex flex-col shadow-2xl animate-zoomIn">
+
+            {/* Header panel */}
+            <div className="bg-[#3e2723] px-5 py-4 flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="text-lg font-black text-[#fbc02d]">Kelola Izin Karyawan</h2>
+                <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider mt-0.5">Review & Approval Pengajuan</p>
+              </div>
+              <button onClick={() => setIzinPanelOpen(false)} className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center border border-white/20 transition-colors">
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+
+            {/* Tab filter */}
+            <div className="flex bg-gray-100 p-1 mx-4 mt-4 rounded-xl gap-1 shrink-0">
+              {(['open', 'approved', 'rejected'] as const).map(tab => (
+                <button key={tab} onClick={() => setIzinFilter(tab)}
+                  className={`flex-1 py-2 rounded-lg text-[11px] font-black transition-all capitalize ${izinFilter === tab ? 'bg-white shadow text-[#3e2723]' : 'text-gray-400 hover:text-gray-600'}`}>
+                  {tab === 'open' ? 'Menunggu' : tab === 'approved' ? 'Disetujui' : 'Ditolak'}
+                </button>
+              ))}
+            </div>
+
+            {/* List izin */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
+              {izinLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                  <i className="fa-solid fa-spinner fa-spin text-3xl mb-3 text-[#fbc02d]" />
+                  <p className="text-sm font-bold">Memuat data izin...</p>
+                </div>
+              ) : (() => {
+                const filtered = izinList.filter(r => r.status?.toLowerCase() === izinFilter);
+                if (filtered.length === 0) return (
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <i className="fa-solid fa-inbox text-4xl mb-3" />
+                    <p className="text-sm font-bold">Tidak ada pengajuan {izinFilter === 'open' ? 'yang menunggu' : izinFilter === 'approved' ? 'yang disetujui' : 'yang ditolak'}</p>
+                  </div>
+                );
+                return filtered.map(item => (
+                  <button key={item.name} onClick={() => setIzinDetail(item)}
+                    className="bg-white border border-gray-100 rounded-2xl p-4 text-left w-full hover:border-[#fbc02d]/50 hover:shadow-md active:scale-[0.98] transition-all group">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-[#fff8e1] flex items-center justify-center shrink-0 border border-[#fbc02d]/20">
+                          <i className="fa-solid fa-user text-[#fbc02d] text-sm" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-[#3e2723] leading-tight">{item.employee_name}</p>
+                          <p className="text-[10px] text-gray-400 font-bold">{item.employee}</p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-black px-2 py-1 rounded-full border shrink-0 ${
+                        item.status?.toLowerCase() === 'approved' ? 'bg-green-50 text-green-700 border-green-200' :
+                        item.status?.toLowerCase() === 'rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+                        'bg-yellow-50 text-yellow-700 border-yellow-200'
+                      }`}>
+                        {item.status?.toLowerCase() === 'approved' ? 'Disetujui' : item.status?.toLowerCase() === 'rejected' ? 'Ditolak' : 'Menunggu'}
+                      </span>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl px-3 py-2 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-black text-[#3e2723]">{item.leave_type}</p>
+                        <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                          {item.from_date === item.to_date ? item.from_date : `${item.from_date} – ${item.to_date}`}
+                          {item.total_leave_days > 0 && <span className="ml-1.5 text-[#fbc02d]">({item.total_leave_days} hari)</span>}
+                        </p>
+                      </div>
+                      <i className="fa-solid fa-chevron-right text-[10px] text-gray-300 group-hover:text-[#fbc02d] transition-colors" />
+                    </div>
+                  </button>
+                ));
+              })()}
+            </div>
+
+            {/* Refresh */}
+            <div className="px-4 pb-4 pt-2 shrink-0 border-t border-gray-100">
+              <button onClick={ambilSemuaIzin} disabled={izinLoading}
+                className="w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-[#3e2723] font-black py-3 rounded-xl text-xs flex items-center justify-center gap-2 active:scale-95 transition-all">
+                <i className={`fa-solid fa-rotate-right text-[#fbc02d] ${izinLoading ? 'fa-spin' : ''}`} /> Refresh Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DETAIL IZIN ── */}
+      {izinDetail && (
+        <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-8"
+          onClick={(e) => { if (e.target === e.currentTarget) setIzinDetail(null); }}>
+          <div className="bg-white w-full max-w-sm rounded-t-[2.5rem] md:rounded-[2rem] flex flex-col overflow-hidden shadow-2xl animate-zoomIn">
+            <div className="flex justify-center pt-4 pb-1 md:hidden">
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+            </div>
+
+            {/* Header detail */}
+            <div className="px-6 pt-4 pb-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-black text-[#3e2723] text-lg flex items-center gap-2">
+                <i className="fa-solid fa-file-lines text-[#fbc02d]" /> Detail Izin
+              </h3>
+              <button onClick={() => setIzinDetail(null)} className="w-8 h-8 bg-gray-100 hover:bg-red-50 hover:text-red-500 text-gray-400 rounded-full flex items-center justify-center transition-colors">
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto max-h-[70vh] px-6 py-4 flex flex-col gap-4">
+              {/* Status badge */}
+              <div className={`rounded-2xl px-4 py-3 flex items-center gap-3 ${
+                izinDetail.status?.toLowerCase() === 'approved' ? 'bg-green-50 border border-green-100' :
+                izinDetail.status?.toLowerCase() === 'rejected' ? 'bg-red-50 border border-red-100' :
+                'bg-yellow-50 border border-yellow-100'}`}>
+                <i className={`fa-solid text-xl ${
+                  izinDetail.status?.toLowerCase() === 'approved' ? 'fa-circle-check text-green-500' :
+                  izinDetail.status?.toLowerCase() === 'rejected' ? 'fa-circle-xmark text-red-500' :
+                  'fa-clock text-yellow-500'}`} />
+                <div>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Status</p>
+                  <p className={`font-black text-sm ${
+                    izinDetail.status?.toLowerCase() === 'approved' ? 'text-green-700' :
+                    izinDetail.status?.toLowerCase() === 'rejected' ? 'text-red-700' : 'text-yellow-700'}`}>
+                    {izinDetail.status?.toLowerCase() === 'approved' ? 'Disetujui HRD' :
+                     izinDetail.status?.toLowerCase() === 'rejected' ? 'Ditolak HRD' : 'Menunggu Persetujuan'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Info karyawan + detail */}
+              <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100">
+                {[
+                  { icon: 'fa-user', label: 'Karyawan', value: `${izinDetail.employee_name} (${izinDetail.employee})` },
+                  { icon: 'fa-tag', label: 'Tipe Izin', value: izinDetail.leave_type },
+                  { icon: 'fa-calendar', label: 'Tanggal', value: izinDetail.from_date === izinDetail.to_date ? izinDetail.from_date : `${izinDetail.from_date} – ${izinDetail.to_date}` },
+                  ...(izinDetail.total_leave_days > 0 ? [{ icon: 'fa-hourglass-half', label: 'Durasi', value: `${izinDetail.total_leave_days} Hari` }] : []),
+                  ...(izinDetail.description ? [{ icon: 'fa-align-left', label: 'Keterangan', value: izinDetail.description }] : []),
+                ].map(({ icon, label, value }) => (
+                  <div key={label} className="flex items-start gap-3 px-4 py-3">
+                    <div className="w-7 h-7 bg-white rounded-full shadow-sm border border-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <i className={`fa-solid ${icon} text-[#fbc02d] text-xs`} />
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">{label}</p>
+                      <p className="text-sm font-black text-[#3e2723] leading-snug">{value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Lampiran */}
+              {getAttachmentIzin(izinDetail) && (() => {
+                const attUrl = getAttachmentIzin(izinDetail) || '';
+                const fullUrl = prosesUrlFoto(attUrl);
+                return (
+                  <div>
+                    <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <i className="fa-solid fa-paperclip text-[#fbc02d]" /> File Lampiran
+                    </p>
+                    {isImageUrl(attUrl) ? (
+                      <button onClick={() => setIzinPreviewUrl(fullUrl)}
+                        className="w-full relative h-40 rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm group">
+                        <img src={fullUrl} alt="Bukti" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <div className="bg-white/90 rounded-full px-3 py-1.5 flex items-center gap-1.5 shadow-md">
+                            <i className="fa-solid fa-magnifying-glass-plus text-[#3e2723] text-xs" />
+                            <span className="text-xs font-black text-[#3e2723]">Perbesar</span>
+                          </div>
+                        </div>
+                      </button>
+                    ) : (() => {
+                      const fi = getFileIcon(attUrl);
+                      return (
+                        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col items-center gap-2">
+                          <i className={`fa-solid ${fi.icon} text-3xl ${fi.color}`} />
+                          <p className="text-xs text-gray-500 font-bold truncate max-w-full">{attUrl.split('/').pop()}</p>
+                          <a href={fullUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-[11px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors flex items-center gap-1.5">
+                            <i className="fa-solid fa-arrow-up-right-from-square" /> Buka / Unduh
+                          </a>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Action buttons */}
+            <div className="px-6 pb-6 pt-4 border-t border-gray-100 flex flex-col gap-2">
+              {izinDetail.status?.toLowerCase() === 'open' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => approveIzin(izinDetail.name)} disabled={izinActionLoading}
+                    className="bg-green-500 hover:bg-green-600 text-white font-black py-3.5 rounded-2xl active:scale-95 transition-all flex justify-center items-center gap-2 text-sm shadow-lg shadow-green-500/30">
+                    {izinActionLoading ? <i className="fa-solid fa-spinner fa-spin" /> : <><i className="fa-solid fa-circle-check" /> Setujui</>}
+                  </button>
+                  <button onClick={() => rejectIzin(izinDetail.name)} disabled={izinActionLoading}
+                    className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black py-3.5 rounded-2xl active:scale-95 transition-all flex justify-center items-center gap-2 text-sm">
+                    {izinActionLoading ? <i className="fa-solid fa-spinner fa-spin" /> : <><i className="fa-solid fa-circle-xmark" /> Tolak</>}
+                  </button>
+                </div>
+              )}
+              <button onClick={() => setIzinDetail(null)}
+                className="w-full bg-[#3e2723] hover:bg-[#4e342e] text-[#fbc02d] font-black py-4 rounded-2xl active:scale-95 transition-all shadow-lg flex justify-center items-center gap-2">
+                <i className="fa-solid fa-check" /> Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PREVIEW GAMBAR IZIN ── */}
+      {izinPreviewUrl && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(8px)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setIzinPreviewUrl(null); }}>
+          <div className="w-full max-w-2xl flex flex-col gap-4 relative">
+            <button onClick={() => setIzinPreviewUrl(null)}
+              className="absolute top-0 right-0 w-10 h-10 bg-white/20 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors border border-white/20 z-10">
+              <i className="fa-solid fa-xmark text-lg" />
+            </button>
+            <div className="rounded-[2rem] overflow-hidden bg-black/40 max-h-[85vh] flex items-center justify-center shadow-2xl border border-white/10">
+              <img src={izinPreviewUrl} alt="Bukti Izin" className="w-full object-contain max-h-[80vh]" />
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes zoomIn {
