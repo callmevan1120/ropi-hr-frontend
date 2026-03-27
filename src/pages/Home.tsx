@@ -355,8 +355,8 @@ const Home = () => {
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
           <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
-            {/* HEADER — safe-area-aware, no double padding */}
-            <div className="bg-[#3e2723] pt-safe-top pb-20 px-5 rounded-b-[2.5rem] shrink-0 shadow-sm relative z-40" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 1.25rem)' }}>
+            {/* HEADER — safe-area-aware, compact */}
+            <div className="bg-[#3e2723] px-5 pb-10 rounded-b-[2rem] shrink-0 shadow-sm relative z-40" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 1rem)' }}>
               <div className="flex justify-between items-center">
                 {/* KIRI: Salam & Role */}
                 <div className="flex-1 min-w-0 pr-3">
@@ -437,7 +437,7 @@ const Home = () => {
             </div>
 
             {/* CONTENT AREA */}
-            <div className="flex-1 px-6 -mt-14 relative z-10 overflow-y-auto no-scrollbar pb-24">
+            <div className="flex-1 px-6 -mt-6 relative z-10 overflow-y-auto no-scrollbar pb-24">
 
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300"></div>
