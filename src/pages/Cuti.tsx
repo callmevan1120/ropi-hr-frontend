@@ -10,11 +10,13 @@ interface User {
 }
 
 interface LeaveHistory {
+  name: string;
   leave_type: string;
   from_date: string;
   to_date: string;
   status: string;
-  reason?: string;
+  description?: string;
+  total_leave_days?: number;
 }
 
 const isCuti = (leaveType: string) => {
@@ -32,32 +34,110 @@ const Cuti = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // State untuk Form Pengajuan Cuti
+  const [showForm, setShowForm] = useState<boolean>(false);
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+  const [reason, setReason] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  
+  // State untuk mencari nama persis "Cuti Tahunan" dari ERPNext
+  const [exactCutiName, setExactCutiName] = useState<string>('Cuti Tahunan');
+
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) { navigate('/'); return; }
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
+    
+    fetchLeaveTypes();
     fetchDataCuti(parsedUser.employee_id);
   }, [navigate]);
+
+  // Mencari nama tipe cuti yang valid di ERPNext
+  const fetchLeaveTypes = async () => {
+    try {
+      const res = await fetch(`${BACKEND}/api/attendance/leave-types`);
+      const data = await res.json();
+      if (data.success) {
+        const cutiType = data.data.find((item: any) => isCuti(item.name));
+        if (cutiType) {
+          setExactCutiName(cutiType.name);
+        }
+      }
+    } catch (err) { console.error('Gagal mengambil tipe cuti', err); }
+  };
 
   const fetchDataCuti = async (employeeId: string) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch(`${BACKEND}/api/leaves?employee_id=${encodeURIComponent(employeeId)}`);
-      const data = await res.json();
-      if (data.success) {
-        const cutiOnly = (data.history || []).filter((item: LeaveHistory) => isCuti(item.leave_type));
-        setLeaveHistory(cutiOnly);
-        setLeaveBalance(data.balance !== undefined ? String(data.balance) : '0');
+      // Mengambil saldo cuti
+      const resBalance = await fetch(`${BACKEND}/api/leaves?employee_id=${encodeURIComponent(employeeId)}`);
+      const dataBalance = await resBalance.json();
+      if (dataBalance.success) {
+        setLeaveBalance(dataBalance.balance !== undefined ? String(dataBalance.balance) : '0');
       } else {
         setLeaveBalance('0');
+      }
+
+      // Mengambil riwayat pengajuan cuti
+      const resHistory = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(employeeId)}`);
+      const dataHistory = await resHistory.json();
+      
+      if (dataHistory.success) {
+        const cutiOnly = dataHistory.data.filter((item: LeaveHistory) => isCuti(item.leave_type));
+        setLeaveHistory(cutiOnly);
       }
     } catch (err) {
       console.error(err);
       setErrorMsg('Gagal terhubung ke server.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validasi super ketat agar karyawan tidak seenaknya
+    if (!user || !fromDate || !toDate || !reason.trim()) {
+      alert('Peringatan: Tanggal dan Alasan Cuti WAJIB diisi dengan jelas!');
+      return;
+    }
+    
+    if (reason.trim().length < 5) {
+      alert('Peringatan: Alasan cuti terlalu singkat. Mohon jelaskan lebih detail.');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${BACKEND}/api/attendance/leave-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_id: user.employee_id,
+          leave_type: exactCutiName, 
+          from_date: fromDate,
+          to_date: toDate,
+          reason: reason,
+        }),
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        alert('✅ Cuti berhasil diajukan! Menunggu persetujuan HRD.');
+        setFromDate(''); setToDate(''); setReason('');
+        setShowForm(false);
+        fetchDataCuti(user.employee_id); 
+      } else {
+        alert(data.message || 'Gagal mengajukan cuti. Pastikan sisa kuota cuti mencukupi.');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi ke server.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -70,17 +150,17 @@ const Cuti = () => {
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase();
     if (s === 'approved') return (
-      <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+      <span className="flex items-center gap-1 bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-green-200">
         <i className="fa-solid fa-circle-check text-[9px]"></i> Disetujui
       </span>
     );
     if (s === 'rejected') return (
-      <span className="flex items-center gap-1 bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+      <span className="flex items-center gap-1 bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full border border-red-200">
         <i className="fa-solid fa-circle-xmark text-[9px]"></i> Ditolak
       </span>
     );
     return (
-      <span className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+      <span className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-yellow-200">
         <i className="fa-solid fa-clock text-[9px]"></i> Menunggu
       </span>
     );
@@ -130,86 +210,164 @@ const Cuti = () => {
             <div className="bg-[#3e2723] pt-12 pb-6 px-6 shrink-0 shadow-md z-10 rounded-b-[1.5rem]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Link to="/home" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white active:scale-95 transition-transform">
+                  <Link to="/home" className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white active:scale-95 transition-transform border border-white/10">
                     <i className="fa-solid fa-arrow-left"></i>
                   </Link>
                   <h1 className="text-xl font-black text-[#fbc02d]">Informasi Cuti</h1>
                 </div>
-                <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white">
-                  <i className="fa-solid fa-calendar-check"></i>
+                <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-[#fbc02d]">
+                  <i className="fa-solid fa-plane-departure"></i>
                 </div>
+              </div>
+              
+              <div className="flex mt-5 bg-white/10 rounded-xl p-1 gap-1 border border-white/5">
+                <button
+                  onClick={() => setShowForm(true)}
+                  className={`flex-1 py-2 rounded-lg text-[11px] font-black transition-all ${showForm ? 'bg-[#fbc02d] text-[#3e2723] shadow-md' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                >
+                  <i className="fa-solid fa-calendar-plus mr-1.5"></i>Ajukan Cuti
+                </button>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className={`flex-1 py-2 rounded-lg text-[11px] font-black transition-all ${!showForm ? 'bg-[#fbc02d] text-[#3e2723] shadow-md' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                >
+                  <i className="fa-solid fa-clock-rotate-left mr-1.5"></i>Riwayat
+                </button>
               </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
-
-              {/* Sisa Kuota */}
-              <div className="px-6 pt-5">
-                <h3 className="font-black text-[#3e2723] text-base mb-3">Sisa Kuota Cuti</h3>
-                <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-                  <div className="min-w-[140px] bg-white p-5 rounded-3xl shadow-sm border border-gray-100 text-center relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-1.5 bg-[#fbc02d]"></div>
-                    <div className="w-16 h-16 rounded-full border-[5px] border-[#fbc02d] flex flex-col items-center justify-center mx-auto mb-2 mt-1 shadow-inner bg-[#fff8e1]">
-                      <span className="text-xl font-black text-[#3e2723]">{leaveBalance}</span>
+            {/* KONTEN */}
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-24 bg-gray-50">
+              
+              {/* FORM PENGAJUAN CUTI */}
+              {showForm ? (
+                <div className="px-6 pt-5">
+                  {/* KOTAK PERINGATAN SYARAT CUTI */}
+                  <div className="bg-[#fff8e1] p-4 rounded-2xl border border-[#fbc02d]/40 flex gap-3 shadow-sm items-start mb-6">
+                    <i className="fa-solid fa-circle-info text-[#fbc02d] text-lg mt-0.5"></i>
+                    <div>
+                      <p className="text-[11px] text-[#3e2723] font-black leading-relaxed mb-1">
+                        Syarat & Ketentuan Cuti:
+                      </p>
+                      <ul className="text-[10px] text-[#3e2723]/80 list-disc pl-3 flex flex-col gap-1 mb-2 font-medium">
+                        <li>Hanya berlaku bagi karyawan dengan <b className="text-[#3e2723]">masa kerja &gt; 1 tahun</b>.</li>
+                        <li>Alasan cuti <b className="text-[#3e2723]">wajib</b> diisi dengan jelas.</li>
+                      </ul>
+                      <p className="text-[11px] text-[#3e2723] font-medium leading-relaxed pt-2 border-t border-[#fbc02d]/20">
+                        Sisa kuota cuti Anda saat ini: <span className="font-black text-red-500">{leaveBalance} Hari</span>.
+                      </p>
                     </div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide">Cuti Tahunan</p>
                   </div>
-                </div>
-                <p className="mt-3 text-[10px] text-gray-400 leading-relaxed italic bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-                  * Jika ada ketidaksesuaian jatah atau ingin mengajukan cuti, harap hubungi bagian HRD.
-                </p>
-              </div>
 
-              {/* Riwayat Cuti */}
-              <div className="px-6 mt-6">
-                <h3 className="font-black text-[#3e2723] text-base mb-4">Riwayat Cuti</h3>
-                <div className="flex flex-col gap-3">
-                  {isLoading ? (
-                    <div className="bg-gray-50 rounded-2xl p-6 text-center text-gray-400 border border-gray-100">
-                      <div className="w-6 h-6 border-2 border-[#fbc02d] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                      <p className="text-sm font-bold">Sinkronisasi data...</p>
-                    </div>
-                  ) : errorMsg ? (
-                    <div className="text-center text-red-400 text-xs font-bold py-10">{errorMsg}</div>
-                  ) : leaveHistory.length > 0 ? (
-                    leaveHistory.map((item, index) => (
-                      <div key={index} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-[#fbc02d]/40 transition-colors">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-[#fff8e1] rounded-full flex items-center justify-center shrink-0 border border-[#fbc02d]/20">
-                              <i className="fa-solid fa-calendar-minus text-[#fbc02d] text-sm"></i>
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-[#3e2723] leading-tight">{item.leave_type}</p>
-                              <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold mt-0.5">
-                                <span>{formatDate(item.from_date)}</span>
-                                {item.from_date !== item.to_date && (
-                                  <><i className="fa-solid fa-arrow-right text-[8px] text-[#fbc02d]"></i><span>{formatDate(item.to_date)}</span></>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {getStatusBadge(item.status)}
-                        </div>
-                        {item.reason && (
-                          <div className="mt-3 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-                            <p className="text-[10px] text-gray-500 leading-relaxed font-medium">"{item.reason}"</p>
-                          </div>
-                        )}
+                  <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-black text-[#3e2723] uppercase tracking-wider mb-1.5 block ml-1">Dari <span className="text-red-500">*</span></label>
+                        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+                          className="w-full bg-white border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold text-[#3e2723] outline-none focus:border-[#fbc02d] focus:ring-2 focus:ring-[#fbc02d]/20 transition-all shadow-sm" required />
                       </div>
-                    ))
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200">
-                      <div className="w-14 h-14 bg-white rounded-full shadow-sm flex items-center justify-center mb-3">
-                        <i className="fa-solid fa-calendar-minus text-xl text-gray-300"></i>
+                      <div>
+                        <label className="text-xs font-black text-[#3e2723] uppercase tracking-wider mb-1.5 block ml-1">Sampai <span className="text-red-500">*</span></label>
+                        <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)}
+                          className="w-full bg-white border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold text-[#3e2723] outline-none focus:border-[#fbc02d] focus:ring-2 focus:ring-[#fbc02d]/20 transition-all shadow-sm" required />
                       </div>
-                      <p className="text-sm font-black text-gray-500">Belum Ada Riwayat Cuti</p>
-                      <p className="text-[10px] text-gray-400 mt-1 px-4">Riwayat cuti tahunan kamu akan otomatis muncul di sini.</p>
                     </div>
-                  )}
+
+                    <div>
+                      <label className="text-xs font-black text-[#3e2723] uppercase tracking-wider mb-1.5 block ml-1">
+                        Alasan Cuti <span className="text-red-500">*</span>
+                      </label>
+                      <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
+                        placeholder="Contoh: Menghadiri acara pernikahan keluarga di luar kota..."
+                        className="w-full bg-white border border-gray-200 rounded-xl py-3 px-4 text-sm font-medium text-[#3e2723] outline-none focus:border-[#fbc02d] focus:ring-2 focus:ring-[#fbc02d]/20 transition-all resize-none shadow-sm"
+                        required></textarea>
+                    </div>
+
+                    {/* TOMBOL TERKUNCI JIKA SALDO 0 */}
+                    <button type="submit" disabled={isSubmitting || Number(leaveBalance) <= 0}
+                      className={`w-full font-black text-base py-4 rounded-2xl active:scale-95 transition-all mt-4 flex justify-center items-center gap-2 shadow-md ${
+                        Number(leaveBalance) <= 0 
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' 
+                        : 'bg-[#fbc02d] hover:bg-[#f9a825] text-[#3e2723] shadow-[#fbc02d]/30'
+                      }`}>
+                      {isSubmitting
+                        ? <><i className="fa-solid fa-spinner fa-spin"></i> Memproses...</>
+                        : <><i className="fa-solid fa-calendar-check"></i> {Number(leaveBalance) <= 0 ? 'Belum Memenuhi Syarat / Kuota Habis' : 'Kirim Pengajuan Cuti'}</>}
+                    </button>
+                  </form>
                 </div>
-              </div>
+              ) : (
+                /* RIWAYAT & KUOTA CUTI */
+                <>
+                  <div className="px-6 pt-5">
+                    <h3 className="font-black text-[#3e2723] text-sm uppercase tracking-wider mb-3">Sisa Kuota Cuti Tahunan</h3>
+                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-full border-4 border-[#fbc02d] flex items-center justify-center bg-[#fff8e1]">
+                          <i className="fa-solid fa-plane-departure text-[#fbc02d] text-lg"></i>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide">Tersedia</p>
+                          <p className="text-3xl font-black text-[#3e2723] leading-none">{leaveBalance} <span className="text-xs text-gray-500 font-bold ml-1">Hari</span></p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-6 mt-6">
+                    <h3 className="font-black text-[#3e2723] text-sm uppercase tracking-wider mb-4">Riwayat Pengajuan</h3>
+                    <div className="flex flex-col gap-3">
+                      {isLoading ? (
+                        <div className="bg-white rounded-2xl p-6 text-center text-gray-400 border border-gray-100 shadow-sm">
+                          <div className="w-6 h-6 border-2 border-[#fbc02d] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                          <p className="text-sm font-bold">Sinkronisasi data...</p>
+                        </div>
+                      ) : errorMsg ? (
+                        <div className="text-center text-red-400 text-xs font-bold py-10">{errorMsg}</div>
+                      ) : leaveHistory.length > 0 ? (
+                        leaveHistory.map((item, index) => (
+                          <div key={index} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-[#fbc02d]/40 transition-colors">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-[#fff8e1] rounded-full flex items-center justify-center shrink-0 border border-[#fbc02d]/20">
+                                  <i className="fa-solid fa-calendar-minus text-[#fbc02d] text-sm"></i>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black text-[#3e2723] leading-tight">{item.leave_type}</p>
+                                  <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold mt-0.5">
+                                    <span>{formatDate(item.from_date)}</span>
+                                    {item.from_date !== item.to_date && (
+                                      <><i className="fa-solid fa-arrow-right text-[8px] text-[#fbc02d]"></i><span>{formatDate(item.to_date)}</span></>
+                                    )}
+                                    {item.total_leave_days && (
+                                      <span className="ml-1 text-gray-300">({item.total_leave_days} hari)</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              {getStatusBadge(item.status)}
+                            </div>
+                            {/* ALASAN CUTI DITAMPILKAN DI RIWAYAT */}
+                            {item.description && (
+                              <div className="mt-3 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                <p className="text-[10px] text-gray-500 leading-relaxed font-medium"><b>Alasan:</b> "{item.description}"</p>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-3xl border border-dashed border-gray-200 shadow-sm">
+                          <div className="w-14 h-14 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                            <i className="fa-solid fa-inbox text-xl text-gray-300"></i>
+                          </div>
+                          <p className="text-sm font-black text-gray-500">Belum Ada Riwayat Cuti</p>
+                          <p className="text-[10px] text-gray-400 mt-1 px-4">Pengajuan cuti tahunan kamu akan otomatis muncul di sini.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
             </div>
 
