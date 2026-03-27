@@ -86,11 +86,10 @@ const isRamadhan = (tanggal?: Date): boolean => {
   const bulan = now.getMonth() + 1; // 1–12
   const tgl   = now.getDate();
 
-  // Encode sebagai angka MMDD untuk perbandingan rentang
   const curr  = bulan * 100 + tgl;
-  if (tahun === 2025 && curr >= 301  && curr <= 330)  return true; // 1–30 Mar 2025
-  if (tahun === 2026 && curr >= 218  && curr <= 319)  return true; // 18 Feb – 19 Mar 2026
-  if (tahun === 2027 && curr >= 209  && curr <= 309)  return true; // 9 Feb – 9 Mar 2027
+  if (tahun === 2025 && curr >= 301  && curr <= 330)  return true; 
+  if (tahun === 2026 && curr >= 218  && curr <= 319)  return true; 
+  if (tahun === 2027 && curr >= 209  && curr <= 309)  return true; 
   return false;
 };
 
@@ -107,24 +106,21 @@ const isSatpam = (role?: string): boolean => {
   return des.includes('satpam') || des.includes('security') || des.includes('sekuriti');
 };
 
-// ─── Tabel jam kantor (PH Klaten & Jakarta sama) ───────────────────
 const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: string } => {
-  const hari     = tglDate.getDay(); // 0=Min,1=Sen,...,5=Jum,6=Sab
+  const hari     = tglDate.getDay(); 
   const isFriday = hari === 5;
   const ramadhan = isRamadhan(tglDate);
 
-  // Jam dasar karyawan kantor
-  const jamMasuk  = '07:30'; // Non Ramadhan default
+  const jamMasuk  = '07:30'; 
   const jamKeluar = isFriday ? '17:00' : '16:30';
 
-  const jamMasukR  = '07:00'; // Ramadhan
+  const jamMasukR  = '07:00'; 
   const jamKeluarR = isFriday ? '16:00' : '15:30';
 
   const baseIn  = ramadhan ? jamMasukR  : jamMasuk;
   const baseOut = ramadhan ? jamKeluarR : jamKeluar;
 
   if (satpam) {
-    // Satpam: 30 menit lebih awal masuk, 30 menit lebih lambat pulang
     return { in: tambahMenit(baseIn, -30), out: tambahMenit(baseOut, 30) };
   }
   return { in: baseIn, out: baseOut };
@@ -563,7 +559,6 @@ const Absen = () => {
       const akhir  = new Date(tahunAktif, bulanAktif + 1, 0);
       const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
       
-      // PERBAIKAN: Menambahkan cache-buster agar selalu dapat data terbaru
       const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}&_t=${Date.now()}`);
       const data   = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
@@ -847,7 +842,6 @@ const Absen = () => {
     setIsKirimLoading(false);
   };
 
-  // PERBAIKAN: MEMPRIORITASKAN LOG YANG MEMILIKI FOTO
   const groupedRiwayat: Record<string, { in?: RiwayatAbsen; out?: RiwayatAbsen }> = {};
   dataRiwayat.forEach(item => {
     const tgl = item.time?.substring(0, 10) || item.attendance_date || '';
@@ -858,13 +852,11 @@ const Absen = () => {
       if (!curr) {
         groupedRiwayat[tgl].in = item;
       } else {
-        // Jika log yang lama tidak ada foto, tapi log yang baru ada fotonya, ambil yang ada fotonya!
         const currHasPic = !!curr.custom_foto_absen;
         const itemHasPic = !!item.custom_foto_absen;
         if (!currHasPic && itemHasPic) {
           groupedRiwayat[tgl].in = item;
         } else if (currHasPic === itemHasPic && item.time && curr.time && item.time < curr.time) {
-          // Jika sama-sama ada/tidak ada foto, ambil jam yang paling awal (Masuk)
           groupedRiwayat[tgl].in = item;
         }
       }
@@ -875,13 +867,11 @@ const Absen = () => {
       if (!curr) {
         groupedRiwayat[tgl].out = item;
       } else {
-        // Jika log yang lama tidak ada foto (misal dari Auto-Checkout), timpa dengan log manual kita yang ada fotonya!
         const currHasPic = !!curr.custom_foto_absen;
         const itemHasPic = !!item.custom_foto_absen;
         if (!currHasPic && itemHasPic) {
           groupedRiwayat[tgl].out = item;
         } else if (currHasPic === itemHasPic && item.time && curr.time && item.time > curr.time) {
-          // Jika sama-sama ada/tidak ada foto, ambil jam yang paling akhir (Keluar)
           groupedRiwayat[tgl].out = item;
         }
       }
@@ -901,17 +891,25 @@ const Absen = () => {
   const rekapIzin  = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
   const rekapCuti  = hitungHariKerjaDalamBulan(leaveRecords, r =>  r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
 
-  const tanggalIzinSet  = (() => {
-    const set = new Set<string>();
-    leaveRecords.forEach(r => {
-      const from = parseLokalDate(r.from_date);
-      const to   = parseLokalDate(r.to_date);
-      for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-        set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  // MEMISAHKAN SET TANGGAL IZIN DAN CUTI
+  const tanggalIzinSet = new Set<string>();
+  const tanggalCutiSet = new Set<string>();
+  
+  leaveRecords.forEach(r => {
+    if (r.status?.toLowerCase() !== 'approved') return; // Hanya yang disetujui yang merubah warna kalender
+    
+    const isCuti = r.leave_type.toLowerCase().includes('tahunan');
+    const from = parseLokalDate(r.from_date);
+    const to   = parseLokalDate(r.to_date);
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (isCuti) {
+        tanggalCutiSet.add(dateStr);
+      } else {
+        tanggalIzinSet.add(dateStr);
       }
-    });
-    return set;
-  })();
+    }
+  });
 
   const sortedTglKeys = Object.keys(groupedRiwayat).sort((a, b) => b.localeCompare(a));
   const tampilKeys    = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
@@ -927,11 +925,15 @@ const Absen = () => {
       const dataIn   = groupedRiwayat[strTgl]?.in;
       const checkin  = dataIn?.time;
       const adaIzin  = tanggalIzinSet.has(strTgl);
+      const adaCuti  = tanggalCutiSet.has(strTgl); // 🔥 Mengecek apakah ini Cuti 🔥
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
       
       let dot: React.ReactNode = null;
       if (isHariIni) {
         kelas += 'bg-[#3e2723] text-[#fbc02d] font-black';
+      } else if (adaCuti && !checkin) {
+        kelas += 'bg-teal-100 text-teal-700 font-bold';
+        dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-teal-400" />;
       } else if (adaIzin && !checkin) {
         kelas += 'bg-blue-100 text-blue-600 font-bold';
         dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />;
@@ -952,7 +954,6 @@ const Absen = () => {
     setDetailModal({ show: true, tgl, inData: groupedRiwayat[tgl]?.in, outData: groupedRiwayat[tgl]?.out });
   };
 
-  // PERBAIKAN: MELEWATKAN SEMUA FILE ERPNEXT KE PROXY AGAR TIDAK TERBLOKIR CORS/AUTH
   const prosesUrlFoto = (url?: string) => {
     if (!url) return '';
     if (url.startsWith('data:image')) return url;
@@ -1037,7 +1038,7 @@ const Absen = () => {
                   { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
                   { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
                   { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
-                  { label: 'Cuti',  value: rekapCuti,  color: 'text-purple-300' },
+                  { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, // 🔥 Mengubah warna rekapan Cuti menjadi Teal
                 ].map(item => (
                   <div key={item.label} className="bg-white/10 rounded-xl py-2 text-center">
                     <p className={`text-xl font-black ${item.color}`}>{item.value}</p>
@@ -1058,7 +1059,13 @@ const Absen = () => {
                   </div>
                   <div className="grid grid-cols-7 gap-y-0.5 text-center">{renderKalender()}</div>
                   <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
-                    {[{ color: 'bg-green-400', label: 'Tepat' }, { color: 'bg-red-400', label: 'Telat' }, { color: 'bg-blue-400', label: 'Izin' }].map(l => (
+                    {/* Menambahkan Cuti (Warna Tosca) di keterangan Legenda */}
+                    {[
+                      { color: 'bg-green-400', label: 'Tepat' }, 
+                      { color: 'bg-red-400', label: 'Telat' }, 
+                      { color: 'bg-blue-400', label: 'Izin' },
+                      { color: 'bg-teal-400', label: 'Cuti' }
+                    ].map(l => (
                       <div key={l.label} className="flex items-center gap-1">
                         <span className={`w-2 h-2 rounded-full ${l.color} inline-block`} />
                         <span className="text-[9px] text-gray-400 font-bold">{l.label}</span>
@@ -1089,7 +1096,9 @@ const Absen = () => {
                         const tglDate    = parseLokalDate(tgl);
                         const shiftInfo  = getJamShift(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, masterShifts, activeShift);
                         const shiftLabel = validasiShiftName(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, activeShift);
+                        
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
+                        const adaCutiHariIni = tanggalCutiSet.has(tgl); // 🔥 Mengecek apakah ini cuti
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
                         let badgeEl: React.ReactNode = null;
@@ -1099,8 +1108,14 @@ const Absen = () => {
                             ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {formatDurasi(selisih)}</span>
                             : <span className="text-green-600 text-[9px] font-black">✓ Tepat</span>;
                         }
-                        if (adaIzinHariIni && !badgeEl) {
-                          badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>;
+                        
+                        // Logika prioritas Badge: Jika tidak absen, tampilkan Cuti atau Izin
+                        if (!badgeEl) {
+                          if (adaCutiHariIni) {
+                            badgeEl = <span className="bg-teal-100 text-teal-700 text-[9px] font-black px-1.5 py-0.5 rounded-md">Cuti</span>;
+                          } else if (adaIzinHariIni) {
+                            badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>;
+                          }
                         }
 
                         let badgeCepat: React.ReactNode = null;
@@ -1120,8 +1135,9 @@ const Absen = () => {
                           <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-3 rounded-2xl border border-gray-100 flex flex-col gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-center gap-3 min-w-0">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
-                                  <i className={`fa-solid ${d.in ? 'fa-check' : adaIzinHariIni ? 'fa-envelope-open-text' : 'fa-minus'}`} />
+                                {/* Mengganti warna icon sesuai tipe hari */}
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaCutiHariIni ? 'bg-teal-50 text-teal-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
+                                  <i className={`fa-solid ${d.in ? 'fa-check' : (adaCutiHariIni || adaIzinHariIni) ? 'fa-envelope-open-text' : 'fa-minus'}`} />
                                 </div>
                                 <div className="min-w-0">
                                   <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
