@@ -93,7 +93,7 @@ const Izin = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        alert('❌ Ukuran file maksimal 2MB ya! Silakan kompres atau pilih foto lain.');
+        alert('❌ Ukuran file maksimal 2MB. Silakan kompres atau pilih file lain.');
         e.target.value = '';
         return;
       }
@@ -207,6 +207,16 @@ const Izin = () => {
   };
 
   const isPdf = (url: string) => url.toLowerCase().endsWith('.pdf');
+  const isDoc = (url: string) => /\.(docx?|xlsx?|pptx?|txt|csv)$/i.test(url);
+  const isImage = (url: string) => /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(url) || url.startsWith('data:image');
+  const getFileIcon = (url: string) => {
+    const u = url.toLowerCase();
+    if (u.endsWith('.pdf')) return { icon: 'fa-file-pdf', color: 'text-red-500' };
+    if (u.match(/\.docx?$/)) return { icon: 'fa-file-word', color: 'text-blue-600' };
+    if (u.match(/\.xlsx?$/)) return { icon: 'fa-file-excel', color: 'text-green-600' };
+    if (u.match(/\.pptx?$/)) return { icon: 'fa-file-powerpoint', color: 'text-orange-500' };
+    return { icon: 'fa-file-lines', color: 'text-gray-500' };
+  };
 
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
@@ -326,9 +336,9 @@ const Izin = () => {
 
                   <div>
                     <label className="text-xs font-black text-[#3e2723] uppercase tracking-wider mb-1.5 block ml-1">
-                      Foto Bukti <span className="text-gray-400 font-medium normal-case">(Opsional)</span>
+                      File Bukti <span className="text-gray-400 font-medium normal-case">(Opsional)</span>
                     </label>
-                    <input type="file" accept="image/*,.pdf" onChange={handleFileChange}
+                    <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onChange={handleFileChange}
                       className="w-full bg-white border border-gray-200 rounded-xl py-2 px-3 text-sm text-gray-500 outline-none focus:border-[#fbc02d] transition-all shadow-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-[#fff8e1] file:text-[#3e2723] hover:file:bg-[#fbc02d]/50 cursor-pointer" />
                     {attachment && attachment.startsWith('data:image') && (
                       <div className="mt-3 relative w-full h-32 rounded-2xl overflow-hidden border-2 border-[#fbc02d]/40 shadow-sm">
@@ -339,17 +349,20 @@ const Izin = () => {
                         </button>
                       </div>
                     )}
-                    {attachment && !attachment.startsWith('data:image') && (
-                      <div className="mt-3 flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
-                        <i className="fa-solid fa-file-pdf text-red-500 text-xl"></i>
-                        <span className="text-xs text-[#3e2723] font-bold truncate flex-1">{attachmentName}</span>
-                        <button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }}
-                          className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors">
-                          <i className="fa-solid fa-xmark text-xs"></i>
-                        </button>
-                      </div>
-                    )}
-                    <p className="text-[10px] text-gray-400 mt-1.5 pl-1 italic">* Upload foto surat dokter jika sakit. Max 2MB.</p>
+                    {attachment && !attachment.startsWith('data:image') && (() => {
+                      const fi = getFileIcon(attachmentName);
+                      return (
+                        <div className="mt-3 flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
+                          <i className={`fa-solid ${fi.icon} ${fi.color} text-xl`}></i>
+                          <span className="text-xs text-[#3e2723] font-bold truncate flex-1">{attachmentName}</span>
+                          <button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }}
+                            className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors">
+                            <i className="fa-solid fa-xmark text-xs"></i>
+                          </button>
+                        </div>
+                      );
+                    })()}
+                    <p className="text-[10px] text-gray-400 mt-1.5 pl-1 italic">* Foto, PDF, Word, Excel, dll. Maks 2MB.</p>
                   </div>
 
                   <button type="submit" disabled={isSubmitting}
@@ -516,39 +529,43 @@ const Izin = () => {
                     {getAttachment(selectedRecord) && (
                       <div>
                         <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider mb-2 flex items-center gap-1.5 ml-1">
-                          <i className="fa-regular fa-image text-[#fbc02d] text-sm"></i> File Bukti Lampiran
+                          <i className="fa-solid fa-paperclip text-[#fbc02d] text-sm"></i> File Bukti Lampiran
                         </p>
-                        {isPdf(getAttachment(selectedRecord) || '') ? (
-                          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 flex flex-col items-center gap-3 shadow-inner">
-                            <div className="w-14 h-14 bg-white rounded-full shadow-sm flex items-center justify-center">
-                              <i className="fa-solid fa-file-pdf text-3xl text-red-500"></i>
-                            </div>
-                            <p className="text-xs text-gray-500 font-bold">Dokumen PDF Terlampir</p>
-                            <a href={prosesUrlFoto(getAttachment(selectedRecord))} target="_blank" rel="noopener noreferrer"
-                              className="text-[11px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-5 py-2.5 rounded-xl hover:bg-blue-100 transition-colors shadow-sm flex items-center gap-2">
-                              <i className="fa-solid fa-arrow-up-right-from-square"></i> Buka Dokumen
-                            </a>
-                          </div>
-                        ) : (
-                          <button onClick={() => setPreviewUrl(prosesUrlFoto(getAttachment(selectedRecord)))}
-                            className="w-full relative h-48 rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm group">
-                            <img src={prosesUrlFoto(getAttachment(selectedRecord))} alt="Bukti Izin" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                            <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 backdrop-blur-[2px]">
-                              <div className="bg-white/90 rounded-full px-4 py-2 flex items-center gap-2 shadow-lg">
-                                <i className="fa-solid fa-magnifying-glass-plus text-[#3e2723] text-sm"></i>
-                                <span className="text-xs font-black text-[#3e2723] uppercase">Perbesar Foto</span>
+                        {(() => {
+                          const attUrl = getAttachment(selectedRecord) || '';
+                          const fullUrl = prosesUrlFoto(attUrl);
+                          if (isImage(attUrl)) return (
+                            <button onClick={() => setPreviewUrl(fullUrl)}
+                              className="w-full relative h-48 rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm group">
+                              <img src={fullUrl} alt="Bukti Izin" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                              <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 backdrop-blur-[2px]">
+                                <div className="bg-white/90 rounded-full px-4 py-2 flex items-center gap-2 shadow-lg">
+                                  <i className="fa-solid fa-magnifying-glass-plus text-[#3e2723] text-sm"></i>
+                                  <span className="text-xs font-black text-[#3e2723] uppercase">Perbesar Foto</span>
+                                </div>
                               </div>
+                            </button>
+                          );
+                          const fi = getFileIcon(attUrl);
+                          return (
+                            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 flex flex-col items-center gap-3 shadow-inner">
+                              <div className="w-14 h-14 bg-white rounded-full shadow-sm flex items-center justify-center">
+                                <i className={`fa-solid ${fi.icon} text-3xl ${fi.color}`}></i>
+                              </div>
+                              <p className="text-xs text-gray-500 font-bold text-center truncate max-w-full px-4">{attUrl.split('/').pop()}</p>
+                              <a href={fullUrl} target="_blank" rel="noopener noreferrer"
+                                className="text-[11px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-5 py-2.5 rounded-xl hover:bg-blue-100 transition-colors shadow-sm flex items-center gap-2">
+                                <i className="fa-solid fa-arrow-up-right-from-square"></i> Buka / Unduh File
+                              </a>
                             </div>
-                          </button>
-                        )}
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
                   <div className="px-6 pb-6 pt-4 border-t border-gray-100 bg-white flex flex-col gap-2">
                     {selectedRecord.status?.toLowerCase() === 'open' && (
-                      <button
-                        onClick={() => handleCancel(selectedRecord.name)}
-                        disabled={isCancelling}
+                      <button onClick={() => handleCancel(selectedRecord.name)} disabled={isCancelling}
                         className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black py-3.5 rounded-2xl active:scale-95 transition-all flex justify-center items-center gap-2 text-sm">
                         {isCancelling
                           ? <><i className="fa-solid fa-spinner fa-spin" /> Membatalkan...</>
