@@ -419,31 +419,34 @@ const Home = () => {
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
           <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
-            {/* HEADER INTEGRASI (CARD TIDAK GANTUNG) */}
-            <div className="bg-[#3e2723] px-5 pt-12 pb-28 rounded-b-[3rem] shrink-0 shadow-sm relative z-40">
-              <div className="flex justify-between items-center mb-6">
+            {/* HEADER — safe-area-aware, compact */}
+            <div className="bg-[#3e2723] px-5 pb-10 pt-12 rounded-b-[2rem] shrink-0 shadow-sm relative z-40">
+              <div className="flex justify-between items-center">
                 {/* KIRI: Salam & Role */}
                 <div className="flex-1 min-w-0 pr-3">
-                  <h2 className="text-2xl font-black text-[#fbc02d] leading-tight truncate">
+                  <h2 className="text-xl font-black text-[#fbc02d] leading-tight truncate">
                     Halo, <span>{user.name.split(' ')[0]}</span> 👋
                   </h2>
                   <p className="text-white/60 text-xs mt-0.5 truncate">{user.role || 'Staff Roti Ropi'}</p>
                 </div>
 
-                {/* KANAN: Bell Notification */}
+                {/* KANAN: Bell Notification — compact & eyecatching */}
                 <div className="relative shrink-0" ref={notifRef}>
                   <button
                     onClick={handleOpenNotif}
                     className={`
-                      relative w-11 h-11 rounded-2xl flex items-center justify-center
+                      relative w-10 h-10 rounded-2xl flex items-center justify-center
                       transition-all duration-200 active:scale-90 border border-[#fbc02d]/30
                       ${showNotif
                         ? 'bg-[#fbc02d] text-[#3e2723] shadow-lg shadow-[#fbc02d]/40'
                         : 'bg-[#fbc02d]/10 text-[#fbc02d] hover:bg-[#fbc02d]/20 shadow-[0_0_15px_rgba(251,192,45,0.1)]'
                       }
                     `}
+                    aria-label="Notifikasi"
                   >
-                    <i className={`fa-solid fa-bell text-lg ${unreadCount > 0 ? 'bell-ring' : ''}`}></i>
+                    <i className={`fa-solid fa-bell text-base ${unreadCount > 0 ? 'bell-ring' : ''}`}></i>
+
+                    {/* Badge unread count */}
                     {unreadCount > 0 && (
                       <span className="badge-pop absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-[#3e2723] leading-none shadow-md">
                         {unreadCount > 9 ? '9+' : unreadCount}
@@ -461,7 +464,10 @@ const Home = () => {
                           </div>
                           Notifikasi
                         </h3>
-                        <button onClick={() => setShowNotif(false)} className="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors">
+                        <button
+                          onClick={() => setShowNotif(false)}
+                          className="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
+                        >
                           <i className="fa-solid fa-xmark text-xs"></i>
                         </button>
                       </div>
@@ -492,9 +498,12 @@ const Home = () => {
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* STATUS CARD TERINTEGRASI (MT-NEGATIVE UNTUK MELEKAT)*/}
-              <div className="bg-white rounded-3xl p-6 shadow-2xl border border-gray-100 relative overflow-hidden transform translate-y-4">
+            {/* CONTENT AREA */}
+            <div className="flex-1 px-6 -mt-6 relative z-10 overflow-y-auto no-scrollbar pb-24">
+
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300"></div>
                 <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
                 <p className="text-[#3e2723] font-bold text-sm mb-5 bg-gray-50 p-2.5 rounded-xl border border-gray-100 inline-block w-full">{statusAbsen}</p>
@@ -506,10 +515,6 @@ const Home = () => {
                   <i className={`fa-solid ${btnConfig.icon} fa-fw text-xl`}></i> {btnConfig.text}
                 </button>
               </div>
-            </div>
-
-            {/* CONTENT AREA */}
-            <div className="flex-1 px-6 pt-10 relative z-10 overflow-y-auto no-scrollbar pb-24">
 
               <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide">Menu Laporan</h3>
               <div className="flex flex-col gap-3 mb-8">
@@ -576,7 +581,7 @@ const Home = () => {
                 )}
               </div>
 
-              {/* BUKU PANDUAN (FULL - TIDAK DIPANGKAS) */}
+              {/* BUKU PANDUAN */}
               <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide flex items-center gap-2">
                 <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
               </h3>
