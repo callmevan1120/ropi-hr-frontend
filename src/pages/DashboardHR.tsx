@@ -74,11 +74,18 @@ const toMenit = (jam: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
+const parseLokalDate = (tglStr: string): Date => {
+  if (!tglStr) return new Date();
+  const parts = tglStr.split(' ')[0].split('-');
+  const [y, m, d] = parts.map(Number);
+  return new Date(y, m - 1, d);
+};
+
 // LOGIKA RAMADHAN 
 const isRamadhan = (tanggalStr: string, ramadhanDates: string[]): boolean => {
   if (ramadhanDates.includes(tanggalStr)) return true;
 
-  const d = new Date(tanggalStr);
+  const d = parseLokalDate(tanggalStr);
   const tahun = d.getFullYear();
   const bulan = d.getMonth() + 1; 
   const tgl = d.getDate();
@@ -96,7 +103,7 @@ const isRamadhan = (tanggalStr: string, ramadhanDates: string[]): boolean => {
 };
 
 const getShiftLabel = (tanggal: string, ramadhanDates: string[]): string => {
-  const tglDate = new Date(tanggal);
+  const tglDate = parseLokalDate(tanggal);
   const hari = tglDate.getDay();
   if (hari === 0 || hari === 6) return 'Libur';
   const isFriday = hari === 5;
@@ -112,7 +119,7 @@ const getJamShift = (
   masterShifts: Record<string, { in: string; out: string }>,
   ramadhanDates: string[]
 ): { in: string; out: string } => {
-  const tglDate = new Date(tanggal);
+  const tglDate = parseLokalDate(tanggal);
   const isFriday = tglDate.getDay() === 5;
   const ramadhan = isRamadhan(tanggal, ramadhanDates);
   if (!isFriday && shiftNameFromRecord && masterShifts[shiftNameFromRecord]) {
@@ -203,7 +210,6 @@ const DashboardHR = () => {
 
   useEffect(() => { tarikDataSemuaKaryawan(); }, [tanggalAktif, bulanAktif, periodeMulai, periodeAkhir, filterMode, masterShifts, lokasiKantor, ramadhanDates]);
 
-  // Reset pagination ke halaman 1 kalau filter berubah
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, activeBranch, filterMode, tanggalAktif, bulanAktif, periodeMulai, periodeAkhir]);
@@ -384,10 +390,10 @@ const DashboardHR = () => {
             const year = parseInt(bulanAktif.split('-')[0]);
             const month = parseInt(bulanAktif.split('-')[1]) - 1;
             startDateObj = new Date(year, month, 1);
-            endDateObj = new Date(year, month + 1, 0);
+            endDateObj = new Date(year, month, 0);
           } else {
-            startDateObj = new Date(periodeMulai);
-            endDateObj = new Date(periodeAkhir);
+            startDateObj = parseLokalDate(periodeMulai);
+            endDateObj = parseLokalDate(periodeAkhir);
           }
 
           leaveResults.forEach(result => {
@@ -395,8 +401,8 @@ const DashboardHR = () => {
               const { employee, data } = result.value;
               let totalIzin = 0;
               (data as any[]).filter(r => r.status?.toLowerCase() === 'approved').forEach((r: any) => {
-                const from = new Date(r.from_date);
-                const to = new Date(r.to_date);
+                const from = parseLokalDate(r.from_date);
+                const to = parseLokalDate(r.to_date);
                 const start = from < startDateObj ? startDateObj : from;
                 const end = to > endDateObj ? endDateObj : to;
                 for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -462,9 +468,9 @@ const DashboardHR = () => {
             if (result.status === 'fulfilled') {
               const { employee, employee_name, branch, data } = result.value;
               const izinHariIni = (data as any[]).filter(r => r.status?.toLowerCase() === 'approved').find((r: any) => {
-                const from = new Date(r.from_date);
-                const to = new Date(r.to_date);
-                const tgl = new Date(tanggalAktif);
+                const from = parseLokalDate(r.from_date);
+                const to = parseLokalDate(r.to_date);
+                const tgl = parseLokalDate(tanggalAktif);
                 return tgl >= from && tgl <= to;
               });
               newLeaveMap[employee] = izinHariIni ? 1 : 0;
@@ -508,11 +514,9 @@ const DashboardHR = () => {
   const ambilSemuaIzin = async () => {
     setIzinLoading(true);
     try {
-      // Ambil izin dari semua karyawan yang ada di dataAbsen
       const allEmployees = dataAbsen.length > 0 ? dataAbsen : [];
       if (allEmployees.length === 0) {
-        // Kalau dataAbsen kosong, fetch semua leave application langsung
-        const res = await fetch(`${BACKEND}/api/attendance/all-leave-requests&_t=${Date.now()}`);
+        const res = await fetch(`${BACKEND}/api/attendance/all-leave-requests?_t=${Date.now()}`);
         const data = await res.json();
         if (data.success) setIzinList(data.data ?? []);
       } else {
@@ -544,7 +548,6 @@ const DashboardHR = () => {
       if (res.ok && data.success) {
         setIzinDetail(null);
         ambilSemuaIzin();
-        // Refresh leaveMap juga
         tarikDataSemuaKaryawan();
       } else {
         alert(data.message || 'Gagal menyetujui izin.');
@@ -603,27 +606,30 @@ const DashboardHR = () => {
           startDateObj = new Date(year, month - 1, 1);
           endDateObj = new Date(year, month, 0);
         } else {
-          startDateObj = new Date(periodeMulai);
-          endDateObj = new Date(periodeAkhir);
+          startDateObj = parseLokalDate(periodeMulai);
+          endDateObj = parseLokalDate(periodeAkhir);
         }
 
         rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').forEach((r: any) => {
-          const from = new Date(r.from_date);
-          const to = new Date(r.to_date);
+          const from = parseLokalDate(r.from_date);
+          const to = parseLokalDate(r.to_date);
           const start = from < startDateObj ? startDateObj : from;
           const end = to > endDateObj ? endDateObj : to;
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             if (d.getDay() !== 0 && d.getDay() !== 6) {
-              const key = d.toISOString().substring(0, 10);
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              const key = `${yyyy}-${mm}-${dd}`;
               empIzinDates[key] = r.leave_type;
             }
           }
         });
       } else {
         const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').find((r: any) => {
-          const from = new Date(r.from_date);
-          const to = new Date(r.to_date);
-          const tgl = new Date(tanggalAktif);
+          const from = parseLokalDate(r.from_date);
+          const to = parseLokalDate(r.to_date);
+          const tgl = parseLokalDate(tanggalAktif);
           return tgl >= from && tgl <= to;
         });
         if (izinHariIni) empIzinDates[tanggalAktif] = izinHariIni.leave_type;
@@ -739,8 +745,8 @@ const DashboardHR = () => {
           dateRange.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
         }
       } else {
-        let curr = new Date(periodeMulai);
-        const end = new Date(periodeAkhir);
+        let curr = parseLokalDate(periodeMulai);
+        const end = parseLokalDate(periodeAkhir);
         while (curr <= end) {
           const y = curr.getFullYear();
           const m = String(curr.getMonth() + 1).padStart(2, '0');
@@ -865,8 +871,7 @@ const DashboardHR = () => {
     </div>
   );
 
-  // LOGIKA PAGINATION
-  const totalPages = Math.ceil(filteredDataAbsen.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredDataAbsen.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentData = filteredDataAbsen.slice(startIndex, startIndex + itemsPerPage);
 
@@ -1101,9 +1106,9 @@ const DashboardHR = () => {
                         {leaveMap[emp.employee] === 1 && (() => {
                           const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
                           const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').find((r: any) => {
-                            const from = new Date(r.from_date);
-                            const to = new Date(r.to_date);
-                            const tgl = new Date(tanggalAktif);
+                            const from = parseLokalDate(r.from_date);
+                            const to = parseLokalDate(r.to_date);
+                            const tgl = parseLokalDate(tanggalAktif);
                             return tgl >= from && tgl <= to;
                           });
                           return izinHariIni ? (
@@ -1181,9 +1186,9 @@ const DashboardHR = () => {
             if (leaveMap[emp.employee] !== 1) return null;
             const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
             return rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').find((r: any) => {
-              const from = new Date(r.from_date);
-              const to = new Date(r.to_date);
-              const tgl = new Date(tanggalAktif);
+              const from = parseLokalDate(r.from_date);
+              const to = parseLokalDate(r.to_date);
+              const tgl = parseLokalDate(tanggalAktif);
               return tgl >= from && tgl <= to;
             }) ?? null;
           })();
@@ -1365,18 +1370,21 @@ const DashboardHR = () => {
                             startDateObj = new Date(year, month - 1, 1);
                             endDateObj = new Date(year, month, 0);
                           } else {
-                            startDateObj = new Date(periodeMulai);
-                            endDateObj = new Date(periodeAkhir);
+                            startDateObj = parseLokalDate(periodeMulai);
+                            endDateObj = parseLokalDate(periodeAkhir);
                           }
                           const izinDates: Record<string, string> = {};
                           rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').forEach((r: any) => {
-                            const from = new Date(r.from_date);
-                            const to = new Date(r.to_date);
+                            const from = parseLokalDate(r.from_date);
+                            const to = parseLokalDate(r.to_date);
                             const start = from < startDateObj ? startDateObj : from;
                             const end = to > endDateObj ? endDateObj : to;
                             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                               if (d.getDay() !== 0 && d.getDay() !== 6) {
-                                const key = d.toISOString().substring(0, 10);
+                                const yyyy = d.getFullYear();
+                                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                                const dd = String(d.getDate()).padStart(2, '0');
+                                const key = `${yyyy}-${mm}-${dd}`;
                                 izinDates[key] = r.leave_type;
                               }
                             }
@@ -1506,7 +1514,7 @@ const DashboardHR = () => {
                                         <div className="flex flex-col gap-1.5 w-[140px] md:w-[180px] shrink-0 snap-center">
                                           <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
                                           <div className="rounded-2xl border-2 border-gray-100 bg-white overflow-hidden flex items-center justify-center relative shadow-sm p-2 aspect-[3/4] md:aspect-square">
-                                            {log.out.custom_signature ? <img src={prosesUrlFoto(log.out.custom_signature)} className="w-full h-full object-contain mix-blend-multiply" alt="TTD Keluar" loading="lazy" decoding="async" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
+                                            {log.out.custom_signature ? <img src={prosesUrlFoto(log.out.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Keluar" loading="lazy" decoding="async" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
                                             <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Keluar</div>
                                           </div>
                                         </div>
