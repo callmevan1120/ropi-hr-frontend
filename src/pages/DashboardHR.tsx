@@ -169,12 +169,10 @@ const DashboardHR = () => {
   const [periodeMulai, setPeriodeMulai] = useState(localISOTime);
   const [periodeAkhir, setPeriodeAkhir] = useState(localISOTime);
 
-  // STATE PAGINATION 
+  // STATE PAGINATION & UI
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
-
-  // STATE MOBILE FILTER TOGGLE
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(false); // Toggle Filter untuk Mobile
 
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
   const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
@@ -539,10 +537,7 @@ const DashboardHR = () => {
           const end = to > endDateObj ? endDateObj : to;
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             if (d.getDay() !== 0 && d.getDay() !== 6) {
-              const yyyy = d.getFullYear();
-              const mm = String(d.getMonth() + 1).padStart(2, '0');
-              const dd = String(d.getDate()).padStart(2, '0');
-              const key = `${yyyy}-${mm}-${dd}`;
+              const key = d.toISOString().substring(0, 10);
               empIzinDates[key] = r.leave_type;
             }
           }
@@ -800,8 +795,8 @@ const DashboardHR = () => {
   return (
     <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
 
-      {/* ── HEADER (PERBAIKAN UI MOBILE) ── */}
-      <div className="bg-[#3e2723] pt-5 pb-6 px-5 md:px-10 shadow-lg relative z-20 w-full rounded-b-[2rem]">
+      {/* ── HEADER (PERBAIKAN UI MOBILE + STICKY) ── */}
+      <div className="bg-[#3e2723] pt-5 pb-6 px-5 md:px-10 shadow-lg sticky top-0 z-30 w-full rounded-b-[2rem]">
         <div className="max-w-7xl mx-auto flex flex-col gap-4">
           
           <div className="flex items-center justify-between w-full">
@@ -1067,7 +1062,6 @@ const DashboardHR = () => {
               })}
             </div>
 
-            {/* KONTROL PAGINATION */}
             {totalPages > 1 && (
               <div className="flex justify-center items-center gap-4 mt-8 mb-4">
                 <button
@@ -1437,7 +1431,7 @@ const DashboardHR = () => {
                                               <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full overflow-hidden">
                                                   <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Lampiran Bukti Izin</p>
                                                   <button onClick={() => setPreviewUrl(prosesUrlFoto(getAttachmentIzin(specificLeave)))}
-                                                      className="w-24 h-24 rounded-xl overflow-hidden border border-gray-200 shadow-sm relative group block text-left">
+                                                      className="w-24 h-24 rounded-xl overflow-hidden border border-gray-200 shadow-sm relative group block text-left mt-2">
                                                       <img src={prosesUrlFoto(getAttachmentIzin(specificLeave))} alt="Bukti Izin" className="w-full h-full object-cover" />
                                                       <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                           <i className="fa-solid fa-magnifying-glass text-white text-xs" />
