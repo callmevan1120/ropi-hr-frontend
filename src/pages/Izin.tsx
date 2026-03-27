@@ -47,6 +47,7 @@ const Izin = () => {
 
   const [selectedRecord, setSelectedRecord] = useState<LeaveRecord | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
@@ -138,6 +139,28 @@ const Izin = () => {
       alert('Terjadi kesalahan koneksi.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleCancel = async (docName: string) => {
+    if (!confirm('Batalkan pengajuan izin ini?')) return;
+    setIsCancelling(true);
+    try {
+      const res = await fetch(`${BACKEND}/api/attendance/leave-request/${encodeURIComponent(docName)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert('✅ Pengajuan izin berhasil dibatalkan.');
+        setSelectedRecord(null);
+        if (user) fetchLeaveHistory(user.employee_id);
+      } else {
+        alert(data.message || 'Gagal membatalkan izin.');
+      }
+    } catch {
+      alert('Terjadi kesalahan koneksi.');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -521,7 +544,17 @@ const Izin = () => {
                       </div>
                     )}
                   </div>
-                  <div className="px-6 pb-6 pt-4 border-t border-gray-100 bg-white">
+                  <div className="px-6 pb-6 pt-4 border-t border-gray-100 bg-white flex flex-col gap-2">
+                    {selectedRecord.status?.toLowerCase() === 'open' && (
+                      <button
+                        onClick={() => handleCancel(selectedRecord.name)}
+                        disabled={isCancelling}
+                        className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black py-3.5 rounded-2xl active:scale-95 transition-all flex justify-center items-center gap-2 text-sm">
+                        {isCancelling
+                          ? <><i className="fa-solid fa-spinner fa-spin" /> Membatalkan...</>
+                          : <><i className="fa-solid fa-trash-can" /> Batalkan Pengajuan</>}
+                      </button>
+                    )}
                     <button onClick={() => setSelectedRecord(null)}
                       className="w-full bg-[#3e2723] hover:bg-[#4e342e] text-[#fbc02d] font-black py-4 rounded-2xl active:scale-95 transition-all shadow-lg flex justify-center items-center gap-2">
                       <i className="fa-solid fa-check"></i> Mengerti & Tutup
