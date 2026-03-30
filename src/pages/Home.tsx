@@ -25,7 +25,7 @@ interface Notification {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// HELPER LOGIKA WAKTU
+// HELPER LOGIKA WAKTU (PORTED FROM ABSEN.TSX)
 // ─────────────────────────────────────────────────────────────────
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
@@ -51,6 +51,7 @@ const isRamadhan = (): boolean => {
   const now = new Date();
   const curr = (now.getMonth() + 1) * 100 + now.getDate();
   const tahun = now.getFullYear();
+  // Mengikuti periode Ramadhan 2026 sesuai logika Absen.tsx
   if (tahun === 2026 && curr >= 218 && curr <= 319) return true;
   return false;
 };
@@ -58,10 +59,12 @@ const isRamadhan = (): boolean => {
 const getJamMasukJadwal = (branch?: string, role?: string): string => {
   const b = (branch || '').toLowerCase();
   const isKantor = b.includes('klaten') || b.includes('ph') || b.includes('jakarta');
-  if (!isKantor) return '07:00';
+  if (!isKantor) return '07:00'; // Default Outlet
+
   const ramadhan = isRamadhan();
   const isSatpam = (role || '').toLowerCase().includes('satpam');
   let jamIn = ramadhan ? '07:00' : '07:30';
+
   if (isSatpam) {
     const total = toMenit(jamIn) - 30;
     const h = Math.floor(total / 60);
@@ -81,6 +84,7 @@ const timeAgo = (dateStr: string) => {
   const date = new Date(dateStr);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
   if (seconds < 60) return 'Baru saja';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes} mnt lalu`;
@@ -105,14 +109,12 @@ const Home = () => {
   });
 
   const [bukaPanduan, setBukaPanduan] = useState<string | null>(null);
+
+  // STATE NOTIFIKASI
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotif, setShowNotif] = useState<boolean>(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const notifRef = useRef<HTMLDivElement>(null);
-
-  // Scroll state untuk efek amplop
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
@@ -135,25 +137,18 @@ const Home = () => {
         setShowNotif(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Listener scroll untuk efek amplop
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => setScrolled(el.scrollTop > 12);
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const fetchNotifications = async (employeeId: string) => {
     try {
       const res = await fetch(`${BACKEND}/api/notifications?employee_id=${encodeURIComponent(employeeId)}&_t=${Date.now()}`);
       const data = await res.json();
+
       if (data.success && data.data) {
         setNotifications(data.data);
+
         const lastReadTime = localStorage.getItem('ropi_last_read_notif');
         if (!lastReadTime) {
           setUnreadCount(data.data.length);
@@ -215,8 +210,10 @@ const Home = () => {
             setStatusAbsen(statusText);
             localStorage.setItem('ropi_status_absen', statusText);
 
+            // LOGIKA DETEKSI TELAT HARI INI
             const jamJadwal = getJamMasukJadwal(userData.branch, userData.role);
             const selisih = toMenit(jamAbsen) - toMenit(jamJadwal);
+            
             if (selisih > 0) {
               const lateId = `late-${tglHariIni}`;
               const lateNotif: Notification = {
@@ -224,8 +221,9 @@ const Home = () => {
                 title: 'Absen Terlambat',
                 message: `Waduh, kamu telat ${formatDurasi(selisih)} hari ini. Yuk besok lebih pagi lagi!`,
                 time: checkInLog.time,
-                type: 'error',
+                type: 'error'
               };
+
               setNotifications(prev => {
                 if (prev.find(n => n.id === lateId)) return prev;
                 return [lateNotif, ...prev];
@@ -284,7 +282,7 @@ const Home = () => {
           <li>Jika ingin bertukar shift dengan teman, wajib mengajukan dari aplikasi agar HRD bisa mengubah jadwal resmi Anda di sistem.</li>
           <li>Tunggu hingga HRD melakukan <em>Approval</em>. Setelah di-ACC, Anda baru bisa membuka kamera absen.</li>
         </ul>
-      ),
+      )
     },
     {
       id: 'absen', title: '2. Cara Absen Harian',
@@ -297,7 +295,7 @@ const Home = () => {
           <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
           <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu notifikasi berhasil.</li>
         </ul>
-      ),
+      )
     },
     {
       id: 'izin', title: '3. Pengajuan Izin & Cuti',
@@ -309,7 +307,7 @@ const Home = () => {
             <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.</li>
           </ul>
         </>
-      ),
+      )
     },
     {
       id: 'error', title: '4. Solusi Jika Error',
@@ -318,8 +316,8 @@ const Home = () => {
           <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba lagi.</li>
           <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.</li>
         </ul>
-      ),
-    },
+      )
+    }
   ];
 
   const panduanKantor = [
@@ -333,7 +331,7 @@ const Home = () => {
           <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
           <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
         </ul>
-      ),
+      )
     },
     {
       id: 'izin', title: '2. Pengajuan Izin & Cuti',
@@ -345,7 +343,7 @@ const Home = () => {
             <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.</li>
           </ul>
         </>
-      ),
+      )
     },
     {
       id: 'error', title: '3. Solusi Jika Error',
@@ -354,18 +352,17 @@ const Home = () => {
           <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba absen lagi.</li>
           <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.</li>
         </ul>
-      ),
-    },
+      )
+    }
   ];
 
   const listBukuPanduan = outlet ? panduanOutlet : panduanKantor;
 
   return (
-    <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
+    <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden text-left">
       <style>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes bell-shake {
           0%, 100% { transform: rotate(0deg); }
           15% { transform: rotate(12deg); }
@@ -384,25 +381,6 @@ const Home = () => {
           100% { transform: scale(1); }
         }
         .badge-pop { animation: badge-pop 0.3s ease-out forwards; }
-
-        /*
-          EFEK AMPLOP:
-          Header adalah "amplop" yang sticky di atas.
-          Area scroll (konten) ada di bawahnya tapi OVERLAP ke header lewat z-index & border-radius.
-          Saat scroll naik, konten "masuk ke dalam" amplop — dicapai dengan:
-            - scroll container dimulai dari dalam header (margin-top negatif)
-            - border-radius atas pada scroll wrapper yang berubah saat sudah scroll
-            - shadow yang muncul saat sudah scroll untuk memberi kesan kedalaman
-        */
-
-        .scroll-wrapper {
-          border-radius: 2rem 2rem 0 0;
-          transition: border-radius 0.3s ease, box-shadow 0.3s ease;
-        }
-        .scroll-wrapper.scrolled {
-          border-radius: 0;
-          box-shadow: 0 -4px 24px rgba(62,39,35,0.18);
-        }
       `}</style>
 
       <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
@@ -413,8 +391,8 @@ const Home = () => {
             <div className="absolute -top-20 -left-20 w-96 h-96 bg-[#fbc02d] rounded-full blur-3xl"></div>
             <div className="absolute bottom-10 -right-10 w-72 h-72 bg-orange-400 rounded-full blur-3xl"></div>
           </div>
-          <div className="relative z-10">
-            <div className="w-20 h-20 bg-[#fbc02d] rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-[#fbc02d]/20 rotate-3">
+          <div className="relative z-10 text-left">
+            <div className="w-20 h-20 bg-[#fbc02d] rounded-2xl flex items-center justify-center mb-8 rotate-3 shadow-lg shadow-[#fbc02d]/20">
               <i className="fa-solid fa-bread-slice text-[#3e2723] text-4xl -rotate-3"></i>
             </div>
             <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
@@ -438,107 +416,95 @@ const Home = () => {
         </div>
 
         {/* BAGIAN KANAN: APLIKASI MOBILE */}
-        <div className="flex-1 flex flex-col bg-[#3e2723] relative z-20 w-full md:w-1/2 h-full md:rounded-r-[3rem] overflow-hidden">
+        <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
+          <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
-          {/* ══════════════════════════════════════════
-              HEADER — sticky "amplop", tidak punya
-              rounded-bottom lagi, konten yang menutup
-          ══════════════════════════════════════════ */}
-          <div className="shrink-0 px-5 pt-12 pb-6 relative z-40">
-            <div className="flex justify-between items-center">
-              {/* KIRI: Salam & Role */}
-              <div className="flex-1 min-w-0 pr-3">
-                <h2 className="text-xl font-black text-[#fbc02d] leading-tight truncate">
-                  Halo, <span>{user.name.split(' ')[0]}</span> 👋
-                </h2>
-                <p className="text-white/60 text-xs mt-0.5 truncate">{user.role || 'Staff Roti Ropi'}</p>
-              </div>
+            {/* HEADER */}
+            <div className="bg-[#3e2723] pt-12 pb-5 px-6 shrink-0 shadow-md z-10 rounded-b-[1.5rem]">
+              <div className="flex justify-between items-center">
+                <div className="flex-1 min-w-0 pr-3 text-left">
+                  <h2 className="text-xl font-black text-[#fbc02d] leading-tight truncate">
+                    Halo, <span>{user.name.split(' ')[0]}</span> 👋
+                  </h2>
+                  <p className="text-white/60 text-xs mt-0.5 truncate text-left">{user.role || 'Staff Roti Ropi'}</p>
+                </div>
 
-              {/* KANAN: Bell Notification */}
-              <div className="relative shrink-0" ref={notifRef}>
-                <button
-                  onClick={handleOpenNotif}
-                  className={`
-                    relative w-10 h-10 rounded-2xl flex items-center justify-center
-                    transition-all duration-200 active:scale-90 border border-[#fbc02d]/30
-                    ${showNotif
-                      ? 'bg-[#fbc02d] text-[#3e2723] shadow-lg shadow-[#fbc02d]/40'
-                      : 'bg-[#fbc02d]/10 text-[#fbc02d] hover:bg-[#fbc02d]/20 shadow-[0_0_15px_rgba(251,192,45,0.1)]'
-                    }
-                  `}
-                  aria-label="Notifikasi"
-                >
-                  <i className={`fa-solid fa-bell text-base ${unreadCount > 0 ? 'bell-ring' : ''}`}></i>
-                  {unreadCount > 0 && (
-                    <span className="badge-pop absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-[#3e2723] leading-none shadow-md">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </button>
+                <div className="relative shrink-0" ref={notifRef}>
+                  <button
+                    onClick={handleOpenNotif}
+                    className={`
+                      relative w-10 h-10 rounded-2xl flex items-center justify-center
+                      transition-all duration-200 active:scale-90 border border-[#fbc02d]/30
+                      ${showNotif
+                        ? 'bg-[#fbc02d] text-[#3e2723] shadow-lg shadow-[#fbc02d]/40'
+                        : 'bg-[#fbc02d]/10 text-[#fbc02d] hover:bg-[#fbc02d]/20 shadow-[0_0_15px_rgba(251,192,45,0.1)]'
+                      }
+                    `}
+                    aria-label="Notifikasi"
+                  >
+                    <i className={`fa-solid fa-bell text-base ${unreadCount > 0 ? 'bell-ring' : ''}`}></i>
+                    {unreadCount > 0 && (
+                      <span className="badge-pop absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-[#3e2723] shadow-md">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
 
-                {/* DROPDOWN NOTIFIKASI */}
-                {showNotif && (
-                  <div className="absolute top-[48px] right-0 w-[300px] max-w-[85vw] bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col z-50">
-                    <div className="bg-gray-50 px-5 py-3.5 border-b border-gray-100 flex justify-between items-center">
-                      <h3 className="font-black text-[#3e2723] text-sm flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-[#fff8e1] flex items-center justify-center">
-                          <i className="fa-solid fa-bell text-[#fbc02d] text-[9px]"></i>
-                        </div>
-                        Notifikasi
-                      </h3>
-                      <button
-                        onClick={() => setShowNotif(false)}
-                        className="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
-                      >
-                        <i className="fa-solid fa-xmark text-xs"></i>
-                      </button>
-                    </div>
-                    <div className="max-h-[50vh] overflow-y-auto no-scrollbar flex flex-col bg-white">
-                      {notifications.length === 0 ? (
-                        <div className="py-10 text-center flex flex-col items-center">
-                          <i className="fa-regular fa-bell-slash text-4xl text-gray-200 mb-3"></i>
-                          <p className="text-xs text-gray-400 font-bold">Belum ada notifikasi.</p>
-                        </div>
-                      ) : (
-                        notifications.map((notif) => (
-                          <div key={notif.id} className="px-5 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 items-start">
-                            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm
-                              ${notif.type === 'success' ? 'bg-green-100 text-green-500' :
-                                notif.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-600'}`}>
-                              <i className={`fa-solid ${notif.type === 'success' ? 'fa-check' : notif.type === 'error' ? 'fa-triangle-exclamation' : 'fa-clock'}`}></i>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-black text-[#3e2723] truncate leading-tight">{notif.title}</p>
-                              <p className="text-[11px] text-gray-500 mt-1 leading-relaxed font-medium">{notif.message}</p>
-                              <p className="text-[9px] text-gray-400 font-bold mt-1.5 uppercase tracking-wide">{timeAgo(notif.time)}</p>
-                            </div>
+                  {/* DROPDOWN NOTIFIKASI */}
+                  {showNotif && (
+                    <div className="absolute top-[48px] right-0 w-[300px] max-w-[85vw] bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden flex flex-col z-50 text-left">
+                      <div className="bg-gray-50 px-5 py-3.5 border-b border-gray-100 flex justify-between items-center">
+                        <h3 className="font-black text-[#3e2723] text-sm flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full bg-[#fff8e1] flex items-center justify-center">
+                            <i className="fa-solid fa-bell text-[#fbc02d] text-[9px]"></i>
                           </div>
-                        ))
-                      )}
+                          Notifikasi
+                        </h3>
+                        <button
+                          onClick={() => setShowNotif(false)}
+                          className="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
+                        >
+                          <i className="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                      </div>
+                      <div className="max-h-[50vh] overflow-y-auto hide-scrollbar flex flex-col bg-white">
+                        {notifications.length === 0 ? (
+                          <div className="py-10 text-center flex flex-col items-center">
+                            <i className="fa-regular fa-bell-slash text-4xl text-gray-200 mb-3"></i>
+                            <p className="text-xs text-gray-400 font-bold">Belum ada notifikasi.</p>
+                          </div>
+                        ) : (
+                          notifications.map((notif) => (
+                            <div key={notif.id} className="px-5 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors flex gap-3 items-start text-left">
+                              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm
+                                ${notif.type === 'success' ? 'bg-green-100 text-green-500' :
+                                  notif.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-600'}`}>
+                                <i className={`fa-solid ${notif.type === 'success' ? 'fa-check' : notif.type === 'error' ? 'fa-triangle-exclamation' : 'fa-clock'}`}></i>
+                              </div>
+                              <div className="flex-1 min-w-0 text-left">
+                                <p className="text-xs font-black text-[#3e2723] truncate leading-tight">{notif.title}</p>
+                                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed font-medium">{notif.message}</p>
+                                <p className="text-[9px] text-gray-400 font-bold mt-1.5 uppercase tracking-wide">{timeAgo(notif.time)}</p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* ══════════════════════════════════════════
-              KONTEN SCROLL — "masuk ke dalam" amplop.
-              Latar putih dengan rounded-top yang
-              menghilang saat scroll menyentuh header.
-          ══════════════════════════════════════════ */}
-          <div
-            ref={scrollRef}
-            className={`flex-1 overflow-y-auto no-scrollbar bg-gray-50 relative z-10 scroll-wrapper${scrolled ? ' scrolled' : ''}`}
-          >
-            {/* Padding top untuk memberi ruang visual sebelum konten pertama */}
-            <div className="px-5 pt-6 pb-24">
+            {/* KONTEN AREA (Scrollable mandiri di bawah Header) */}
+            <div className="flex-1 overflow-y-auto pb-24 pt-4 px-6 hide-scrollbar">
+              
+              {/* Status Absen Card */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300"></div>
+                <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider mb-1 text-left">Status Hari Ini</p>
+                <p className="text-[#3e2723] font-bold text-sm mb-5 bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-left">{statusAbsen}</p>
 
-              {/* CARD ABSEN */}
-              <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-5 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#fbc02d] to-yellow-300 rounded-t-3xl"></div>
-                <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider mt-1 mb-1">Status Hari Ini</p>
-                <p className="text-[#3e2723] font-bold text-sm mb-4 bg-gray-50 p-2.5 rounded-xl border border-gray-100 inline-block w-full">{statusAbsen}</p>
                 <button
                   onClick={() => navigate(`/absen?mode=${btnConfig.mode}&auto=true`)}
                   className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg ${btnConfig.className}`}
@@ -547,10 +513,9 @@ const Home = () => {
                 </button>
               </div>
 
-              {/* MENU LAPORAN */}
-              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide">Menu Laporan</h3>
-              <div className="flex flex-col gap-3 mb-7">
-                <Link to="/izin" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50 group">
+              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide text-left">Menu Laporan</h3>
+              <div className="flex flex-col gap-3 mb-8 text-left">
+                <Link to="/izin" className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm active:scale-95 transition-all hover:border-[#fbc02d]/50 group text-left">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-[#fff8e1] rounded-full flex items-center justify-center text-[#fbc02d] text-xl shrink-0 group-hover:bg-[#fbc02d] group-hover:text-[#3e2723] transition-colors">
                       <i className="fa-solid fa-envelope-open-text"></i>
@@ -565,7 +530,7 @@ const Home = () => {
                   </div>
                 </Link>
 
-                <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-blue-400/50 group">
+                <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm active:scale-95 transition-all hover:border-blue-400/50 group text-left">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-xl shrink-0 group-hover:bg-blue-500 group-hover:text-white transition-colors">
                       <i className="fa-solid fa-calendar-minus"></i>
@@ -580,7 +545,7 @@ const Home = () => {
                   </div>
                 </Link>
 
-                <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#3e2723]/50 group">
+                <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm active:scale-95 transition-all hover:border-[#3e2723]/50 group text-left">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 text-xl shrink-0 group-hover:bg-[#3e2723] group-hover:text-[#fbc02d] transition-colors">
                       <i className="fa-solid fa-clipboard-list"></i>
@@ -596,7 +561,7 @@ const Home = () => {
                 </Link>
 
                 {outlet && (
-                  <Link to="/shift" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-purple-400/50 group">
+                  <Link to="/shift" className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm active:scale-95 transition-all hover:border-purple-400/50 group text-left">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center text-purple-500 text-xl shrink-0 group-hover:bg-purple-500 group-hover:text-white transition-colors">
                         <i className="fa-solid fa-calendar-days"></i>
@@ -614,18 +579,18 @@ const Home = () => {
               </div>
 
               {/* BUKU PANDUAN */}
-              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide flex items-center gap-2">
+              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide flex items-center gap-2 text-left">
                 <i className="fa-solid fa-book-open text-[#fbc02d]"></i> Buku Panduan
               </h3>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 pb-10">
                 {listBukuPanduan.map(({ id, title, content }) => (
                   <div key={id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                    <button onClick={() => togglePanduan(id)} className="w-full px-4 py-3 flex justify-between items-center bg-gray-50/50">
-                      <span className="font-bold text-[#3e2723] text-sm text-left">{title}</span>
+                    <button onClick={() => togglePanduan(id)} className="w-full px-4 py-3.5 flex justify-between items-center bg-gray-50/50 text-left">
+                      <span className="font-bold text-[#3e2723] text-sm">{title}</span>
                       <i className={`fa-solid fa-chevron-down text-gray-400 transition-transform ${bukaPanduan === id ? 'rotate-180' : ''}`}></i>
                     </button>
                     {bukaPanduan === id && (
-                      <div className="px-4 py-3 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white">
+                      <div className="px-5 py-4 text-xs text-gray-600 border-t border-gray-100 leading-relaxed bg-white text-left">
                         {content}
                       </div>
                     )}
@@ -634,11 +599,11 @@ const Home = () => {
               </div>
 
             </div>
+
+            <BottomNav />
+
           </div>
-
-          <BottomNav />
         </div>
-
       </div>
     </div>
   );
