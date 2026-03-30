@@ -127,8 +127,23 @@ const Home = () => {
       return;
     }
 
-    ambilStatusHariIni(parsedUser.employee_id, parsedUser);
-    fetchNotifications(parsedUser.employee_id);
+    // Tampilkan status cache dulu agar UI tidak kosong saat loading
+    const cachedStatus = localStorage.getItem('ropi_status_absen');
+    if (cachedStatus) {
+      setStatusAbsen(cachedStatus);
+      setBtnConfig({
+        text: 'Memperbarui...',
+        icon: 'fa-spinner fa-spin',
+        className: 'bg-gray-200 text-gray-500',
+        mode: '',
+      });
+    }
+
+    // Semua fetch paralel
+    Promise.all([
+      ambilStatusHariIni(parsedUser.employee_id, parsedUser),
+      fetchNotifications(parsedUser.employee_id),
+    ]).catch(() => {});
   }, [navigate]);
 
   useEffect(() => {
@@ -143,7 +158,7 @@ const Home = () => {
 
   const fetchNotifications = async (employeeId: string) => {
     try {
-      const res = await fetch(`${BACKEND}/api/notifications?employee_id=${encodeURIComponent(employeeId)}&_t=${Date.now()}`);
+      const res = await fetch(`${BACKEND}/api/notifications?employee_id=${encodeURIComponent(employeeId)}`);
       const data = await res.json();
 
       if (data.success && data.data) {

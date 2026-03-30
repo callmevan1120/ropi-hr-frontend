@@ -57,6 +57,24 @@ const Shift = () => {
   const [toDate, setToDate]             = useState(todayStr);
 
   // ── Load data awal ──────────────────────────────────────────────
+  const SESSION_SHIFTS_KEY   = 'ropi_cache_shifts_raw';
+  const SESSION_HR_KEY       = 'ropi_cache_hr_users';
+  const CACHE_MAX_AGE_MS     = 5 * 60 * 1000;
+
+  const readCache = (key: string): any | null => {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const { ts, data } = JSON.parse(raw);
+      if (Date.now() - ts > CACHE_MAX_AGE_MS) { sessionStorage.removeItem(key); return null; }
+      return data;
+    } catch { return null; }
+  };
+
+  const writeCache = (key: string, data: any) => {
+    try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
+  };
+
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) { navigate('/'); return; }
@@ -69,28 +87,42 @@ const Shift = () => {
 
     const init = async () => {
       try {
-        // Shift list (outlet only, tapi tetap fetch untuk data)
-        const resShifts = await fetch(`${BACKEND}/api/attendance/shifts`);
-        const dataShifts = await resShifts.json();
-        if (dataShifts.success && dataShifts.data) {
+        const isOutletUser = isKaryawanOutlet(u.branch);
+
+        // Cek cache dulu untuk data statis
+        const cachedShifts  = readCache(SESSION_SHIFTS_KEY);
+        const cachedHrUsers = readCache(SESSION_HR_KEY);
+
+        const fetches: Promise<any>[] = [
+          cachedShifts  ? Promise.resolve(cachedShifts)  : fetch(`${BACKEND}/api/attendance/shifts`).then(r => r.json()),
+          cachedHrUsers ? Promise.resolve(cachedHrUsers) : fetch(`${BACKEND}/api/attendance/hr-users`).then(r => r.json()),
+        ];
+        if (isOutletUser) {
+          fetches.push(
+            fetch(`${BACKEND}/api/attendance/shift-history?employee_id=${encodeURIComponent(u.employee_id)}`).then(r => r.json()),
+          );
+        }
+
+        const [dataShifts, dataHr, dataHistory] = await Promise.all(fetches);
+
+        if (dataShifts?.success && dataShifts.data) {
+          if (!cachedShifts) writeCache(SESSION_SHIFTS_KEY, dataShifts);
           const outlet = dataShifts.data.filter(
             (s: any) => s.name.includes('Shift') || s.name.includes('Middle'),
           );
           setShiftList(outlet.sort((a: any, b: any) => a.name.localeCompare(b.name)));
         }
 
-        // Approver list
-        const resHr = await fetch(`${BACKEND}/api/attendance/hr-users`);
-        const dataHr = await resHr.json();
-        const list: string[] = dataHr.success && dataHr.data.length > 0
-          ? dataHr.data
+        const hrData = dataHr?.success !== undefined ? dataHr : cachedHrUsers;
+        if (hrData && !cachedHrUsers) writeCache(SESSION_HR_KEY, dataHr);
+        const list: string[] = hrData?.success && hrData.data?.length > 0
+          ? hrData.data
           : ['hrdrotiropi@gmail.com'];
         setApproverList(list);
         setSelectedApprover(list[0]);
 
-        // Riwayat shift (hanya kalau outlet)
-        if (isKaryawanOutlet(u.branch)) {
-          await fetchHistory(u.employee_id);
+        if (isOutletUser && dataHistory?.success) {
+          setHistory(dataHistory.data);
         }
       } catch {
         setApproverList(['hrdrotiropi@gmail.com']);

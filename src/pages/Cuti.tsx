@@ -50,7 +50,8 @@ const Cuti = () => {
     if (!userData) { navigate('/'); return; }
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
-    
+
+    // Semua fetch paralel dari parsedUser langsung, tidak tunggu setUser re-render
     fetchLeaveTypes();
     fetchDataCuti(parsedUser.employee_id);
   }, [navigate]);
@@ -73,8 +74,17 @@ const Cuti = () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const resBalance = await fetch(`${BACKEND}/api/leaves?employee_id=${encodeURIComponent(employeeId)}`);
-      const dataBalance = await resBalance.json();
+      // Jalankan balance dan history secara PARALEL
+      const [resBalance, resHistory] = await Promise.all([
+        fetch(`${BACKEND}/api/leaves?employee_id=${encodeURIComponent(employeeId)}`),
+        fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(employeeId)}`),
+      ]);
+
+      const [dataBalance, dataHistory] = await Promise.all([
+        resBalance.json(),
+        resHistory.json(),
+      ]);
+
       if (dataBalance.success) {
         setLeaveBalance(dataBalance.balance !== undefined ? Number(dataBalance.balance) : 0);
         setLeaveTotal(dataBalance.total !== undefined ? Number(dataBalance.total) : 0);
@@ -83,9 +93,6 @@ const Cuti = () => {
         setLeaveTotal(0);
       }
 
-      const resHistory = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(employeeId)}`);
-      const dataHistory = await resHistory.json();
-      
       if (dataHistory.success) {
         const cutiOnly = dataHistory.data.filter((item: LeaveHistory) => isCuti(item.leave_type));
         setLeaveHistory(cutiOnly);

@@ -54,8 +54,12 @@ const Izin = () => {
     if (!userData) { navigate('/'); return; }
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
-    fetchLeaveTypes();
-    fetchLeaveHistory(parsedUser.employee_id);
+
+    // Jalankan paralel, tidak tunggu setUser re-render
+    Promise.all([
+      fetchLeaveTypes(),
+      fetchLeaveHistory(parsedUser.employee_id),
+    ]).catch(() => {});
   }, [navigate]);
 
   const fetchLeaveTypes = async () => {
