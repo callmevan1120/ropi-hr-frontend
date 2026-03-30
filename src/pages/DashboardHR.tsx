@@ -274,242 +274,215 @@ const DashboardHR = () => {
     }
 
     try {
-      const res = await fetch(`${BACKEND}/api/attendance/all-history?from=${from}&to=${to}&_t=${Date.now()}`);
+      // ── 1 request ke backend, sudah berisi absensi + cuti sekaligus ──
+      const res = await fetch(`${BACKEND}/api/attendance/all-history?from=${from}&to=${to}`);
       const result = await res.json();
-      if (result.success && result.data) {
-        const grouped: Record<string, EmployeeSummary> = {};
-        const locs = lokasiKantorRef.current;
 
-        result.data.forEach((item: any) => {
-          const { lat: normLat, lng: normLng } = getLatLng(item);
-          if (normLat && normLng) { item.latitude = normLat; item.longitude = normLng; }
-
-          if (!grouped[item.employee]) {
-            let branchAsumsi = 'Outlet';
-            
-            if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
-            else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
-            else if (item.shift) {
-              const shiftLower = item.shift.toLowerCase().replace(/\s+/g, ' ').trim();
-              const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase()));
-              if (matchLoc) branchAsumsi = matchLoc.nama;
-            }
-
-            if (branchAsumsi === 'Outlet' && item.latitude && item.longitude) {
-              const lat = Number(item.latitude);
-              const lng = Number(item.longitude);
-              if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-                let min = Infinity;
-                for (const l of locs) {
-                  if (l.lat === 0 && l.lng === 0) continue;
-                  const d = hitungJarak(lat, lng, l.lat, l.lng);
-                  if (d < 2000 && d < min) { min = d; branchAsumsi = l.nama; }
-                }
-              }
-            }
-
-            grouped[item.employee] = {
-              employee: item.employee,
-              employee_name: item.employee_name || item.employee,
-              totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 0,
-              branch: branchAsumsi, 
-              logsByDate: {}
-            };
-          }
-
-          const empRef = grouped[item.employee];
-          if (item.shift?.toLowerCase().includes('klaten')) empRef.branch = 'PH Klaten';
-          else if (item.shift?.toLowerCase().includes('jakarta')) empRef.branch = 'Jakarta';
-
-          const timeStr = item.time || item.attendance_date || '';
-          if (!timeStr) return; 
-
-          const dateKey = timeStr.substring(0, 10);
-          if (!grouped[item.employee].logsByDate[dateKey])
-            grouped[item.employee].logsByDate[dateKey] = { in: null, out: null };
-
-          if (item.log_type === 'IN') {
-            const curr = grouped[item.employee].logsByDate[dateKey].in;
-            if (!curr) {
-              grouped[item.employee].logsByDate[dateKey].in = item;
-            } else {
-              const currHasPic = !!curr.custom_foto_absen;
-              const itemHasPic = !!item.custom_foto_absen;
-              const itemTime = item.time || item.attendance_date;
-              const currTime = curr.time || curr.attendance_date;
-              if (!currHasPic && itemHasPic) {
-                grouped[item.employee].logsByDate[dateKey].in = item;
-              } else if (currHasPic === itemHasPic && itemTime && currTime && itemTime < currTime) {
-                grouped[item.employee].logsByDate[dateKey].in = item;
-              }
-            }
-          } else {
-            const curr = grouped[item.employee].logsByDate[dateKey].out;
-            if (!curr) {
-              grouped[item.employee].logsByDate[dateKey].out = item;
-            } else {
-              const currHasPic = !!curr.custom_foto_absen;
-              const itemHasPic = !!item.custom_foto_absen;
-              const itemTime = item.time || item.attendance_date;
-              const currTime = curr.time || curr.attendance_date;
-              if (!currHasPic && itemHasPic) {
-                grouped[item.employee].logsByDate[dateKey].out = item;
-              } else if (currHasPic === itemHasPic && itemTime && currTime && itemTime > currTime) {
-                grouped[item.employee].logsByDate[dateKey].out = item;
-              }
-            }
-          }
-        });
-
-        Object.values(grouped).forEach(emp => {
-          let hadir = 0, telat = 0, cepat = 0;
-          Object.entries(emp.logsByDate).forEach(([date, log]) => {
-            if (log.in || log.out) hadir++; 
-            const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts, ramadhanDates);
-            if (log.in) {
-              const timeStrIn = log.in.time || log.in.attendance_date;
-              const inJam = formatJamLokal(timeStrIn);
-              if (inJam !== '-' && toMenit(inJam) > toMenit(shiftInfo.in)) telat++;
-            }
-            if (log.out) {
-              const timeStrOut = log.out.time || log.out.attendance_date;
-              const outJam = formatJamLokal(timeStrOut);
-              if (outJam !== '-' && toMenit(shiftInfo.out) > toMenit(outJam)) cepat++;
-            }
-          });
-          emp.totalHadir = hadir; emp.totalTelat = telat; emp.totalCepat = cepat;
-        });
-
-        const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
-        setDataAbsen(arrData);
-
-        if (filterMode === 'bulanan' || filterMode === 'periode') {
-          const leaveResults = await Promise.allSettled(
-            arrData.map(emp =>
-              fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}&_t=${Date.now()}`)
-                .then(r => r.json())
-                .then(d => ({ employee: emp.employee, data: d.success ? d.data : [] }))
-                .catch(() => ({ employee: emp.employee, data: [] }))
-            )
-          );
-          const newLeaveMap: Record<string, number> = {};
-          const newLeaveRawMap: Record<string, any[]> = {};
-          
-          let startDateObj: Date, endDateObj: Date;
-          if (filterMode === 'bulanan') {
-            const year = parseInt(bulanAktif.split('-')[0]);
-            const month = parseInt(bulanAktif.split('-')[1]) - 1;
-            startDateObj = new Date(year, month, 1);
-            endDateObj = new Date(year, month + 1, 0); 
-          } else {
-            startDateObj = parseLokalDate(periodeMulai);
-            endDateObj = parseLokalDate(periodeAkhir);
-          }
-
-          leaveResults.forEach(result => {
-            if (result.status === 'fulfilled') {
-              const { employee, data } = result.value;
-              let totalIzin = 0;
-              (data as any[]).filter(r => r.status?.toLowerCase() === 'approved').forEach((r: any) => {
-                const from = parseLokalDate(r.from_date);
-                const to = parseLokalDate(r.to_date);
-                const start = from < startDateObj ? startDateObj : from;
-                const end = to > endDateObj ? endDateObj : to;
-                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                  if (d.getDay() !== 0 && d.getDay() !== 6) totalIzin++;
-                }
-              });
-              newLeaveMap[employee] = totalIzin;
-              newLeaveRawMap[employee] = data as any[];
-            }
-          });
-          setLeaveMap(newLeaveMap);
-          setLeaveRawMap(newLeaveRawMap);
-        } else {
-          const bulanRef = tanggalAktif.substring(0, 7); 
-          const [yr, mo] = bulanRef.split('-').map(Number);
-          const lastDay = new Date(yr, mo, 0).getDate();
-          const fromBulan = `${bulanRef}-01`;
-          const toBulan = `${bulanRef}-${lastDay}`;
-
-          let allEmployeeIds: { employee: string; employee_name: string; branch: string }[] = [...arrData];
-          try {
-            const resBulan = await fetch(`${BACKEND}/api/attendance/all-history?from=${fromBulan}&to=${toBulan}&_t=${Date.now()}`);
-            const dataBulan = await resBulan.json();
-            if (dataBulan.success && dataBulan.data) {
-              const empMap: Record<string, {name: string, branch: string}> = {};
-              const locs = lokasiKantorRef.current;
-              
-              dataBulan.data.forEach((item: any) => {
-                if (!empMap[item.employee]) {
-                  let branchAsumsi = 'Outlet';
-                  if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
-                  else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
-                  else if (item.shift) {
-                    const shiftLower = item.shift.toLowerCase().replace(/\s+/g, ' ').trim();
-                    const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase()));
-                    if (matchLoc) branchAsumsi = matchLoc.nama;
-                  }
-                  empMap[item.employee] = { name: item.employee_name || item.employee, branch: branchAsumsi };
-                }
-              });
-              Object.entries(empMap).forEach(([id, info]) => {
-                if (!allEmployeeIds.find(e => e.employee === id)) {
-                  allEmployeeIds.push({ employee: id, employee_name: info.name, branch: info.branch });
-                }
-              });
-            }
-          } catch { }
-
-          const leaveResults = await Promise.allSettled(
-            allEmployeeIds.map(emp =>
-              fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${encodeURIComponent(emp.employee)}&_t=${Date.now()}`)
-                .then(r => r.json())
-                .then(d => ({ employee: emp.employee, employee_name: emp.employee_name, branch: emp.branch, data: d.success ? d.data : [] }))
-                .catch(() => ({ employee: emp.employee, employee_name: emp.employee_name, branch: emp.branch, data: [] }))
-            )
-          );
-
-          const newLeaveMap: Record<string, number> = {};
-          const newLeaveRawMap: Record<string, any[]> = {};
-          const extraEmployees: EmployeeSummary[] = [];
-
-          leaveResults.forEach(result => {
-            if (result.status === 'fulfilled') {
-              const { employee, employee_name, branch, data } = result.value;
-              const izinHariIni = (data as any[]).filter(r => r.status?.toLowerCase() === 'approved').find((r: any) => {
-                const from = parseLokalDate(r.from_date);
-                const to = parseLokalDate(r.to_date);
-                const tgl = parseLokalDate(tanggalAktif);
-                return tgl >= from && tgl <= to;
-              });
-              newLeaveMap[employee] = izinHariIni ? 1 : 0;
-              newLeaveRawMap[employee] = data as any[];
-
-              if (izinHariIni && !arrData.find(e => e.employee === employee)) {
-                extraEmployees.push({
-                  employee,
-                  employee_name,
-                  branch,
-                  totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 1,
-                  logsByDate: {},
-                });
-              }
-            }
-          });
-
-          if (extraEmployees.length > 0) {
-            const merged = [...arrData, ...extraEmployees].sort((a, b) => a.employee_name.localeCompare(b.employee_name));
-            setDataAbsen(merged);
-          }
-
-          setLeaveMap(newLeaveMap);
-          setLeaveRawMap(newLeaveRawMap);
-        }
-      } else {
+      if (!result.success || !result.data) {
         setDataAbsen([]);
+        setIsLoading(false);
+        return;
       }
-    } catch (err) { console.error('Gagal tarik data HR'); }
+
+      // Backend baru mengembalikan { absensi: [], cuti: [] }
+      const rawAbsensi: any[] = result.data.absensi ?? [];
+      const rawCuti: any[]    = result.data.cuti    ?? [];
+
+      const locs = lokasiKantorRef.current;
+
+      // ── 2. Proses data absensi → grouped per employee ──
+      const grouped: Record<string, EmployeeSummary> = {};
+
+      rawAbsensi.forEach((item: any) => {
+        const { lat: normLat, lng: normLng } = getLatLng(item);
+        if (normLat && normLng) { item.latitude = normLat; item.longitude = normLng; }
+
+        if (!grouped[item.employee]) {
+          let branchAsumsi = 'Outlet';
+          if (item.shift?.toLowerCase().includes('klaten')) branchAsumsi = 'PH Klaten';
+          else if (item.shift?.toLowerCase().includes('jakarta')) branchAsumsi = 'Jakarta';
+          else if (item.shift) {
+            const shiftLower = item.shift.toLowerCase().replace(/\s+/g, ' ').trim();
+            const matchLoc = locs.find(l => shiftLower.includes(l.nama.toLowerCase()));
+            if (matchLoc) branchAsumsi = matchLoc.nama;
+          }
+          if (branchAsumsi === 'Outlet' && item.latitude && item.longitude) {
+            const lat = Number(item.latitude);
+            const lng = Number(item.longitude);
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+              let min = Infinity;
+              for (const l of locs) {
+                if (l.lat === 0 && l.lng === 0) continue;
+                const d = hitungJarak(lat, lng, l.lat, l.lng);
+                if (d < 2000 && d < min) { min = d; branchAsumsi = l.nama; }
+              }
+            }
+          }
+          grouped[item.employee] = {
+            employee: item.employee,
+            employee_name: item.employee_name || item.employee,
+            totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 0,
+            branch: branchAsumsi,
+            logsByDate: {}
+          };
+        }
+
+        const empRef = grouped[item.employee];
+        if (item.shift?.toLowerCase().includes('klaten')) empRef.branch = 'PH Klaten';
+        else if (item.shift?.toLowerCase().includes('jakarta')) empRef.branch = 'Jakarta';
+
+        const timeStr = item.time || item.attendance_date || '';
+        if (!timeStr) return;
+
+        const dateKey = timeStr.substring(0, 10);
+        if (!empRef.logsByDate[dateKey]) empRef.logsByDate[dateKey] = { in: null, out: null };
+
+        if (item.log_type === 'IN') {
+          const curr = empRef.logsByDate[dateKey].in;
+          if (!curr) {
+            empRef.logsByDate[dateKey].in = item;
+          } else {
+            const currHasPic = !!curr.custom_foto_absen;
+            const itemHasPic = !!item.custom_foto_absen;
+            const itemTime = item.time || item.attendance_date;
+            const currTime = curr.time || curr.attendance_date;
+            if (!currHasPic && itemHasPic) {
+              empRef.logsByDate[dateKey].in = item;
+            } else if (currHasPic === itemHasPic && itemTime && currTime && itemTime < currTime) {
+              empRef.logsByDate[dateKey].in = item;
+            }
+          }
+        } else {
+          const curr = empRef.logsByDate[dateKey].out;
+          if (!curr) {
+            empRef.logsByDate[dateKey].out = item;
+          } else {
+            const currHasPic = !!curr.custom_foto_absen;
+            const itemHasPic = !!item.custom_foto_absen;
+            const itemTime = item.time || item.attendance_date;
+            const currTime = curr.time || curr.attendance_date;
+            if (!currHasPic && itemHasPic) {
+              empRef.logsByDate[dateKey].out = item;
+            } else if (currHasPic === itemHasPic && itemTime && currTime && itemTime > currTime) {
+              empRef.logsByDate[dateKey].out = item;
+            }
+          }
+        }
+      });
+
+      Object.values(grouped).forEach(emp => {
+        let hadir = 0, telat = 0, cepat = 0;
+        Object.entries(emp.logsByDate).forEach(([date, log]) => {
+          if (log.in || log.out) hadir++;
+          const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts, ramadhanDates);
+          if (log.in) {
+            const timeStrIn = log.in.time || log.in.attendance_date;
+            const inJam = formatJamLokal(timeStrIn);
+            if (inJam !== '-' && toMenit(inJam) > toMenit(shiftInfo.in)) telat++;
+          }
+          if (log.out) {
+            const timeStrOut = log.out.time || log.out.attendance_date;
+            const outJam = formatJamLokal(timeStrOut);
+            if (outJam !== '-' && toMenit(shiftInfo.out) > toMenit(outJam)) cepat++;
+          }
+        });
+        emp.totalHadir = hadir; emp.totalTelat = telat; emp.totalCepat = cepat;
+      });
+
+      // ── 3. Proses data cuti dari response yang sama (tidak ada extra fetch!) ──
+      // Bangun leaveRawMap dan leaveMap langsung dari rawCuti
+      const newLeaveRawMap: Record<string, any[]> = {};
+      rawCuti.forEach((leave: any) => {
+        if (!newLeaveRawMap[leave.employee]) newLeaveRawMap[leave.employee] = [];
+        newLeaveRawMap[leave.employee].push(leave);
+      });
+
+      const newLeaveMap: Record<string, number> = {};
+
+      let startDateObj: Date, endDateObj: Date;
+      if (filterMode === 'bulanan') {
+        const [yr, mo] = bulanAktif.split('-').map(Number);
+        startDateObj = new Date(yr, mo - 1, 1);
+        endDateObj   = new Date(yr, mo, 0);
+      } else if (filterMode === 'periode') {
+        startDateObj = parseLokalDate(periodeMulai);
+        endDateObj   = parseLokalDate(periodeAkhir);
+      } else {
+        // Harian: cukup cek hari ini
+        startDateObj = parseLokalDate(tanggalAktif);
+        endDateObj   = parseLokalDate(tanggalAktif);
+      }
+
+      // Kumpulkan semua employee yang punya izin (termasuk yang tidak absen)
+      const extraEmployees: EmployeeSummary[] = [];
+      const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
+
+      Object.entries(newLeaveRawMap).forEach(([empId, leaves]) => {
+        const approvedLeaves = leaves.filter(r => r.status?.toLowerCase() === 'approved');
+
+        if (filterMode === 'harian') {
+          const izinHariIni = approvedLeaves.find((r: any) => {
+            const f = parseLokalDate(r.from_date);
+            const t = parseLokalDate(r.to_date);
+            return startDateObj >= f && startDateObj <= t;
+          });
+          newLeaveMap[empId] = izinHariIni ? 1 : 0;
+
+          // Tambahkan sebagai row extra jika employee tidak punya data absen hari ini
+          if (izinHariIni && !grouped[empId]) {
+            const leaveData = newLeaveRawMap[empId][0];
+            extraEmployees.push({
+              employee: empId,
+              employee_name: leaveData.employee_name || empId,
+              branch: 'Outlet',
+              totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 1,
+              logsByDate: {},
+            });
+          }
+        } else {
+          // Bulanan / periode: hitung total hari izin dalam range
+          let totalIzin = 0;
+          approvedLeaves.forEach((r: any) => {
+            const f = parseLokalDate(r.from_date);
+            const t = parseLokalDate(r.to_date);
+            const start = f < startDateObj ? startDateObj : f;
+            const end   = t > endDateObj   ? endDateObj   : t;
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+              if (d.getDay() !== 0 && d.getDay() !== 6) totalIzin++;
+            }
+          });
+          newLeaveMap[empId] = totalIzin;
+
+          if (!grouped[empId] && totalIzin > 0) {
+            const leaveData = newLeaveRawMap[empId][0];
+            extraEmployees.push({
+              employee: empId,
+              employee_name: leaveData.employee_name || empId,
+              branch: 'Outlet',
+              totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin,
+              logsByDate: {},
+            });
+          }
+        }
+      });
+
+      // Update totalIzin pada employee yang sudah ada di arrData
+      arrData.forEach(emp => {
+        emp.totalIzin = newLeaveMap[emp.employee] ?? 0;
+      });
+
+      const merged = extraEmployees.length > 0
+        ? [...arrData, ...extraEmployees].sort((a, b) => a.employee_name.localeCompare(b.employee_name))
+        : arrData;
+
+      setDataAbsen(merged);
+      setLeaveMap(newLeaveMap);
+      setLeaveRawMap(newLeaveRawMap);
+
+    } catch (err) {
+      console.error('Gagal tarik data HR', err);
+      setDataAbsen([]);
+    }
     setIsLoading(false);
   };
 
