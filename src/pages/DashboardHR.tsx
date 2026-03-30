@@ -153,6 +153,7 @@ const getLatLng = (record: any): { lat: string | null; lng: string | null } => {
 const DashboardHR = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
+  const ERPNEXT_URL = 'http://103.187.147.240';
 
   const [dataAbsen, setDataAbsen] = useState<EmployeeSummary[]>([]);
   const [leaveMap, setLeaveMap] = useState<Record<string, number>>({});
@@ -714,7 +715,8 @@ const DashboardHR = () => {
             return tgl >= from && tgl <= to;
           });
 
-          let statusAbsen: number | string = '';
+          // Menggunakan let dan assignment agar tidak error TypeScript
+          let statusAbsen: string | number = '';
 
           if (log && (log.in || log.out)) {
             let isTelat = false;
@@ -1478,7 +1480,7 @@ const DashboardHR = () => {
                                       });
                                       if (specificLeave && getAttachmentIzin(specificLeave)) {
                                           return (
-                                              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full overflow-hidden">
+                                              <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full overflow-hidden min-w-[200px]">
                                                   <p className="text-[10px] font-black text-[#3e2723] uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Lampiran Bukti Izin</p>
                                                   <button onClick={() => setPreviewUrl(prosesUrlFoto(getAttachmentIzin(specificLeave)))}
                                                       className="w-24 h-24 rounded-xl overflow-hidden border border-gray-200 shadow-sm relative group block text-left mt-2">
