@@ -684,22 +684,34 @@ const DashboardHR = () => {
 
         for (const dateStr of dateRange) {
           const log = emp.logsByDate[dateStr];
-          let isTelat = 0;
+          let statusAbsen: number | string = '';
+
+          const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+          const izinForDate = rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').find((r: any) => {
+            const from = parseLokalDate(r.from_date);
+            const to = parseLokalDate(r.to_date);
+            const tgl = parseLokalDate(dateStr);
+            return tgl >= from && tgl <= to;
+          });
 
           if (log && log.in) {
             const inJam = formatJamLokal(log.in.time);
             const shiftInfo = getJamShift(log.in.shift, dateStr, masterShifts, ramadhanDates);
             if (toMenit(inJam) > toMenit(shiftInfo.in)) {
-              isTelat = 1;
+              statusAbsen = 1; 
               totalTelatBulanIni++;
+            } else {
+              statusAbsen = 0; 
             }
+          } else if (izinForDate) {
+            statusAbsen = '-'; 
           }
 
           const dayLabel = filterMode === 'bulanan' 
             ? `Tgl ${parseInt(dateStr.split('-')[2])}`
             : `${dateStr.substring(8, 10)}/${dateStr.substring(5, 7)}`;
           
-          row[dayLabel] = isTelat;
+          row[dayLabel] = statusAbsen;
         }
 
         row['Total Telat'] = totalTelatBulanIni;
@@ -710,9 +722,10 @@ const DashboardHR = () => {
 
       const wsRingkasan = XLSX.utils.aoa_to_sheet([
         [filterMode === 'bulanan' ? `Ringkasan Absensi - ${bulanAktif}` : `Ringkasan Absensi - ${periodeMulai} s/d ${periodeAkhir}`],
+        ['Keterangan Angka:', '0 = Hadir', '1 = Terlambat', '- = Izin / Cuti'],
         [] 
       ]);
-      XLSX.utils.sheet_add_json(wsRingkasan, ringkasan, { origin: 'A3', skipHeader: false } as any);
+      XLSX.utils.sheet_add_json(wsRingkasan, ringkasan, { origin: 'A4', skipHeader: false } as any);
 
       const ringkasanColWidths = [{ wch: 18 }, { wch: 30 }, { wch: 20 }];
       for (let d = 0; d < dateRange.length; d++) ringkasanColWidths.push({ wch: 7 }); 
