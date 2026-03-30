@@ -80,12 +80,20 @@ const Izin = () => {
     }
   };
 
+  // PERBAIKAN: Fungsi ini sekarang akan MEMFILTER riwayat Cuti agar tidak bocor ke Izin
   const fetchLeaveHistory = async (employeeId: string) => {
     setIsLoadingHistory(true);
     try {
       const res = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}`);
       const data = await res.json();
-      if (data.success) setLeaveHistory(data.data);
+      if (data.success) {
+        // Saring agar HANYA menampilkan tipe izin (bukan Cuti Tahunan)
+        const izinOnly = data.data.filter((item: LeaveRecord) => {
+          const lower = item.leave_type.toLowerCase();
+          return !lower.includes('cuti') && !lower.includes('tahunan');
+        });
+        setLeaveHistory(izinOnly);
+      }
     } catch (err) {
       console.error('Gagal mengambil riwayat izin', err);
     } finally {
