@@ -350,6 +350,9 @@ const Absen = () => {
     inData?: RiwayatAbsen; outData?: RiwayatAbsen;
   }>({ show: false, tgl: '' });
 
+  // ── STATE POPUP NOTIFIKASI ──
+  const [toastMsg, setToastMsg] = useState<{ show: boolean; type: 'success' | 'late'; title: string; desc: string } | null>(null);
+
   const videoRef           = useRef<HTMLVideoElement>(null);
   const streamRef          = useRef<MediaStream | null>(null);
   const intervalDeteksiRef = useRef<number | null>(null);
@@ -381,33 +384,20 @@ const Absen = () => {
     if (!userData) { navigate('/'); return; }
     const parsedUser: User = JSON.parse(userData);
     setUser(parsedUser);
-
-    const bln = new Date().getMonth();
-    const thn = new Date().getFullYear();
-
-    // ── Semua fetch jalan PARALEL — tidak menunggu setUser re-render ──
-    const fetches: Promise<any>[] = [
-      ambilLokasiKantor(parsedUser.branch),
-      ambilMasterShift(),
-      ambilRiwayatAbsen(parsedUser.employee_id, bln, thn),
-      ambilRiwayatIzin(parsedUser.employee_id, bln, thn),
-    ];
+    ambilLokasiKantor(parsedUser.branch);
+    ambilMasterShift();
 
     if (isKaryawanOutlet(parsedUser.branch)) {
-      fetches.push(ambilActiveShift(parsedUser.employee_id));
+      ambilActiveShift(parsedUser.employee_id);
     }
-
-    Promise.all(fetches).catch(() => {});
   }, [navigate]);
 
-  // Hanya di-trigger saat user ganti bulan/tahun (bukan saat mount pertama)
-  const isMounted = useRef(false);
   useEffect(() => {
-    if (!isMounted.current) { isMounted.current = true; return; }
-    if (!user) return;
-    ambilRiwayatAbsen(user.employee_id, bulanAktif, tahunAktif);
-    ambilRiwayatIzin(user.employee_id, bulanAktif, tahunAktif);
-  }, [bulanAktif, tahunAktif]);
+    if (user) {
+      ambilRiwayatAbsen();
+      ambilRiwayatIzin(user.employee_id);
+    }
+  }, [user, bulanAktif, tahunAktif]);
 
   useEffect(() => { setLihatSemua(false); }, [bulanAktif, tahunAktif]);
 
@@ -517,38 +507,18 @@ const Absen = () => {
     setCameraStep(4);
   };
 
-  // ─────────────────────────────────────────────
-  // CACHE HELPERS (sessionStorage, per-session)
-  // ─────────────────────────────────────────────
-  const SESSION_SHIFTS_KEY  = 'ropi_cache_shifts';
-  const SESSION_LOKASI_KEY  = 'ropi_cache_lokasi';
-  const CACHE_MAX_AGE_MS    = 5 * 60 * 1000; // 5 menit
-
-  const readCache = (key: string): any | null => {
-    try {
-      const raw = sessionStorage.getItem(key);
-      if (!raw) return null;
-      const { ts, data } = JSON.parse(raw);
-      if (Date.now() - ts > CACHE_MAX_AGE_MS) { sessionStorage.removeItem(key); return null; }
-      return data;
-    } catch { return null; }
-  };
-
-  const writeCache = (key: string, data: any) => {
-    try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
-  };
-
-  // ─────────────────────────────────────────────
-  // FETCH FUNCTIONS
-  // ─────────────────────────────────────────────
   const ambilActiveShift = async (empId: string) => {
     setShiftLoading(true);
     setShiftError(null);
     try {
-      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}`);
+      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}&_t=${Date.now()}`);
       const data = await res.json();
       if (data.success) {
-        setActiveShift({ shift_name: data.shift_name, start_time: data.start_time, end_time: data.end_time });
+        setActiveShift({
+          shift_name: data.shift_name,
+          start_time: data.start_time,
+          end_time: data.end_time
+        });
       } else {
         setShiftError(data.message || 'Belum ada Shift. Ajukan HRD.');
       }
@@ -560,11 +530,8 @@ const Absen = () => {
   };
 
   const ambilMasterShift = async () => {
-    // Cek cache sessionStorage dulu
-    const cached = readCache(SESSION_SHIFTS_KEY);
-    if (cached) { setMasterShifts(cached); return; }
     try {
-      const res  = await fetch(`${BACKEND}/api/attendance/shifts`);
+      const res  = await fetch(`${BACKEND}/api/attendance/shifts?_t=${Date.now()}`);
       const data = await res.json();
       if (data.success && data.data) {
         const tempMap: Record<string, { in: string; out: string }> = {};
@@ -574,49 +541,44 @@ const Absen = () => {
             out: s.end_time   ? s.end_time.substring(0, 5)   : '15:30',
           };
         });
-        writeCache(SESSION_SHIFTS_KEY, tempMap);
         setMasterShifts(tempMap);
       }
     } catch { console.error('Gagal menarik shift'); }
   };
 
   const ambilLokasiKantor = async (branch?: string) => {
-    const cacheKey = SESSION_LOKASI_KEY + (branch || '');
-    const cached   = readCache(cacheKey);
-    if (cached) { setLokasiKantor(cached); return; }
     try {
-      const url  = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}` : `${BACKEND}/api/locations`;
+      const url  = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}?_t=${Date.now()}` : `${BACKEND}/api/locations?_t=${Date.now()}`;
       const res  = await fetch(url);
       const data = await res.json();
-      if (data.success && data.locations?.length > 0) {
-        writeCache(cacheKey, data.locations);
-        setLokasiKantor(data.locations);
-      }
+      if (data.success && data.locations?.length > 0) setLokasiKantor(data.locations);
     } catch { console.warn('Pakai lokasi fallback'); }
   };
 
-  const ambilRiwayatAbsen = async (empId: string, bln: number, thn: number) => {
+  const ambilRiwayatAbsen = async () => {
+    if (!user) return;
     try {
-      const dari   = `${thn}-${String(bln + 1).padStart(2, '0')}-01`;
-      const akhir  = new Date(thn, bln + 1, 0);
-      const sampai = `${thn}-${String(bln + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
-      const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(empId)}&from=${dari}&to=${sampai}`);
+      const dari   = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
+      const akhir  = new Date(tahunAktif, bulanAktif + 1, 0);
+      const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
+      
+      const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}&_t=${Date.now()}`);
       const data   = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
       else setDataRiwayat([]);
     } catch { setDataRiwayat([]); }
   };
 
-  const ambilRiwayatIzin = async (employeeId: string, bln: number, thn: number) => {
+  const ambilRiwayatIzin = async (employeeId: string) => {
     try {
-      const res  = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}`);
+      const res  = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}&_t=${Date.now()}`);
       const data = await res.json();
       if (data.success && data.data) {
         const filtered = data.data.filter((item: LeaveRecord) => {
           const from       = parseLokalDate(item.from_date);
           const to         = parseLokalDate(item.to_date);
-          const bulanMulai = new Date(thn, bln, 1);
-          const bulanAkhir = new Date(thn, bln + 1, 0);
+          const bulanMulai = new Date(tahunAktif, bulanAktif, 1);
+          const bulanAkhir = new Date(tahunAktif, bulanAktif + 1, 0);
           return from <= bulanAkhir && to >= bulanMulai;
         });
         setLeaveRecords(filtered);
@@ -871,12 +833,59 @@ const Absen = () => {
       });
 
       if (res.ok) {
-        alert(`Absen ${modeAbsen} berhasil dikirim!`);
         tutupModal();
-        if (user) ambilRiwayatAbsen(user.employee_id, bulanAktif, tahunAktif);
+        
+        // --- LOGIKA POP-UP NOTIFIKASI TOAST ---
+        const nowUtc = new Date();
+        const wibTime = new Date(nowUtc.getTime() + 7 * 60 * 60 * 1000);
+        const yyyy = wibTime.getUTCFullYear();
+        const mm = String(wibTime.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(wibTime.getUTCDate()).padStart(2, '0');
+        const tglStr = `${yyyy}-${mm}-${dd}`; // Tanggal hari ini
+        
+        // Memastikan format jam selalu pakai titik dua (:) meski di setting HP pakai titik (.)
+        const jamSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(/\./g, ':');
+        
+        if (modeAbsen === 'MASUK') {
+           const shiftInfo = getJamShift(namaShiftKirim, tglStr, user.branch, user.role, masterShifts, activeShiftRef.current);
+           const selisih = toMenit(jamSekarang) - toMenit(shiftInfo.in);
+           
+           if (selisih > 0) {
+              // Cek apakah hari ini sudah dihitung telat sebelumnya (di array rekapTelat)
+              const isAlreadyCounted = dataRiwayat.some(r => r.log_type === 'IN' && (r.time?.includes(tglStr) || r.attendance_date?.includes(tglStr)));
+              const finalTelatCount = isAlreadyCounted ? rekapTelat : rekapTelat + 1;
+              
+              setToastMsg({
+                show: true,
+                type: 'late',
+                title: 'Waduh, Kamu Terlambat!',
+                desc: `Kamu masuk telat ${formatDurasi(selisih)} hari ini. (Total ${finalTelatCount}x telat bulan ini)`
+              });
+           } else {
+              setToastMsg({
+                show: true, type: 'success', title: 'Absen Masuk Berhasil', desc: 'Kamu datang tepat waktu. Semangat bekerja!'
+              });
+           }
+        } else {
+           setToastMsg({
+              show: true, type: 'success', title: 'Absen Keluar Berhasil', desc: 'Hati-hati di jalan pulang, selamat beristirahat!'
+           });
+        }
+        
+        // Toast akan hilang otomatis dalam 6 detik
+        setTimeout(() => setToastMsg(null), 6000);
+        
+        // Perbarui data riwayat di belakang layar
+        ambilRiwayatAbsen();
       } else {
         const errData = await res.json().catch(() => null);
-        alert(errData?.message || 'Absen gagal dikirim ke sistem.');
+        const errMsg = errData?.message || 'Absen gagal dikirim ke sistem.';
+        
+        if (errMsg.length > 100) {
+          alert('Terjadi kesalahan pada sistem. Silakan coba lagi atau lapor admin.\n\nDetail:\n' + errMsg.substring(0, 150) + '...');
+        } else {
+          alert(errMsg);
+        }
       }
     } catch { alert('Gagal konek ke server.'); }
 
@@ -919,8 +928,8 @@ const Absen = () => {
     }
   });
 
-  const rekapHadir = Object.keys(groupedRiwayat).length;
   let rekapTelat = 0;
+  const rekapHadir = Object.keys(groupedRiwayat).length;
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
     if (d.in?.time) {
       const jamAbsen  = formatJamLokal(d.in.time);
@@ -1005,7 +1014,32 @@ const Absen = () => {
 
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
-      <style>{`.hide-scrollbar::-webkit-scrollbar{display:none}.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}`}</style>
+      <style>{`.hide-scrollbar::-webkit-scrollbar{display:none}.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+      @keyframes bounceIn {
+        0% { opacity: 0; transform: translate(-50%, -20px); }
+        50% { opacity: 1; transform: translate(-50%, 5px); }
+        100% { opacity: 1; transform: translate(-50%, 0); }
+      }
+      .animate-bounceIn { animation: bounceIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      `}</style>
+
+      {/* ── TOAST POPUP NOTIFIKASI ── */}
+      {toastMsg && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] animate-bounceIn w-[90%] max-w-sm">
+          <div className={`flex items-start gap-4 px-5 py-4 rounded-2xl shadow-2xl border bg-white/95 backdrop-blur-md ${toastMsg.type === 'late' ? 'border-red-300 shadow-red-500/20' : 'border-green-300 shadow-green-500/20'}`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${toastMsg.type === 'late' ? 'bg-red-100 text-red-500' : 'bg-green-100 text-green-500'}`}>
+               <i className={`fa-solid ${toastMsg.type === 'late' ? 'fa-clock text-xl' : 'fa-check text-xl'}`}></i>
+            </div>
+            <div className="flex-1 pt-0.5">
+              <p className={`text-base font-black leading-tight ${toastMsg.type === 'late' ? 'text-red-600' : 'text-green-600'}`}>{toastMsg.title}</p>
+              <p className="text-xs font-bold text-gray-500 mt-1 leading-snug pr-2">{toastMsg.desc}</p>
+            </div>
+            <button onClick={() => setToastMsg(null)} className="text-gray-300 hover:text-gray-600 active:scale-95 transition-all mt-1">
+               <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="w-full md:max-w-4xl lg:max-w-5xl bg-white md:rounded-[3rem] h-screen md:h-[600px] lg:h-[700px] relative shadow-2xl flex flex-col md:flex-row overflow-hidden border border-gray-200">
 
@@ -1515,7 +1549,7 @@ const Absen = () => {
 
               const hasVerifImage = !!(detailModal.inData?.custom_verification_image || detailModal.outData?.custom_verification_image);
 
-              const FotoSlot = ({ src, label, badge, badgeColor }: { src?: string; label: string; badge: string; badgeColor: string }) => (
+              const FotoSlotDetail = ({ src, label, badge, badgeColor }: { src?: string; label: string; badge: string; badgeColor: string }) => (
                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
@@ -1572,8 +1606,29 @@ const Absen = () => {
                                 <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Masuk</p>
                               </div>
                               <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
-                                 <FotoSlot src={detailModal.inData?.custom_foto_absen} label="Wajah + Kanan" badge="Masuk" badgeColor="bg-green-500" />
-                                 <FotoSlot src={detailModal.inData?.custom_verification_image} label="Wajah + Kiri" badge="Masuk" badgeColor="bg-green-500" />
+                                 {/* FOTO MASUK KANAN */}
+                                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
+                                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                     {detailModal.inData?.custom_foto_absen
+                                       ? <img src={prosesUrlFoto(detailModal.inData.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Masuk" loading="lazy" decoding="async" />
+                                       : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                                     }
+                                     <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
+                                   </div>
+                                 </div>
+                                 {/* FOTO MASUK KIRI */}
+                                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
+                                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                     {detailModal.inData?.custom_verification_image
+                                       ? <img src={prosesUrlFoto(detailModal.inData.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Masuk" loading="lazy" decoding="async" />
+                                       : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                                     }
+                                     <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
+                                   </div>
+                                 </div>
+                                 {/* TTD MASUK */}
                                  <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
                                     <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
@@ -1593,8 +1648,29 @@ const Absen = () => {
                                   <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Keluar</p>
                                 </div>
                                 <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
-                                   <FotoSlot src={detailModal.outData?.custom_foto_absen} label="Wajah + Kanan" badge="Keluar" badgeColor="bg-orange-500" />
-                                   <FotoSlot src={detailModal.outData?.custom_verification_image} label="Wajah + Kiri" badge="Keluar" badgeColor="bg-orange-500" />
+                                   {/* FOTO KELUAR KANAN */}
+                                   <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
+                                     <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                       {detailModal.outData?.custom_foto_absen
+                                         ? <img src={prosesUrlFoto(detailModal.outData.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Keluar" loading="lazy" decoding="async" />
+                                         : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                                       }
+                                       <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
+                                     </div>
+                                   </div>
+                                   {/* FOTO KELUAR KIRI */}
+                                   <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
+                                     <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                       {detailModal.outData?.custom_verification_image
+                                         ? <img src={prosesUrlFoto(detailModal.outData.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Keluar" loading="lazy" decoding="async" />
+                                         : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                                       }
+                                       <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
+                                     </div>
+                                   </div>
+                                   {/* TTD KELUAR */}
                                    <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
                                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
                                       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
@@ -1616,8 +1692,18 @@ const Absen = () => {
                               <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Selfie Wajah</p>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                              <FotoSlot src={detailModal.inData?.custom_foto_absen}  label="Masuk"  badge="Masuk"  badgeColor="bg-green-500" />
-                              <FotoSlot src={detailModal.outData?.custom_foto_absen} label="Keluar" badge="Keluar" badgeColor="bg-orange-500" />
+                              {[{ label: 'Masuk', data: detailModal.inData, badgeCol: 'bg-green-500' }, { label: 'Keluar', data: detailModal.outData, badgeCol: 'bg-orange-500' }].map(({ label, data, badgeCol }) => (
+                                <div key={label} className="flex flex-col gap-1.5">
+                                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
+                                  <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                    {data?.custom_foto_absen
+                                      ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-contain" alt={label} loading="lazy" decoding="async" />
+                                      : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Belum ada</p></div>
+                                    }
+                                    <div className={`absolute top-2 left-2 ${badgeCol} text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20`}>{label}</div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
 
