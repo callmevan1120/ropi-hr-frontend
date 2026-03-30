@@ -381,20 +381,33 @@ const Absen = () => {
     if (!userData) { navigate('/'); return; }
     const parsedUser: User = JSON.parse(userData);
     setUser(parsedUser);
-    ambilLokasiKantor(parsedUser.branch);
-    ambilMasterShift();
+
+    const bln = new Date().getMonth();
+    const thn = new Date().getFullYear();
+
+    // ── Semua fetch jalan PARALEL — tidak menunggu setUser re-render ──
+    const fetches: Promise<any>[] = [
+      ambilLokasiKantor(parsedUser.branch),
+      ambilMasterShift(),
+      ambilRiwayatAbsen(parsedUser.employee_id, bln, thn),
+      ambilRiwayatIzin(parsedUser.employee_id, bln, thn),
+    ];
 
     if (isKaryawanOutlet(parsedUser.branch)) {
-      ambilActiveShift(parsedUser.employee_id);
+      fetches.push(ambilActiveShift(parsedUser.employee_id));
     }
+
+    Promise.all(fetches).catch(() => {});
   }, [navigate]);
 
+  // Hanya di-trigger saat user ganti bulan/tahun (bukan saat mount pertama)
+  const isMounted = useRef(false);
   useEffect(() => {
-    if (user) {
-      ambilRiwayatAbsen();
-      ambilRiwayatIzin(user.employee_id);
-    }
-  }, [user, bulanAktif, tahunAktif]);
+    if (!isMounted.current) { isMounted.current = true; return; }
+    if (!user) return;
+    ambilRiwayatAbsen(user.employee_id, bulanAktif, tahunAktif);
+    ambilRiwayatIzin(user.employee_id, bulanAktif, tahunAktif);
+  }, [bulanAktif, tahunAktif]);
 
   useEffect(() => { setLihatSemua(false); }, [bulanAktif, tahunAktif]);
 
@@ -504,18 +517,38 @@ const Absen = () => {
     setCameraStep(4);
   };
 
+  // ─────────────────────────────────────────────
+  // CACHE HELPERS (sessionStorage, per-session)
+  // ─────────────────────────────────────────────
+  const SESSION_SHIFTS_KEY  = 'ropi_cache_shifts';
+  const SESSION_LOKASI_KEY  = 'ropi_cache_lokasi';
+  const CACHE_MAX_AGE_MS    = 5 * 60 * 1000; // 5 menit
+
+  const readCache = (key: string): any | null => {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const { ts, data } = JSON.parse(raw);
+      if (Date.now() - ts > CACHE_MAX_AGE_MS) { sessionStorage.removeItem(key); return null; }
+      return data;
+    } catch { return null; }
+  };
+
+  const writeCache = (key: string, data: any) => {
+    try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
+  };
+
+  // ─────────────────────────────────────────────
+  // FETCH FUNCTIONS
+  // ─────────────────────────────────────────────
   const ambilActiveShift = async (empId: string) => {
     setShiftLoading(true);
     setShiftError(null);
     try {
-      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}&_t=${Date.now()}`);
+      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}`);
       const data = await res.json();
       if (data.success) {
-        setActiveShift({
-          shift_name: data.shift_name,
-          start_time: data.start_time,
-          end_time: data.end_time
-        });
+        setActiveShift({ shift_name: data.shift_name, start_time: data.start_time, end_time: data.end_time });
       } else {
         setShiftError(data.message || 'Belum ada Shift. Ajukan HRD.');
       }
@@ -527,8 +560,11 @@ const Absen = () => {
   };
 
   const ambilMasterShift = async () => {
+    // Cek cache sessionStorage dulu
+    const cached = readCache(SESSION_SHIFTS_KEY);
+    if (cached) { setMasterShifts(cached); return; }
     try {
-      const res  = await fetch(`${BACKEND}/api/attendance/shifts?_t=${Date.now()}`);
+      const res  = await fetch(`${BACKEND}/api/attendance/shifts`);
       const data = await res.json();
       if (data.success && data.data) {
         const tempMap: Record<string, { in: string; out: string }> = {};
@@ -538,44 +574,49 @@ const Absen = () => {
             out: s.end_time   ? s.end_time.substring(0, 5)   : '15:30',
           };
         });
+        writeCache(SESSION_SHIFTS_KEY, tempMap);
         setMasterShifts(tempMap);
       }
     } catch { console.error('Gagal menarik shift'); }
   };
 
   const ambilLokasiKantor = async (branch?: string) => {
+    const cacheKey = SESSION_LOKASI_KEY + (branch || '');
+    const cached   = readCache(cacheKey);
+    if (cached) { setLokasiKantor(cached); return; }
     try {
-      const url  = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}?_t=${Date.now()}` : `${BACKEND}/api/locations?_t=${Date.now()}`;
+      const url  = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}` : `${BACKEND}/api/locations`;
       const res  = await fetch(url);
       const data = await res.json();
-      if (data.success && data.locations?.length > 0) setLokasiKantor(data.locations);
+      if (data.success && data.locations?.length > 0) {
+        writeCache(cacheKey, data.locations);
+        setLokasiKantor(data.locations);
+      }
     } catch { console.warn('Pakai lokasi fallback'); }
   };
 
-  const ambilRiwayatAbsen = async () => {
-    if (!user) return;
+  const ambilRiwayatAbsen = async (empId: string, bln: number, thn: number) => {
     try {
-      const dari   = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
-      const akhir  = new Date(tahunAktif, bulanAktif + 1, 0);
-      const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
-      
-      const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}&_t=${Date.now()}`);
+      const dari   = `${thn}-${String(bln + 1).padStart(2, '0')}-01`;
+      const akhir  = new Date(thn, bln + 1, 0);
+      const sampai = `${thn}-${String(bln + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
+      const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(empId)}&from=${dari}&to=${sampai}`);
       const data   = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
       else setDataRiwayat([]);
     } catch { setDataRiwayat([]); }
   };
 
-  const ambilRiwayatIzin = async (employeeId: string) => {
+  const ambilRiwayatIzin = async (employeeId: string, bln: number, thn: number) => {
     try {
-      const res  = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}&_t=${Date.now()}`);
+      const res  = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}`);
       const data = await res.json();
       if (data.success && data.data) {
         const filtered = data.data.filter((item: LeaveRecord) => {
           const from       = parseLokalDate(item.from_date);
           const to         = parseLokalDate(item.to_date);
-          const bulanMulai = new Date(tahunAktif, bulanAktif, 1);
-          const bulanAkhir = new Date(tahunAktif, bulanAktif + 1, 0);
+          const bulanMulai = new Date(thn, bln, 1);
+          const bulanAkhir = new Date(thn, bln + 1, 0);
           return from <= bulanAkhir && to >= bulanMulai;
         });
         setLeaveRecords(filtered);
@@ -832,7 +873,7 @@ const Absen = () => {
       if (res.ok) {
         alert(`Absen ${modeAbsen} berhasil dikirim!`);
         tutupModal();
-        ambilRiwayatAbsen();
+        if (user) ambilRiwayatAbsen(user.employee_id, bulanAktif, tahunAktif);
       } else {
         const errData = await res.json().catch(() => null);
         alert(errData?.message || 'Absen gagal dikirim ke sistem.');
