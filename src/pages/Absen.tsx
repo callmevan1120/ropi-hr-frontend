@@ -843,7 +843,7 @@ const Absen = () => {
         const dd = String(wibTime.getUTCDate()).padStart(2, '0');
         const tglStr = `${yyyy}-${mm}-${dd}`; // Tanggal hari ini
         
-        // Memastikan format jam selalu pakai titik dua (:) meski di setting HP pakai titik (.)
+        // Memastikan format jam selalu pakai titik dua (:)
         const jamSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(/\./g, ':');
         
         if (modeAbsen === 'MASUK') {
@@ -1013,28 +1013,34 @@ const Absen = () => {
   };
 
   return (
-    <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
+    <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden relative">
       <style>{`.hide-scrollbar::-webkit-scrollbar{display:none}.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
       @keyframes bounceIn {
-        0% { opacity: 0; transform: translate(-50%, -20px); }
-        50% { opacity: 1; transform: translate(-50%, 5px); }
-        100% { opacity: 1; transform: translate(-50%, 0); }
+        0% { opacity: 0; transform: translateY(-30px); }
+        50% { opacity: 1; transform: translateY(10px); }
+        100% { opacity: 1; transform: translateY(0); }
       }
       .animate-bounceIn { animation: bounceIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
 
       {/* ── TOAST POPUP NOTIFIKASI ── */}
       {toastMsg && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] animate-bounceIn w-[90%] max-w-sm">
-          <div className={`flex items-start gap-4 px-5 py-4 rounded-2xl shadow-2xl border bg-white/95 backdrop-blur-md ${toastMsg.type === 'late' ? 'border-red-300 shadow-red-500/20' : 'border-green-300 shadow-green-500/20'}`}>
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${toastMsg.type === 'late' ? 'bg-red-100 text-red-500' : 'bg-green-100 text-green-500'}`}>
-               <i className={`fa-solid ${toastMsg.type === 'late' ? 'fa-clock text-xl' : 'fa-check text-xl'}`}></i>
+        <div className="fixed top-10 left-0 w-full flex justify-center z-[100] pointer-events-none px-4">
+          <div className={`animate-bounceIn w-full max-w-sm pointer-events-auto rounded-2xl flex items-start gap-4 px-5 py-4 border-2 ${
+            toastMsg.type === 'late' 
+              ? 'bg-gradient-to-r from-red-600 to-red-500 border-red-400 shadow-[0_15px_40px_-10px_rgba(220,38,38,0.8)]' 
+              : 'bg-white/95 backdrop-blur-md border-green-400 shadow-[0_15px_40px_-10px_rgba(34,197,94,0.4)]'
+          }`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 shadow-inner ${
+              toastMsg.type === 'late' ? 'bg-white/20 text-white animate-pulse border border-white/30' : 'bg-green-100 text-green-500'
+            }`}>
+               <i className={`fa-solid ${toastMsg.type === 'late' ? 'fa-triangle-exclamation text-2xl' : 'fa-check text-xl'}`}></i>
             </div>
             <div className="flex-1 pt-0.5">
-              <p className={`text-base font-black leading-tight ${toastMsg.type === 'late' ? 'text-red-600' : 'text-green-600'}`}>{toastMsg.title}</p>
-              <p className="text-xs font-bold text-gray-500 mt-1 leading-snug pr-2">{toastMsg.desc}</p>
+              <p className={`text-base font-black leading-tight ${toastMsg.type === 'late' ? 'text-white' : 'text-green-600'}`}>{toastMsg.title}</p>
+              <p className={`text-xs font-bold mt-1 leading-snug pr-2 ${toastMsg.type === 'late' ? 'text-white/90' : 'text-gray-500'}`}>{toastMsg.desc}</p>
             </div>
-            <button onClick={() => setToastMsg(null)} className="text-gray-300 hover:text-gray-600 active:scale-95 transition-all mt-1">
+            <button onClick={() => setToastMsg(null)} className={`mt-1 transition-all active:scale-95 ${toastMsg.type === 'late' ? 'text-white/60 hover:text-white' : 'text-gray-300 hover:text-gray-600'}`}>
                <i className="fa-solid fa-xmark text-lg"></i>
             </button>
           </div>
