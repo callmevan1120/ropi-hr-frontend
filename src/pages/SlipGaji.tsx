@@ -17,6 +17,7 @@ interface SlipRecord {
 
 const SlipGaji = () => {
   const navigate = useNavigate();
+  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
 
   const [user, setUser] = useState<User | null>(null);
   const [slips, setSlips] = useState<SlipRecord[]>([]);
@@ -29,44 +30,22 @@ const SlipGaji = () => {
     
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
-    
-    // Memanggil fungsi fetchSlips buatan (dummy)
-    fetchDummySlips();
+    fetchSlips(parsedUser.employee_id);
   }, [navigate]);
 
-  // Fungsi Dummy untuk memuat data palsu
-  const fetchDummySlips = () => {
+  const fetchSlips = async (employeeId: string) => {
     setIsLoading(true);
-    
-    // Mensimulasikan loading jaringan selama 1 detik
-    setTimeout(() => {
-      const dummyData: SlipRecord[] = [
-        {
-          name: 'HR-SLP-2026-00003',
-          start_date: '2026-03-01',
-          end_date: '2026-03-31',
-          net_pay: 4250000,
-          status: 'Submitted',
-        },
-        {
-          name: 'HR-SLP-2026-00002',
-          start_date: '2026-02-01',
-          end_date: '2026-02-28',
-          net_pay: 4100000,
-          status: 'Submitted',
-        },
-        {
-          name: 'HR-SLP-2026-00001',
-          start_date: '2026-01-01',
-          end_date: '2026-01-31',
-          net_pay: 4500000,
-          status: 'Submitted',
-        }
-      ];
-      
-      setSlips(dummyData);
+    try {
+      const res = await fetch(`${BACKEND}/api/payroll/slips?employee_id=${encodeURIComponent(employeeId)}`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        setSlips(data.data);
+      }
+    } catch (err) {
+      console.error('Gagal menarik data slip gaji', err);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const formatRupiah = (angka: number) => {
@@ -80,15 +59,28 @@ const SlipGaji = () => {
     return `${month} ${year}`;
   };
 
-  // Fungsi Download Dummy
-  const handleDownload = (slipId: string) => {
+  // Logic Download PDF dari API Nest.js yang menjembatani Frappe ERPNext
+  const handleDownload = async (slipId: string) => {
     setIsDownloading(slipId);
-    
-    // Mensimulasikan proses download (streaming) selama 2 detik
-    setTimeout(() => {
+    try {
+      const res = await fetch(`${BACKEND}/api/payroll/download?slip_id=${encodeURIComponent(slipId)}`);
+      if (!res.ok) throw new Error('Gagal download PDF');
+      
+      // Ubah response menjadi Blob PDF dan picu unduhan di browser
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Slip_Gaji_${slipId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('❌ Gagal mendownload dokumen PDF. Pastikan backend sudah siap dan dokumen sudah di-Submit di ERPNext.');
+    } finally {
       setIsDownloading(null);
-      alert(`✅ [MODE DUMMY] Dokumen Slip_Gaji_${slipId}.pdf berhasil "diunduh". (Fungsi ini akan memanggil backend setelah dummy dimatikan).`);
-    }, 2000);
+    }
   };
 
   return (
