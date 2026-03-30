@@ -851,15 +851,15 @@ const Absen = () => {
            const selisih = toMenit(jamSekarang) - toMenit(shiftInfo.in);
            
            if (selisih > 0) {
-              // Cek apakah hari ini sudah dihitung telat sebelumnya (di array rekapTelat)
+              // Cek apakah hari ini sudah dihitung telat sebelumnya
               const isAlreadyCounted = dataRiwayat.some(r => r.log_type === 'IN' && (r.time?.includes(tglStr) || r.attendance_date?.includes(tglStr)));
               const finalTelatCount = isAlreadyCounted ? rekapTelat : rekapTelat + 1;
               
               setToastMsg({
                 show: true,
                 type: 'late',
-                title: 'Waduh, Kamu Terlambat!',
-                desc: `Kamu masuk telat ${formatDurasi(selisih)} hari ini. (Total ${finalTelatCount}x telat bulan ini)`
+                title: 'Kamu Terlambat!',
+                desc: `Masuk telat ${formatDurasi(selisih)} hari ini. (Total ${finalTelatCount}x telat bulan ini)`
               });
            } else {
               setToastMsg({
@@ -872,8 +872,8 @@ const Absen = () => {
            });
         }
         
-        // Toast akan hilang otomatis dalam 6 detik
-        setTimeout(() => setToastMsg(null), 6000);
+        // Toast akan hilang otomatis dalam 8 detik agar sempat dibaca
+        setTimeout(() => setToastMsg(null), 8000);
         
         // Perbarui data riwayat di belakang layar
         ambilRiwayatAbsen();
@@ -1016,32 +1016,30 @@ const Absen = () => {
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden relative">
       <style>{`.hide-scrollbar::-webkit-scrollbar{display:none}.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
       @keyframes bounceIn {
-        0% { opacity: 0; transform: translateY(-30px); }
-        50% { opacity: 1; transform: translateY(10px); }
-        100% { opacity: 1; transform: translateY(0); }
+        0% { opacity: 0; transform: translateY(-30px) scale(0.9); }
+        50% { opacity: 1; transform: translateY(5px) scale(1.02); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
       }
       .animate-bounceIn { animation: bounceIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
 
-      {/* ── TOAST POPUP NOTIFIKASI ── */}
+      {/* ── TOAST POPUP NOTIFIKASI (FIXED CSS & OVERLAP) ── */}
       {toastMsg && (
-        <div className="fixed top-10 left-0 w-full flex justify-center z-[100] pointer-events-none px-4">
-          <div className={`animate-bounceIn w-full max-w-sm pointer-events-auto rounded-2xl flex items-start gap-4 px-5 py-4 border-2 ${
+        <div className="fixed top-6 left-0 w-full flex justify-center z-[9999] pointer-events-none px-4">
+          <div className={`pointer-events-auto animate-bounceIn w-full max-w-sm flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border-2 ${
             toastMsg.type === 'late' 
-              ? 'bg-gradient-to-r from-red-600 to-red-500 border-red-400 shadow-[0_15px_40px_-10px_rgba(220,38,38,0.8)]' 
-              : 'bg-white/95 backdrop-blur-md border-green-400 shadow-[0_15px_40px_-10px_rgba(34,197,94,0.4)]'
+              ? 'bg-[#dc2626] border-[#ef4444] shadow-red-600/50' 
+              : 'bg-[#16a34a] border-[#22c55e] shadow-green-600/50'
           }`}>
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 shadow-inner ${
-              toastMsg.type === 'late' ? 'bg-white/20 text-white animate-pulse border border-white/30' : 'bg-green-100 text-green-500'
-            }`}>
-               <i className={`fa-solid ${toastMsg.type === 'late' ? 'fa-triangle-exclamation text-2xl' : 'fa-check text-xl'}`}></i>
+            <div className="shrink-0 flex items-center justify-center">
+               <i className={`fa-solid ${toastMsg.type === 'late' ? 'fa-triangle-exclamation text-3xl animate-pulse text-yellow-300' : 'fa-circle-check text-3xl text-white'}`}></i>
             </div>
-            <div className="flex-1 pt-0.5">
-              <p className={`text-base font-black leading-tight ${toastMsg.type === 'late' ? 'text-white' : 'text-green-600'}`}>{toastMsg.title}</p>
-              <p className={`text-xs font-bold mt-1 leading-snug pr-2 ${toastMsg.type === 'late' ? 'text-white/90' : 'text-gray-500'}`}>{toastMsg.desc}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-white uppercase tracking-wider leading-tight drop-shadow-sm">{toastMsg.title}</p>
+              <p className="text-[11px] font-medium text-white/90 mt-0.5 leading-snug">{toastMsg.desc}</p>
             </div>
-            <button onClick={() => setToastMsg(null)} className={`mt-1 transition-all active:scale-95 ${toastMsg.type === 'late' ? 'text-white/60 hover:text-white' : 'text-gray-300 hover:text-gray-600'}`}>
-               <i className="fa-solid fa-xmark text-lg"></i>
+            <button onClick={() => setToastMsg(null)} className="shrink-0 text-white/60 hover:text-white active:scale-95 p-1 ml-1 transition-colors">
+               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
           </div>
         </div>
@@ -1119,7 +1117,7 @@ const Absen = () => {
                   { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
                   { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
                   { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
-                  { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, // 🔥 Mengubah warna rekapan Cuti menjadi Teal
+                  { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, 
                 ].map(item => (
                   <div key={item.label} className="bg-white/10 rounded-xl py-2 text-center">
                     <p className={`text-xl font-black ${item.color}`}>{item.value}</p>
@@ -1140,7 +1138,6 @@ const Absen = () => {
                   </div>
                   <div className="grid grid-cols-7 gap-y-0.5 text-center">{renderKalender()}</div>
                   <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
-                    {/* Menambahkan Cuti (Warna Tosca) di keterangan Legenda */}
                     {[
                       { color: 'bg-green-400', label: 'Tepat' }, 
                       { color: 'bg-red-400', label: 'Telat' }, 
@@ -1179,7 +1176,7 @@ const Absen = () => {
                         const shiftLabel = validasiShiftName(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, activeShift);
                         
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
-                        const adaCutiHariIni = tanggalCutiSet.has(tgl); // 🔥 Mengecek apakah ini cuti
+                        const adaCutiHariIni = tanggalCutiSet.has(tgl); 
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
                         let badgeEl: React.ReactNode = null;
@@ -1681,7 +1678,7 @@ const Absen = () => {
                                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
                                       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
                                          {detailModal.outData?.custom_signature ? <img src={prosesUrlFoto(detailModal.outData.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Keluar" loading="lazy" decoding="async" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
-                                         <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
+                                         <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Keluar</div>
                                       </div>
                                    </div>
                                 </div>
