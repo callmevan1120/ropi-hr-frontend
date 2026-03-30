@@ -7,6 +7,7 @@ interface RiwayatAbsen {
   employee: string;
   employee_name?: string;
   time: string;
+  attendance_date?: string;
   log_type: string;
   custom_foto_absen?: string;
   custom_verification_image?: string;
@@ -58,7 +59,8 @@ const formatJamLokal = (timeString?: string) => {
   if (!timeString) return '-';
   const parts = timeString.split(' ');
   if (parts.length > 1) return parts[1].substring(0, 5);
-  return timeString.substring(0, 5);
+  if (timeString.includes(':')) return timeString.substring(0, 5); 
+  return '-';
 };
 
 const formatDurasi = (totalMenit: number): string => {
@@ -151,7 +153,6 @@ const getLatLng = (record: any): { lat: string | null; lng: string | null } => {
 const DashboardHR = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
-  const ERPNEXT_URL = 'http://103.187.147.240';
 
   const [dataAbsen, setDataAbsen] = useState<EmployeeSummary[]>([]);
   const [leaveMap, setLeaveMap] = useState<Record<string, number>>({});
@@ -172,7 +173,7 @@ const DashboardHR = () => {
   // STATE PAGINATION & UI
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
-  const [showFilters, setShowFilters] = useState(false); // Toggle Filter untuk Mobile
+  const [showFilters, setShowFilters] = useState(false); 
 
   const [detailModal, setDetailModal] = useState<EmployeeSummary | null>(null);
   const [expandedDateHR, setExpandedDateHR] = useState<string | null>(null);
@@ -278,7 +279,7 @@ const DashboardHR = () => {
         const grouped: Record<string, EmployeeSummary> = {};
         const locs = lokasiKantorRef.current;
 
-        result.data.forEach((item: RiwayatAbsen) => {
+        result.data.forEach((item: any) => {
           const { lat: normLat, lng: normLng } = getLatLng(item);
           if (normLat && normLng) { item.latitude = normLat; item.longitude = normLng; }
 
@@ -319,7 +320,10 @@ const DashboardHR = () => {
           if (item.shift?.toLowerCase().includes('klaten')) empRef.branch = 'PH Klaten';
           else if (item.shift?.toLowerCase().includes('jakarta')) empRef.branch = 'Jakarta';
 
-          const dateKey = item.time.substring(0, 10);
+          const timeStr = item.time || item.attendance_date || '';
+          if (!timeStr) return; 
+
+          const dateKey = timeStr.substring(0, 10);
           if (!grouped[item.employee].logsByDate[dateKey])
             grouped[item.employee].logsByDate[dateKey] = { in: null, out: null };
 
@@ -330,9 +334,11 @@ const DashboardHR = () => {
             } else {
               const currHasPic = !!curr.custom_foto_absen;
               const itemHasPic = !!item.custom_foto_absen;
+              const itemTime = item.time || item.attendance_date;
+              const currTime = curr.time || curr.attendance_date;
               if (!currHasPic && itemHasPic) {
                 grouped[item.employee].logsByDate[dateKey].in = item;
-              } else if (currHasPic === itemHasPic && item.time && curr.time && item.time < curr.time) {
+              } else if (currHasPic === itemHasPic && itemTime && currTime && itemTime < currTime) {
                 grouped[item.employee].logsByDate[dateKey].in = item;
               }
             }
@@ -343,9 +349,11 @@ const DashboardHR = () => {
             } else {
               const currHasPic = !!curr.custom_foto_absen;
               const itemHasPic = !!item.custom_foto_absen;
+              const itemTime = item.time || item.attendance_date;
+              const currTime = curr.time || curr.attendance_date;
               if (!currHasPic && itemHasPic) {
                 grouped[item.employee].logsByDate[dateKey].out = item;
-              } else if (currHasPic === itemHasPic && item.time && curr.time && item.time > curr.time) {
+              } else if (currHasPic === itemHasPic && itemTime && currTime && itemTime > currTime) {
                 grouped[item.employee].logsByDate[dateKey].out = item;
               }
             }
@@ -355,10 +363,18 @@ const DashboardHR = () => {
         Object.values(grouped).forEach(emp => {
           let hadir = 0, telat = 0, cepat = 0;
           Object.entries(emp.logsByDate).forEach(([date, log]) => {
-            if (log.in) hadir++;
+            if (log.in || log.out) hadir++; 
             const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts, ramadhanDates);
-            if (log.in && toMenit(formatJamLokal(log.in.time)) > toMenit(shiftInfo.in)) telat++;
-            if (log.out && toMenit(shiftInfo.out) > toMenit(formatJamLokal(log.out.time))) cepat++;
+            if (log.in) {
+              const timeStrIn = log.in.time || log.in.attendance_date;
+              const inJam = formatJamLokal(timeStrIn);
+              if (inJam !== '-' && toMenit(inJam) > toMenit(shiftInfo.in)) telat++;
+            }
+            if (log.out) {
+              const timeStrOut = log.out.time || log.out.attendance_date;
+              const outJam = formatJamLokal(timeStrOut);
+              if (outJam !== '-' && toMenit(shiftInfo.out) > toMenit(outJam)) cepat++;
+            }
           });
           emp.totalHadir = hadir; emp.totalTelat = telat; emp.totalCepat = cepat;
         });
@@ -560,15 +576,20 @@ const DashboardHR = () => {
       allDates.forEach(date => {
         const log = emp.logsByDate[date] ?? { in: null, out: null };
         const izinType = empIzinDates[date];
-        const inJam = log.in ? formatJamLokal(log.in.time) : '-';
-        const outJam = log.out ? formatJamLokal(log.out.time) : '-';
+        
+        const timeStrIn = log.in?.time || log.in?.attendance_date;
+        const timeStrOut = log.out?.time || log.out?.attendance_date;
+        
+        const inJam = log.in ? formatJamLokal(timeStrIn) : '-';
+        const outJam = log.out ? formatJamLokal(timeStrOut) : '-';
+        
         const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts, ramadhanDates);
         const shiftLabel = getShiftLabel(date, ramadhanDates);
         
         let telat = '-';
-        if (log.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) telat = formatDurasi(s); }
+        if (inJam !== '-') { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) telat = formatDurasi(s); }
         let pulangCepat = '-';
-        if (log.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) pulangCepat = formatDurasi(s); }
+        if (outJam !== '-') { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) pulangCepat = formatDurasi(s); }
 
         if (izinType && !log.in && !log.out) {
           dataExcel.push({
@@ -684,8 +705,7 @@ const DashboardHR = () => {
 
         for (const dateStr of dateRange) {
           const log = emp.logsByDate[dateStr];
-          let statusAbsen: number | string = '';
-
+          
           const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
           const izinForDate = rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').find((r: any) => {
             const from = parseLokalDate(r.from_date);
@@ -694,17 +714,24 @@ const DashboardHR = () => {
             return tgl >= from && tgl <= to;
           });
 
-          if (log && log.in) {
-            const inJam = formatJamLokal(log.in.time);
-            const shiftInfo = getJamShift(log.in.shift, dateStr, masterShifts, ramadhanDates);
-            if (toMenit(inJam) > toMenit(shiftInfo.in)) {
-              statusAbsen = 1; 
-              totalTelatBulanIni++;
-            } else {
-              statusAbsen = 0; 
+          let statusAbsen: number | string = '';
+
+          if (log && (log.in || log.out)) {
+            let isTelat = false;
+            if (log.in) {
+              const timeStr = log.in.time || log.in.attendance_date || '';
+              const inJam = formatJamLokal(timeStr);
+              if (inJam !== '-') {
+                const shiftInfo = getJamShift(log.in.shift, dateStr, masterShifts, ramadhanDates);
+                if (toMenit(inJam) > toMenit(shiftInfo.in)) {
+                  isTelat = true;
+                  totalTelatBulanIni++;
+                }
+              }
             }
+            statusAbsen = isTelat ? 1 : 0;
           } else if (izinForDate) {
-            statusAbsen = '-'; 
+            statusAbsen = '-';
           }
 
           const dayLabel = filterMode === 'bulanan' 
@@ -772,8 +799,9 @@ const DashboardHR = () => {
       const todayLog = emp.logsByDate[tanggalAktif];
       if (todayLog?.in) {
         globalHadir++;
+        const timeStrIn = todayLog.in.time || todayLog.in.attendance_date;
         const shiftInfo = getJamShift(todayLog.in.shift, tanggalAktif, masterShifts, ramadhanDates);
-        if (toMenit(formatJamLokal(todayLog.in.time)) > toMenit(shiftInfo.in)) globalTelat++;
+        if (toMenit(formatJamLokal(timeStrIn)) > toMenit(shiftInfo.in)) globalTelat++;
       }
       if (leaveMap[emp.employee] === 1) globalIzin++;
     } else {
@@ -808,7 +836,6 @@ const DashboardHR = () => {
   return (
     <div className="bg-gray-200 min-h-screen font-sans w-full text-[#3e2723] pb-10">
 
-      {/* ── HEADER (PERBAIKAN UI MOBILE + STICKY) ── */}
       <div className="bg-[#3e2723] pt-5 pb-6 px-5 md:px-10 shadow-lg sticky top-0 z-30 w-full rounded-b-[2rem]">
         <div className="max-w-7xl mx-auto flex flex-col gap-4">
           
@@ -843,7 +870,6 @@ const DashboardHR = () => {
             </div>
           </div>
 
-          {/* SEARCH & TOGGLE FILTER (MOBILE) */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full">
             <div className="flex gap-2 w-full md:w-auto md:flex-1">
               <div className="flex items-center bg-white/10 rounded-xl px-4 py-2 w-full border border-white/10 shadow-sm relative group focus-within:bg-white/20 transition-colors">
@@ -869,7 +895,6 @@ const DashboardHR = () => {
               </button>
             </div>
 
-            {/* FILTER PANEL (Sembunyi di HP kalau tidak di-klik) */}
             <div className={`${showFilters ? 'flex' : 'hidden'} md:flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto`}>
               <div className="flex bg-white/10 rounded-xl p-1 border border-white/10 shadow-inner shrink-0">
                 <button onClick={() => setFilterMode('harian')} className={`flex-1 md:px-4 py-2 text-[10px] md:text-xs font-black rounded-lg transition-all ${filterMode === 'harian' ? 'bg-[#fbc02d] text-[#3e2723] shadow' : 'text-white/70 hover:text-white hover:bg-white/10'}`}>Harian</button>
@@ -957,11 +982,14 @@ const DashboardHR = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {currentData.map((emp) => {
                 const todayLog = filterMode === 'harian' ? (emp.logsByDate[tanggalAktif] || { in: null, out: null }) : null;
-                const inJam = todayLog?.in ? formatJamLokal(todayLog.in.time) : '-';
-                const outJam = todayLog?.out ? formatJamLokal(todayLog.out.time) : '-';
+                const timeStrIn = todayLog?.in?.time || todayLog?.in?.attendance_date;
+                const timeStrOut = todayLog?.out?.time || todayLog?.out?.attendance_date;
+                
+                const inJam = todayLog?.in ? formatJamLokal(timeStrIn) : '-';
+                const outJam = todayLog?.out ? formatJamLokal(timeStrOut) : '-';
                 const shiftInfo = getJamShift(todayLog?.in?.shift || todayLog?.out?.shift, tanggalAktif, masterShifts, ramadhanDates);
                 const shiftLabel = getShiftLabel(tanggalAktif, ramadhanDates);
-                const isTelat = todayLog?.in && toMenit(inJam) > toMenit(shiftInfo.in);
+                const isTelat = todayLog?.in && inJam !== '-' && toMenit(inJam) > toMenit(shiftInfo.in);
 
                 let avatarSrc = null;
                 if (filterMode === 'harian') avatarSrc = todayLog?.in?.custom_foto_absen;
@@ -1109,12 +1137,16 @@ const DashboardHR = () => {
           const todayLog = emp.logsByDate[tanggalAktif] || { in: null, out: null };
           const shiftInfo = getJamShift(todayLog.in?.shift || todayLog.out?.shift, tanggalAktif, masterShifts, ramadhanDates);
           const shiftLabel = getShiftLabel(tanggalAktif, ramadhanDates);
-          const inJam = todayLog.in ? formatJamLokal(todayLog.in.time) : '-';
-          const outJam = todayLog.out ? formatJamLokal(todayLog.out.time) : '-';
+          
+          const timeStrIn = todayLog.in?.time || todayLog.in?.attendance_date;
+          const timeStrOut = todayLog.out?.time || todayLog.out?.attendance_date;
+          
+          const inJam = todayLog.in ? formatJamLokal(timeStrIn) : '-';
+          const outJam = todayLog.out ? formatJamLokal(timeStrOut) : '-';
 
           let durasiTelat = 0, durasiCepat = 0;
-          if (todayLog.in) { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) durasiTelat = s; }
-          if (todayLog.out) { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) durasiCepat = s; }
+          if (todayLog.in && inJam !== '-') { const s = toMenit(inJam) - toMenit(shiftInfo.in); if (s > 0) durasiTelat = s; }
+          if (todayLog.out && outJam !== '-') { const s = toMenit(shiftInfo.out) - toMenit(outJam); if (s > 0) durasiCepat = s; }
 
           const izinHariIniData = (() => {
             if (leaveMap[emp.employee] !== 1) return null;
@@ -1352,11 +1384,16 @@ const DashboardHR = () => {
                     return allDates.map(date => {
                       const log = emp.logsByDate[date] ?? { in: null, out: null };
                       const izinType = empLeaveData[date];
-                      const inJam = log.in ? formatJamLokal(log.in.time) : '-';
-                      const outJam = log.out ? formatJamLokal(log.out.time) : '-';
+                      
+                      const timeStrIn = log.in?.time || log.in?.attendance_date;
+                      const timeStrOut = log.out?.time || log.out?.attendance_date;
+                      
+                      const inJam = log.in ? formatJamLokal(timeStrIn) : '-';
+                      const outJam = log.out ? formatJamLokal(timeStrOut) : '-';
+                      
                       const shiftInfo = getJamShift(log.in?.shift || log.out?.shift, date, masterShifts, ramadhanDates);
                       const shiftLabel = getShiftLabel(date, ramadhanDates);
-                      const isTelat = log.in && toMenit(inJam) > toMenit(shiftInfo.in);
+                      const isTelat = log.in && inJam !== '-' && toMenit(inJam) > toMenit(shiftInfo.in);
                       const isExpanded = expandedDateHR === date;
                       const isOutlet = emp.branch !== 'PH Klaten' && emp.branch !== 'Jakarta';
 
