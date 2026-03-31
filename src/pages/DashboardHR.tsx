@@ -29,6 +29,7 @@ interface EmployeeSummary {
   totalTelat: number;
   totalCepat: number;
   totalIzin: number;
+  totalLemburMenit: number; 
   branch: string; 
   logsByDate: Record<string, DayLog>;
 }
@@ -158,6 +159,7 @@ const DashboardHR = () => {
   const [dataAbsen, setDataAbsen] = useState<EmployeeSummary[]>([]);
   const [leaveMap, setLeaveMap] = useState<Record<string, number>>({});
   const [leaveRawMap, setLeaveRawMap] = useState<Record<string, any[]>>({});
+  const [overtimeRawMap, setOvertimeRawMap] = useState<Record<string, any[]>>({}); 
   const [masterShifts, setMasterShifts] = useState<Record<string, { in: string; out: string }>>({});
   const [ramadhanDates, setRamadhanDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -274,7 +276,7 @@ const DashboardHR = () => {
     }
 
     try {
-      // ── 1 request ke backend, sudah berisi absensi + cuti sekaligus ──
+      // ── 1 request ke backend, sudah berisi absensi + cuti + lembur sekaligus ──
       const res = await fetch(`${BACKEND}/api/attendance/all-history?from=${from}&to=${to}`);
       const result = await res.json();
 
@@ -284,9 +286,10 @@ const DashboardHR = () => {
         return;
       }
 
-      // Backend baru mengembalikan { absensi: [], cuti: [] }
+      // Backend baru mengembalikan { absensi: [], cuti: [], lembur: [] }
       const rawAbsensi: any[] = result.data.absensi ?? [];
       const rawCuti: any[]    = result.data.cuti    ?? [];
+      const rawLembur: any[]  = result.data.lembur  ?? [];
 
       const locs = lokasiKantorRef.current;
 
@@ -321,7 +324,7 @@ const DashboardHR = () => {
           grouped[item.employee] = {
             employee: item.employee,
             employee_name: item.employee_name || item.employee,
-            totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 0,
+            totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 0, totalLemburMenit: 0, // 🔥 BARU
             branch: branchAsumsi,
             logsByDate: {}
           };
@@ -389,12 +392,18 @@ const DashboardHR = () => {
         emp.totalHadir = hadir; emp.totalTelat = telat; emp.totalCepat = cepat;
       });
 
-      // ── 3. Proses data cuti dari response yang sama (tidak ada extra fetch!) ──
-      // Bangun leaveRawMap dan leaveMap langsung dari rawCuti
+      // ── 3. Proses data cuti & lembur ──
       const newLeaveRawMap: Record<string, any[]> = {};
       rawCuti.forEach((leave: any) => {
         if (!newLeaveRawMap[leave.employee]) newLeaveRawMap[leave.employee] = [];
         newLeaveRawMap[leave.employee].push(leave);
+      });
+
+      // Simpan Lembur Raw Map
+      const newOvertimeRawMap: Record<string, any[]> = {};
+      rawLembur.forEach((ot: any) => {
+        if (!newOvertimeRawMap[ot.employee]) newOvertimeRawMap[ot.employee] = [];
+        newOvertimeRawMap[ot.employee].push(ot);
       });
 
       const newLeaveMap: Record<string, number> = {};
@@ -408,12 +417,10 @@ const DashboardHR = () => {
         startDateObj = parseLokalDate(periodeMulai);
         endDateObj   = parseLokalDate(periodeAkhir);
       } else {
-        // Harian: cukup cek hari ini
         startDateObj = parseLokalDate(tanggalAktif);
         endDateObj   = parseLokalDate(tanggalAktif);
       }
 
-      // Kumpulkan semua employee yang punya izin (termasuk yang tidak absen)
       const extraEmployees: EmployeeSummary[] = [];
       const arrData = Object.values(grouped).sort((a, b) => a.employee_name.localeCompare(b.employee_name));
 
@@ -428,19 +435,17 @@ const DashboardHR = () => {
           });
           newLeaveMap[empId] = izinHariIni ? 1 : 0;
 
-          // Tambahkan sebagai row extra jika employee tidak punya data absen hari ini
           if (izinHariIni && !grouped[empId]) {
             const leaveData = newLeaveRawMap[empId][0];
             extraEmployees.push({
               employee: empId,
               employee_name: leaveData.employee_name || empId,
               branch: 'Outlet',
-              totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 1,
+              totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin: 1, totalLemburMenit: 0,
               logsByDate: {},
             });
           }
         } else {
-          // Bulanan / periode: hitung total hari izin dalam range
           let totalIzin = 0;
           approvedLeaves.forEach((r: any) => {
             const f = parseLokalDate(r.from_date);
@@ -459,25 +464,38 @@ const DashboardHR = () => {
               employee: empId,
               employee_name: leaveData.employee_name || empId,
               branch: 'Outlet',
-              totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin,
+              totalHadir: 0, totalTelat: 0, totalCepat: 0, totalIzin, totalLemburMenit: 0,
               logsByDate: {},
             });
           }
         }
       });
 
-      // Update totalIzin pada employee yang sudah ada di arrData
-      arrData.forEach(emp => {
+      const merged = extraEmployees.length > 0
+        ? [...arrData, ...extraEmployees]
+        : arrData;
+
+      // Kalkulasi Total Lembur Per Employee
+      merged.forEach(emp => {
         emp.totalIzin = newLeaveMap[emp.employee] ?? 0;
+
+        let lemburMenit = 0;
+        const oList = newOvertimeRawMap[emp.employee] || [];
+        oList.filter(o => o.status?.toLowerCase() === 'approved').forEach(o => {
+           const d = parseLokalDate(o.overtime_date);
+           if (d >= startDateObj && d <= endDateObj) {
+              lemburMenit += (toMenit(o.end_time) - toMenit(o.start_time));
+           }
+        });
+        emp.totalLemburMenit = lemburMenit > 0 ? lemburMenit : 0;
       });
 
-      const merged = extraEmployees.length > 0
-        ? [...arrData, ...extraEmployees].sort((a, b) => a.employee_name.localeCompare(b.employee_name))
-        : arrData;
+      merged.sort((a, b) => a.employee_name.localeCompare(b.employee_name));
 
       setDataAbsen(merged);
       setLeaveMap(newLeaveMap);
       setLeaveRawMap(newLeaveRawMap);
+      setOvertimeRawMap(newOvertimeRawMap); 
 
     } catch (err) {
       console.error('Gagal tarik data HR', err);
@@ -508,48 +526,46 @@ const DashboardHR = () => {
     filteredDataAbsen.forEach((emp) => {
       const empIzinDates: Record<string, string> = {};
       const rawLeaves: any[] = leaveRawMap[emp.employee] ?? [];
+      const rawLemburs: any[] = overtimeRawMap[emp.employee] ?? []; 
       
-      if (filterMode === 'bulanan' || filterMode === 'periode') {
-        let startDateObj: Date, endDateObj: Date;
-        if (filterMode === 'bulanan') {
-          const [year, month] = bulanAktif.split('-').map(Number);
-          startDateObj = new Date(year, month - 1, 1);
-          endDateObj = new Date(year, month, 0);
-        } else {
-          startDateObj = parseLokalDate(periodeMulai);
-          endDateObj = parseLokalDate(periodeAkhir);
-        }
-
-        rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').forEach((r: any) => {
-          const from = parseLokalDate(r.from_date);
-          const to = parseLokalDate(r.to_date);
-          const start = from < startDateObj ? startDateObj : from;
-          const end = to > endDateObj ? endDateObj : to;
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            if (d.getDay() !== 0 && d.getDay() !== 6) {
-              const key = d.toISOString().substring(0, 10);
-              empIzinDates[key] = r.leave_type;
-            }
-          }
-        });
+      let startDateObj: Date, endDateObj: Date;
+      if (filterMode === 'bulanan') {
+        const [year, month] = bulanAktif.split('-').map(Number);
+        startDateObj = new Date(year, month - 1, 1);
+        endDateObj = new Date(year, month, 0);
+      } else if (filterMode === 'periode') {
+        startDateObj = parseLokalDate(periodeMulai);
+        endDateObj = parseLokalDate(periodeAkhir);
       } else {
-        const izinHariIni = rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').find((r: any) => {
-          const from = parseLokalDate(r.from_date);
-          const to = parseLokalDate(r.to_date);
-          const tgl = parseLokalDate(tanggalAktif);
-          return tgl >= from && tgl <= to;
-        });
-        if (izinHariIni) empIzinDates[tanggalAktif] = izinHariIni.leave_type;
+        startDateObj = parseLokalDate(tanggalAktif);
+        endDateObj = parseLokalDate(tanggalAktif);
       }
+
+      rawLeaves.filter(r => r.status?.toLowerCase() === 'approved').forEach((r: any) => {
+        const from = parseLokalDate(r.from_date); const to = parseLokalDate(r.to_date);
+        const start = from < startDateObj ? startDateObj : from; const end = to > endDateObj ? endDateObj : to;
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          if (d.getDay() !== 0 && d.getDay() !== 6) {
+            const key = d.toISOString().substring(0, 10);
+            empIzinDates[key] = r.leave_type;
+          }
+        }
+      });
+
+      // Kumpulkan tanggal lembur yang di-approve
+      const lemburDates = rawLemburs.filter(r => r.status?.toLowerCase() === 'approved').map(r => r.overtime_date);
 
       const allDates = Array.from(new Set([
         ...Object.keys(emp.logsByDate),
         ...Object.keys(empIzinDates),
+        ...lemburDates,
       ])).sort();
 
       allDates.forEach(date => {
         const log = emp.logsByDate[date] ?? { in: null, out: null };
         const izinType = empIzinDates[date];
+        const lemburForDate = rawLemburs.find(o => o.overtime_date === date && o.status?.toLowerCase() === 'approved');
+        const lemburText = lemburForDate ? formatDurasi(toMenit(lemburForDate.end_time) - toMenit(lemburForDate.start_time)) : '-';
         
         const timeStrIn = log.in?.time || log.in?.attendance_date;
         const timeStrOut = log.out?.time || log.out?.attendance_date;
@@ -577,6 +593,7 @@ const DashboardHR = () => {
             'Jam Keluar': '-',
             'Keterlambatan': '-',
             'Pulang Cepat': '-',
+            'Jam Lembur': lemburText, 
             'Status': `Izin – ${izinType}`,
             'Lokasi Masuk': '-',
             'Lokasi Keluar': '-',
@@ -595,9 +612,10 @@ const DashboardHR = () => {
           'Jam Keluar': outJam,
           'Keterlambatan': telat,
           'Pulang Cepat': pulangCepat,
+          'Jam Lembur': lemburText, 
           'Status': izinType ? `Hadir + Izin (${izinType})` : (log.in ? (telat !== '-' ? `Telat ${telat}` : 'Tepat') : '-'),
-          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}` : '-',
-          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}` : '-',
+          'Lokasi Masuk': log.in?.latitude && log.in?.longitude ? `https://www.google.com/maps?q=$${log.in.latitude},${log.in.longitude}` : '-',
+          'Lokasi Keluar': log.out?.latitude && log.out?.longitude ? `https://www.google.com/maps?q=$${log.out.latitude},${log.out.longitude}` : '-',
         });
       });
     });
@@ -633,15 +651,17 @@ const DashboardHR = () => {
       }
     }
 
+    // UPDATE LEBAR KOLOM EXCEL
     worksheet['!cols'] = [
       { wch: 12 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 35 }, 
       { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, 
-      { wch: 25 }, { wch: 55 }, { wch: 55 }
+      { wch: 16 }, { wch: 25 }, { wch: 55 }, { wch: 55 }
     ];
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Absen");
 
+    // RINGKASAN EXCEL
     if (filterMode === 'bulanan' || filterMode === 'periode') {
       const dateRange: string[] = [];
       
@@ -688,7 +708,6 @@ const DashboardHR = () => {
             return tgl >= from && tgl <= to;
           });
 
-          // Menggunakan let dan assignment agar tidak error TypeScript
           let statusAbsen: string | number = '';
 
           if (log && (log.in || log.out)) {
@@ -719,6 +738,7 @@ const DashboardHR = () => {
         row['Total Telat'] = totalTelatBulanIni;
         row['Total Hadir'] = emp.totalHadir;
         row['Total Izin (Hari)'] = leaveMap[emp.employee] ?? 0;
+        row['Total Lembur'] = formatDurasi(emp.totalLemburMenit); // 🔥 BARU
         return row;
       });
 
@@ -731,7 +751,7 @@ const DashboardHR = () => {
 
       const ringkasanColWidths = [{ wch: 18 }, { wch: 30 }, { wch: 20 }];
       for (let d = 0; d < dateRange.length; d++) ringkasanColWidths.push({ wch: 7 }); 
-      ringkasanColWidths.push({ wch: 15 }, { wch: 15 }, { wch: 18 }); 
+      ringkasanColWidths.push({ wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 18 }); // 🔥 BARU
       wsRingkasan['!cols'] = ringkasanColWidths;
 
       XLSX.utils.book_append_sheet(workbook, wsRingkasan, "Ringkasan");
@@ -768,7 +788,7 @@ const DashboardHR = () => {
     return searchMatch && branchMatch;
   });
 
-  let globalHadir = 0, globalTelat = 0, globalIzin = 0;
+  let globalHadir = 0, globalTelat = 0, globalIzin = 0, globalLemburMenit = 0;
   filteredDataAbsen.forEach(emp => {
     if (filterMode === 'harian') {
       const todayLog = emp.logsByDate[tanggalAktif];
@@ -784,6 +804,7 @@ const DashboardHR = () => {
       globalTelat += emp.totalTelat;
       globalIzin += leaveMap[emp.employee] ?? 0;
     }
+    globalLemburMenit += emp.totalLemburMenit;
   });
 
   const tutupModal = () => {
@@ -830,18 +851,22 @@ const DashboardHR = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 md:gap-4 w-full mt-1">
-            <div className="bg-green-500/20 rounded-xl px-2 py-2 md:py-3 border border-green-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
+          <div className="grid grid-cols-4 gap-2 md:gap-4 w-full mt-1">
+            <div className="bg-green-500/20 rounded-xl px-1 py-2 md:py-3 border border-green-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
               <p className="text-[9px] md:text-xs text-green-300 font-bold uppercase tracking-wide">Hadir</p>
-              <p className="font-black text-xl md:text-3xl leading-none mt-1">{globalHadir}</p>
+              <p className="font-black text-lg md:text-3xl leading-none mt-1">{globalHadir}</p>
             </div>
-            <div className="bg-red-500/20 rounded-xl px-2 py-2 md:py-3 border border-red-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
+            <div className="bg-red-500/20 rounded-xl px-1 py-2 md:py-3 border border-red-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
               <p className="text-[9px] md:text-xs text-red-300 font-bold uppercase tracking-wide">Telat</p>
-              <p className="font-black text-xl md:text-3xl leading-none mt-1">{globalTelat}</p>
+              <p className="font-black text-lg md:text-3xl leading-none mt-1">{globalTelat}</p>
             </div>
-            <div className="bg-blue-500/20 rounded-xl px-2 py-2 md:py-3 border border-blue-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
+            <div className="bg-blue-500/20 rounded-xl px-1 py-2 md:py-3 border border-blue-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
               <p className="text-[9px] md:text-xs text-blue-300 font-bold uppercase tracking-wide">Izin</p>
-              <p className="font-black text-xl md:text-3xl leading-none mt-1">{globalIzin}</p>
+              <p className="font-black text-lg md:text-3xl leading-none mt-1">{globalIzin}</p>
+            </div>
+            <div className="bg-purple-500/20 rounded-xl px-1 py-2 md:py-3 border border-purple-500/30 text-white flex flex-col items-center justify-center text-center shadow-inner">
+              <p className="text-[9px] md:text-xs text-purple-300 font-bold uppercase tracking-wide">Lembur</p>
+              <p className="font-black text-lg md:text-3xl leading-none mt-1">{formatDurasi(globalLemburMenit)}</p>
             </div>
           </div>
 
@@ -1056,20 +1081,30 @@ const DashboardHR = () => {
                             </div>
                           ) : null;
                         })()}
+                        {emp.totalLemburMenit > 0 && (
+                          <div className="mt-2 bg-purple-50 border border-purple-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                            <i className="fa-solid fa-business-time text-purple-400 text-xs shrink-0" />
+                            <p className="text-[10px] font-black text-purple-700">Lembur {formatDurasi(emp.totalLemburMenit)}</p>
+                          </div>
+                        )}
                       </>
                     ) : (
-                      <div className="grid grid-cols-3 gap-2 mt-auto">
-                        <div className="bg-green-50 rounded-xl p-2.5 flex flex-col justify-center border border-green-100">
+                      <div className="grid grid-cols-4 gap-2 mt-auto">
+                        <div className="bg-green-50 rounded-xl p-2.5 flex flex-col justify-center items-center border border-green-100">
                           <p className="text-[9px] text-green-600 font-black uppercase mb-1">Hadir</p>
-                          <p className="font-black text-green-800 text-base">{emp.totalHadir} <span className="text-[10px] font-bold">Hari</span></p>
+                          <p className="font-black text-green-800 text-base">{emp.totalHadir}</p>
                         </div>
-                        <div className="bg-red-50 rounded-xl p-2.5 flex flex-col justify-center border border-red-100">
+                        <div className="bg-red-50 rounded-xl p-2.5 flex flex-col justify-center items-center border border-red-100">
                           <p className="text-[9px] text-red-500 font-black uppercase mb-1">Telat</p>
-                          <p className="font-black text-red-800 text-base">{emp.totalTelat} <span className="text-[10px] font-bold">Kali</span></p>
+                          <p className="font-black text-red-800 text-base">{emp.totalTelat}</p>
                         </div>
-                        <div className="bg-blue-50 rounded-xl p-2.5 flex flex-col justify-center border border-blue-100">
+                        <div className="bg-blue-50 rounded-xl p-2.5 flex flex-col justify-center items-center border border-blue-100">
                           <p className="text-[9px] text-blue-500 font-black uppercase mb-1">Izin</p>
-                          <p className="font-black text-blue-800 text-base">{leaveMap[emp.employee] ?? 0} <span className="text-[10px] font-bold">Hari</span></p>
+                          <p className="font-black text-blue-800 text-base">{leaveMap[emp.employee] ?? 0}</p>
+                        </div>
+                        <div className="bg-purple-50 rounded-xl p-2.5 flex flex-col justify-center items-center border border-purple-100">
+                          <p className="text-[9px] text-purple-500 font-black uppercase mb-1">Lembur</p>
+                          <p className="font-black text-purple-800 text-xs text-center leading-tight mt-0.5">{formatDurasi(emp.totalLemburMenit)}</p>
                         </div>
                       </div>
                     )}
@@ -1134,6 +1169,8 @@ const DashboardHR = () => {
             }) ?? null;
           })();
 
+          const lemburHariIniData = overtimeRawMap[emp.employee]?.find(o => o.overtime_date === tanggalAktif && o.status?.toLowerCase() === 'approved') ?? null;
+
           return (
             <div className="fixed inset-0 z-50 flex flex-col justify-end md:justify-center items-center p-0 md:p-8 bg-black/60 backdrop-blur-sm">
               <div className="bg-white w-full md:max-w-6xl max-h-[85vh] rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-zoomIn">
@@ -1194,6 +1231,20 @@ const DashboardHR = () => {
                         </div>
                       </div>
 
+                      {/* TAMPILKAN INFO LEMBUR JIKA ADA */}
+                      {lemburHariIniData && (
+                        <div className="mb-3 bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2 text-purple-600 font-bold text-[10px] uppercase">
+                            <i className="fa-solid fa-business-time" /> Disetujui Lembur
+                          </div>
+                          <p className="text-sm font-black text-purple-800">
+                            {formatDurasi(toMenit(lemburHariIniData.end_time) - toMenit(lemburHariIniData.start_time))}
+                            <span className="text-xs font-bold text-purple-500 ml-1">({lemburHariIniData.start_time.substring(0, 5)} - {lemburHariIniData.end_time.substring(0, 5)})</span>
+                          </p>
+                          <p className="text-[10px] text-purple-600 leading-snug italic">"{lemburHariIniData.description}"</p>
+                        </div>
+                      )}
+
                       {izinHariIniData && (
                         <div className="mb-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 flex flex-col gap-3">
                           <div className="flex items-start gap-3">
@@ -1220,13 +1271,13 @@ const DashboardHR = () => {
 
                       <div className="flex flex-col gap-2">
                         {todayLog.in?.latitude && todayLog.in?.longitude && (
-                          <a href={`https://www.google.com/maps?q=${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=$${todayLog.in.latitude},${todayLog.in.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-blue-500" /> Peta Masuk</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
                         )}
                         {todayLog.out?.latitude && todayLog.out?.longitude && (
-                          <a href={`https://www.google.com/maps?q=${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
+                          <a href={`https://www.google.com/maps?q=$${todayLog.out.latitude},${todayLog.out.longitude}`} target="_blank" rel="noreferrer" className="bg-white hover:bg-gray-50 border border-gray-200 text-[#3e2723] p-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors">
                             <span className="flex items-center gap-2"><i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar</span>
                             <i className="fa-solid fa-arrow-up-right-from-square text-gray-300" />
                           </a>
@@ -1347,9 +1398,12 @@ const DashboardHR = () => {
                         })()
                       : {};
 
+                    // Gabung tanggal absen, izin, dan lembur
+                    const lemburForEmp = overtimeRawMap[emp.employee]?.filter(o => o.status?.toLowerCase() === 'approved').map(o => o.overtime_date) || [];
                     const allDates = Array.from(new Set([
                       ...sortedDates,
                       ...Object.keys(empLeaveData),
+                      ...lemburForEmp
                     ])).sort((a,b) => b.localeCompare(a));
 
                     if (allDates.length === 0) {
@@ -1359,6 +1413,7 @@ const DashboardHR = () => {
                     return allDates.map(date => {
                       const log = emp.logsByDate[date] ?? { in: null, out: null };
                       const izinType = empLeaveData[date];
+                      const lemburForDate = overtimeRawMap[emp.employee]?.find(o => o.overtime_date === date && o.status?.toLowerCase() === 'approved');
                       
                       const timeStrIn = log.in?.time || log.in?.attendance_date;
                       const timeStrOut = log.out?.time || log.out?.attendance_date;
@@ -1395,7 +1450,7 @@ const DashboardHR = () => {
                                 </div>
                               </div>
                               
-                              <div className="w-12 md:w-16 flex justify-center">
+                              <div className="w-12 md:w-16 flex flex-col gap-1 justify-center items-center">
                                 {izinType ? (
                                   <span className="bg-blue-50 text-blue-600 border border-blue-200 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md w-full text-center">Izin</span>
                                 ) : isTelat ? (
@@ -1404,6 +1459,10 @@ const DashboardHR = () => {
                                   <span className="bg-green-50 text-green-700 border border-green-200 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md w-full text-center">Tepat</span>
                                 ) : (
                                   <span className="bg-gray-50 text-gray-400 border border-gray-200 text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md w-full text-center">-</span>
+                                )}
+                                
+                                {lemburForDate && (
+                                  <span className="bg-purple-50 text-purple-600 border border-purple-200 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">Lembur</span>
                                 )}
                               </div>
                               
@@ -1424,14 +1483,27 @@ const DashboardHR = () => {
                                  </div>
                               </div>
 
+                              {lemburForDate && (
+                                <div className="mb-4 bg-purple-50 border border-purple-200 rounded-xl p-3 flex flex-col gap-1.5">
+                                  <div className="flex items-center gap-2 text-purple-600 font-bold text-[10px] uppercase">
+                                    <i className="fa-solid fa-business-time" /> Disetujui Lembur
+                                  </div>
+                                  <p className="text-sm font-black text-purple-800">
+                                    {formatDurasi(toMenit(lemburForDate.end_time) - toMenit(lemburForDate.start_time))}
+                                    <span className="text-xs font-bold text-purple-500 ml-1">({lemburForDate.start_time.substring(0, 5)} - {lemburForDate.end_time.substring(0, 5)})</span>
+                                  </p>
+                                  <p className="text-[10px] text-purple-600 leading-snug italic">"{lemburForDate.description}"</p>
+                                </div>
+                              )}
+
                               <div className="flex gap-2 mb-4">
                                 {log.in?.latitude && log.in?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=$${log.in.latitude},${log.in.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-green-500" /> Peta Masuk
                                   </a>
                                 )}
                                 {log.out?.latitude && log.out?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
+                                  <a href={`https://www.google.com/maps?q=$${log.out.latitude},${log.out.longitude}`} target="_blank" rel="noreferrer" className="flex-1 bg-white hover:bg-gray-100 border border-gray-200 text-[#3e2723] p-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                     <i className="fa-solid fa-map-location-dot text-orange-500" /> Peta Keluar
                                   </a>
                                 )}
@@ -1508,7 +1580,7 @@ const DashboardHR = () => {
                                     </div>
                                   )}
 
-                                  {/* PREVIEW LAMPIRAN IZIN BULANAN (JIKA ADA ABSEN) */}
+                                  {/* PREVIEW LAMPIRAN IZIN BULANAN (JIKA ADA ABSEN JUGA DI HARI ITU) */}
                                   {izinType && (() => {
                                       const specificLeave = leaveRawMap[emp.employee]?.find(r => {
                                           const f = parseLokalDate(r.from_date);

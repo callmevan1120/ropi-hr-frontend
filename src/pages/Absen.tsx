@@ -42,6 +42,14 @@ interface ActiveShift {
   end_time: string;
 }
 
+interface OvertimeRecord {
+  name: string;
+  overtime_date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+}
+
 // ─────────────────────────────────────────────
 // HELPER: format & hitung waktu
 // ─────────────────────────────────────────────
@@ -317,6 +325,7 @@ const Absen = () => {
   const [tahunAktif,    setTahunAktif]    = useState(new Date().getFullYear());
   const [masterShifts,  setMasterShifts]  = useState<Record<string, { in: string; out: string }>>({});
   const [leaveRecords,  setLeaveRecords]  = useState<LeaveRecord[]>([]);
+  const [overtimeRecords, setOvertimeRecords] = useState<OvertimeRecord[]>([]);
   const [lihatSemua,    setLihatSemua]    = useState(false);
 
   const [activeShift,   setActiveShift]   = useState<ActiveShift | null>(null);
@@ -396,6 +405,7 @@ const Absen = () => {
     if (user) {
       ambilRiwayatAbsen();
       ambilRiwayatIzin(user.employee_id);
+      ambilRiwayatLembur(user.employee_id);
     }
   }, [user, bulanAktif, tahunAktif]);
 
@@ -527,6 +537,16 @@ const Absen = () => {
     } finally {
       setShiftLoading(false);
     }
+  };
+
+  const ambilRiwayatLembur = async (employeeId: string) => {
+    try {
+      const res = await fetch(`${BACKEND}/api/attendance/overtime-history?employee_id=${employeeId}&_t=${Date.now()}`);
+      const data = await res.json();
+      if (data.success && data.data) {
+        setOvertimeRecords(data.data);
+      }
+    } catch (e) { console.error(e); }
   };
 
   const ambilMasterShift = async () => {
@@ -941,6 +961,17 @@ const Absen = () => {
   const rekapIzin  = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
   const rekapCuti  = hitungHariKerjaDalamBulan(leaveRecords, r =>  r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
 
+  const rekapLemburMenit = overtimeRecords.reduce((acc, r) => {
+    if (r.status.toLowerCase() === 'approved') {
+      const d = parseLokalDate(r.overtime_date);
+      if (d.getMonth() === bulanAktif && d.getFullYear() === tahunAktif) {
+        const diff = toMenit(r.end_time) - toMenit(r.start_time);
+        return acc + (diff > 0 ? diff : 0);
+      }
+    }
+    return acc;
+  }, 0);
+
   // MEMISAHKAN SET TANGGAL IZIN DAN CUTI
   const tanggalIzinSet = new Set<string>();
   const tanggalCutiSet = new Set<string>();
@@ -969,13 +1000,13 @@ const Absen = () => {
     const totalHari   = new Date(tahunAktif, bulanAktif + 1, 0).getDate();
     const blanks      = Array.from({ length: hariPertama }, (_, i) => <div key={`b-${i}`} />);
     const days        = Array.from({ length: totalHari }, (_, i) => {
-      const d        = i + 1;
+      const d         = i + 1;
       const isHariIni = d === new Date().getDate() && bulanAktif === new Date().getMonth() && tahunAktif === new Date().getFullYear();
-      const strTgl   = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dataIn   = groupedRiwayat[strTgl]?.in;
-      const checkin  = dataIn?.time;
-      const adaIzin  = tanggalIzinSet.has(strTgl);
-      const adaCuti  = tanggalCutiSet.has(strTgl); // 🔥 Mengecek apakah ini Cuti 🔥
+      const strTgl    = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dataIn    = groupedRiwayat[strTgl]?.in;
+      const checkin   = dataIn?.time;
+      const adaIzin   = tanggalIzinSet.has(strTgl);
+      const adaCuti   = tanggalCutiSet.has(strTgl); // 🔥 Mengecek apakah ini Cuti 🔥
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
       
       let dot: React.ReactNode = null;
@@ -1112,16 +1143,17 @@ const Absen = () => {
                 </div>
               )}
 
-              <div className="mt-4 grid grid-cols-4 gap-2">
+              <div className="mt-4 grid grid-cols-5 gap-1.5">
                 {[
                   { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
                   { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
                   { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
                   { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, 
+                  { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' }, 
                 ].map(item => (
-                  <div key={item.label} className="bg-white/10 rounded-xl py-2 text-center">
-                    <p className={`text-xl font-black ${item.color}`}>{item.value}</p>
-                    <p className="text-[9px] font-black text-white/60 uppercase tracking-wide">{item.label}</p>
+                  <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center">
+                    <p className={`text-sm font-black ${item.color} truncate`}>{item.value}</p>
+                    <p className="text-[8px] font-black text-white/60 uppercase tracking-wide mt-0.5">{item.label}</p>
                   </div>
                 ))}
               </div>
@@ -1137,7 +1169,7 @@ const Absen = () => {
                     {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(h => <div key={h}>{h}</div>)}
                   </div>
                   <div className="grid grid-cols-7 gap-y-0.5 text-center">{renderKalender()}</div>
-                  <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
                     {[
                       { color: 'bg-green-400', label: 'Tepat' }, 
                       { color: 'bg-red-400', label: 'Telat' }, 
@@ -1178,6 +1210,13 @@ const Absen = () => {
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
                         const adaCutiHariIni = tanggalCutiSet.has(tgl); 
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+
+                        const lemburHariIni = overtimeRecords.find(o => o.overtime_date === tgl && o.status?.toLowerCase() === 'approved');
+                        let badgeLembur: React.ReactNode = null;
+                        if (lemburHariIni) {
+                           const durasi = toMenit(lemburHariIni.end_time) - toMenit(lemburHariIni.start_time);
+                           badgeLembur = <span className="bg-purple-100 text-purple-600 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm border border-purple-200">Lembur {formatDurasi(durasi)}</span>;
+                        }
 
                         let badgeEl: React.ReactNode = null;
                         if (jamIn !== '-') {
@@ -1223,7 +1262,7 @@ const Absen = () => {
                                 </div>
                               </div>
                               <div className="flex flex-col items-end gap-1 shrink-0">
-                                {badgeEl}{badgeCepat}{badgeBelumKeluar}
+                                {badgeEl}{badgeCepat}{badgeBelumKeluar}{badgeLembur}
                               </div>
                             </div>
                             
@@ -1551,19 +1590,6 @@ const Absen = () => {
               const outJam    = detailModal.outData?.time ? formatJamLokal(detailModal.outData.time) : null;
 
               const hasVerifImage = !!(detailModal.inData?.custom_verification_image || detailModal.outData?.custom_verification_image);
-
-              const FotoSlotDetail = ({ src, label, badge, badgeColor }: { src?: string; label: string; badge: string; badgeColor: string }) => (
-                <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-                  <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                    {src
-                      ? <img src={prosesUrlFoto(src)} className="w-full h-full object-contain" alt={label} loading="lazy" decoding="async" />
-                      : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                    }
-                    <div className={`absolute top-2 left-2 ${badgeColor} text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20`}>{badge}</div>
-                  </div>
-                </div>
-              );
 
               return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
