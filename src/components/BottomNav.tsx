@@ -42,6 +42,8 @@ const BottomNav = () => {
           <div className="bg-white w-full max-w-sm rounded-t-[2.5rem] p-6 shadow-2xl pb-10" style={{ animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards' }} onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
             <h3 className="text-[#3e2723] font-black text-lg mb-4 px-2">Menu Lainnya</h3>
+            
+            {/* GRID DIBUAT 4 KOLOM AGAR RAPI (Menu ke-5 otomatis turun ke bawah) */}
             <div className="grid grid-cols-4 gap-4">
               <Link to="/shift" className="flex flex-col items-center gap-2 group" onClick={() => setShowMoreMenu(false)}>
                 <div className="w-14 h-14 bg-[#fff8e1] rounded-2xl flex items-center justify-center text-[#fbc02d] text-2xl group-hover:bg-[#fbc02d] group-hover:text-[#3e2723] transition-colors border border-[#fbc02d]/30">
@@ -49,18 +51,29 @@ const BottomNav = () => {
                 </div>
                 <span className="text-[10px] font-bold text-[#3e2723]">Shift</span>
               </Link>
+              
               <Link to="/cuti" className="flex flex-col items-center gap-2 group" onClick={() => setShowMoreMenu(false)}>
                 <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 text-2xl group-hover:bg-blue-500 group-hover:text-white transition-colors border border-blue-100">
                   <i className="fa-solid fa-calendar-minus"></i>
                 </div>
                 <span className="text-[10px] font-bold text-[#3e2723]">Cuti</span>
               </Link>
+
+              {/* TOMBOL LEMBUR BARU DITAMBAHKAN DI SINI */}
+              <Link to="/lembur" className="flex flex-col items-center gap-2 group" onClick={() => setShowMoreMenu(false)}>
+                <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 text-2xl group-hover:bg-indigo-500 group-hover:text-white transition-colors border border-indigo-100">
+                  <i className="fa-solid fa-business-time"></i>
+                </div>
+                <span className="text-[10px] font-bold text-[#3e2723]">Lembur</span>
+              </Link>
+              
               <Link to="/slip-gaji" className="flex flex-col items-center gap-2 group" onClick={() => setShowMoreMenu(false)}>
                 <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 text-2xl group-hover:bg-green-500 group-hover:text-white transition-colors border border-green-100">
                   <i className="fa-solid fa-money-check-dollar"></i>
                 </div>
                 <span className="text-[10px] font-bold text-[#3e2723]">Slip Gaji</span>
               </Link>
+              
               <Link to="/profil" className="flex flex-col items-center gap-2 group" onClick={() => setShowMoreMenu(false)}>
                 <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-500 text-2xl group-hover:bg-gray-200 transition-colors border border-gray-200">
                   <i className="fa-solid fa-user"></i>
