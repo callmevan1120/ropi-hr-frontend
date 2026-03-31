@@ -166,7 +166,7 @@ const Lembur = () => {
                 <Link to="/home" className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white active:scale-95 transition-transform border border-white/10 hover:bg-white/20">
                   <i className="fa-solid fa-arrow-left"></i>
                 </Link>
-                <h1 className="text-xl font-black text-white">Pengajuan Lembur</h1>
+                <h1 className="text-xl font-black text-[#fbc02d]">Pengajuan Lembur</h1>
               </div>
               <div className="flex mt-5 bg-white/5 rounded-xl p-1 gap-1 border border-white/10">
                 <button
