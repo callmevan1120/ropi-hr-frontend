@@ -962,7 +962,6 @@ const Absen = () => {
   const rekapIzin  = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
   const rekapCuti  = hitungHariKerjaDalamBulan(leaveRecords, r =>  r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
 
-  // 🔥 BARU: Kalkulasi Rekap Lembur 🔥
   const rekapLemburMenit = overtimeRecords.reduce((acc, r) => {
     if (r.status.toLowerCase() === 'approved') {
       const d = parseLokalDate(r.overtime_date);
@@ -1145,20 +1144,31 @@ const Absen = () => {
                 </div>
               )}
 
-              {/* 🔥 BARU: Grid 5 Kolom 🔥 */}
-              <div className="mt-4 grid grid-cols-5 gap-1.5">
-                {[
-                  { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
-                  { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
-                  { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
-                  { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, 
-                  { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' },
-                ].map(item => (
-                  <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center overflow-hidden">
-                    <p className={`text-sm md:text-base font-black ${item.color} truncate w-full`}>{item.value}</p>
-                    <p className="text-[8px] font-black text-white/60 uppercase tracking-wide mt-0.5">{item.label}</p>
-                  </div>
-                ))}
+              {/* REVISI: GRID KOTAK LEGA, TIDAK MAMPAT (2 BARIS) */}
+              <div className="mt-5 flex flex-col gap-2.5">
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[
+                    { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
+                    { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
+                    { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
+                  ].map(item => (
+                    <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center overflow-hidden">
+                      <p className={`text-base font-black ${item.color} truncate w-full`}>{item.value}</p>
+                      <p className="text-[9px] font-bold text-white/60 uppercase tracking-wide mt-0.5">{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, 
+                    { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' }, 
+                  ].map(item => (
+                    <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center overflow-hidden">
+                      <p className={`text-base font-black ${item.color} truncate w-full`}>{item.value}</p>
+                      <p className="text-[9px] font-bold text-white/60 uppercase tracking-wide mt-0.5">{item.label}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1214,27 +1224,27 @@ const Absen = () => {
                         const adaCutiHariIni = tanggalCutiSet.has(tgl); 
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
+                        // REVISI: BADGE STATUS DIBUAT FLEX WRAP DI BAWAH TANGGAL AGAR LEGA
                         const lemburHariIni = overtimeRecords.find(o => o.overtime_date === tgl && o.status?.toLowerCase() === 'approved');
                         let badgeLembur: React.ReactNode = null;
                         if (lemburHariIni) {
                            const durasi = toMenit(lemburHariIni.end_time) - toMenit(lemburHariIni.start_time);
-                           badgeLembur = <span className="bg-purple-100 text-purple-600 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm border border-purple-200">Lembur {formatDurasi(durasi)}</span>;
+                           badgeLembur = <span className="bg-purple-100 text-purple-600 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm border border-purple-200 shrink-0">Lembur {formatDurasi(durasi)}</span>;
                         }
 
                         let badgeEl: React.ReactNode = null;
                         if (jamIn !== '-') {
                           const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
                           badgeEl = selisih > 0
-                            ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Telat {formatDurasi(selisih)}</span>
-                            : <span className="text-green-600 text-[9px] font-black">✓ Tepat</span>;
+                            ? <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm shrink-0">Telat {formatDurasi(selisih)}</span>
+                            : <span className="bg-green-100 text-green-700 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm shrink-0">Tepat Waktu</span>;
                         }
                         
-                        // Logika prioritas Badge: Jika tidak absen, tampilkan Cuti atau Izin
                         if (!badgeEl) {
                           if (adaCutiHariIni) {
-                            badgeEl = <span className="bg-teal-100 text-teal-700 text-[9px] font-black px-1.5 py-0.5 rounded-md">Cuti</span>;
+                            badgeEl = <span className="bg-teal-100 text-teal-700 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm shrink-0">Cuti</span>;
                           } else if (adaIzinHariIni) {
-                            badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md">Izin</span>;
+                            badgeEl = <span className="bg-blue-100 text-blue-600 text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm shrink-0">Izin</span>;
                           }
                         }
 
@@ -1242,34 +1252,42 @@ const Absen = () => {
                         if (jamOut !== '-') {
                           const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
                           if (selisih > 0) {
-                            badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">Cepat {formatDurasi(selisih)}</span>;
+                            badgeCepat = <span className="bg-orange-400 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm shrink-0">Pulang Cepat {formatDurasi(selisih)}</span>;
                           }
                         }
 
                         let badgeBelumKeluar: React.ReactNode = null;
                         if (jamIn !== '-' && jamOut === '-') {
-                          badgeBelumKeluar = <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">Belum Keluar</span>;
+                          badgeBelumKeluar = <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm shrink-0">Belum Keluar</span>;
                         }
 
                         return (
-                          <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-3 rounded-2xl border border-gray-100 flex flex-col gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                {/* Mengganti warna icon sesuai tipe hari */}
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaCutiHariIni ? 'bg-teal-50 text-teal-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
-                                  <i className={`fa-solid ${d.in ? 'fa-check' : (adaCutiHariIni || adaIzinHariIni) ? 'fa-envelope-open-text' : 'fa-minus'}`} />
+                          <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-4 rounded-2xl border border-gray-100 flex flex-col gap-3 shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
+                            
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaCutiHariIni ? 'bg-teal-50 text-teal-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
+                                    <i className={`fa-solid ${d.in ? 'fa-check' : (adaCutiHariIni || adaIzinHariIni) ? 'fa-envelope-open-text' : 'fa-minus'}`} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
+                                    <p className="text-[10px] font-bold text-gray-400 truncate">{shiftLabel || '-'}</p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
-                                  <p className="text-[9px] font-bold text-gray-400 truncate">{shiftLabel || '-'}</p>
-                                </div>
+                                <i className="fa-solid fa-chevron-right text-gray-300 text-[10px] shrink-0" />
                               </div>
-                              <div className="flex flex-col items-end gap-1 shrink-0">
-                                {badgeEl}{badgeCepat}{badgeBelumKeluar}{badgeLembur}
+
+                              {/* Kumpulan Badge Melipat (Wrap) di bawah nama tanggal */}
+                              <div className="flex flex-wrap items-center gap-1.5 pl-[52px]">
+                                 {badgeEl}
+                                 {badgeCepat}
+                                 {badgeBelumKeluar}
+                                 {badgeLembur}
                               </div>
                             </div>
                             
-                            <div className="bg-gray-50 border border-gray-100 rounded-xl py-2 px-4 flex items-center justify-between mt-0.5">
+                            <div className="bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 flex items-center justify-between">
                               <div className="flex flex-col">
                                 <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Aktual</span>
                                 <div className="flex items-center gap-1.5 text-xs font-black text-[#3e2723]">
@@ -1594,7 +1612,7 @@ const Absen = () => {
 
               const hasVerifImage = !!(detailModal.inData?.custom_verification_image || detailModal.outData?.custom_verification_image);
 
-              // 🔥 MENGAMBIL DATA LEMBUR UNTUK MODAL 🔥
+              // MENGAMBIL DATA LEMBUR UNTUK MODAL
               const lemburHariIniData = overtimeRecords?.find(o => o.overtime_date === detailModal.tgl && o.status?.toLowerCase() === 'approved') ?? null;
 
               return (
@@ -1632,7 +1650,7 @@ const Absen = () => {
 
                     <div className={`flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 bg-gray-50`}>
                       
-                      {/* 🔥 MENAMPILKAN LEMBUR DI MODAL DETAIL 🔥 */}
+                      {/* MENAMPILKAN LEMBUR DI MODAL DETAIL */}
                       {lemburHariIniData && (
                         <div className="bg-purple-50 border border-purple-200 rounded-3xl px-4 py-3 flex flex-col gap-1.5">
                           <div className="flex items-center gap-2 text-purple-600 font-bold text-[10px] uppercase">
