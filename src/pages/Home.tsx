@@ -328,14 +328,14 @@ const Home = () => {
       id: 'lembur', title: '4. Pengajuan Lembur',
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
-          <li>Pilih menu <strong>Lembur</strong> dari pilihan "Menu Lainnya".</li>
+          <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat".</li>
           <li>Isi tanggal, jam mulai, jam selesai, dan keterangan pekerjaan lembur.</li>
           <li>Tunggu status pengajuan disetujui (Approved) oleh HRD. Jam lembur akan otomatis dijumlahkan pada riwayat absen.</li>
         </ul>
       )
     },
     {
-      id: 'error', title: '4. Solusi Jika Error',
+      id: 'error', title: '5. Solusi Jika Error',
       content: (
         <ul className="list-disc pl-4 space-y-2">
           <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba lagi.</li>
@@ -371,7 +371,17 @@ const Home = () => {
       )
     },
     {
-      id: 'error', title: '3. Solusi Jika Error',
+      id: 'lembur', title: '3. Pengajuan Lembur',
+      content: (
+        <ul className="list-decimal pl-4 space-y-1.5">
+          <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat".</li>
+          <li>Isi tanggal, jam mulai, jam selesai, dan keterangan pekerjaan lembur.</li>
+          <li>Tunggu status pengajuan disetujui (Approved) oleh atasan/HRD. Jam lembur akan otomatis dijumlahkan pada riwayat absen.</li>
+        </ul>
+      )
+    },
+    {
+      id: 'error', title: '4. Solusi Jika Error',
       content: (
         <ul className="list-disc pl-4 space-y-2">
           <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba absen lagi.</li>
@@ -455,7 +465,7 @@ const Home = () => {
                   <p className="text-white/60 text-xs mt-0.5 truncate">{user.role || 'Staff Roti Ropi'}</p>
                 </div>
 
-                {/* KANAN: Bell Notification — compact & eyecatching */}
+                {/* KANAN: Bell Notification */}
                 <div className="relative shrink-0" ref={notifRef}>
                   <button
                     onClick={handleOpenNotif}
@@ -541,67 +551,51 @@ const Home = () => {
                 </button>
               </div>
 
-              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide">Menu Laporan</h3>
-              <div className="flex flex-col gap-3 mb-8">
-                <Link to="/izin" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50 group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-[#fff8e1] rounded-full flex items-center justify-center text-[#fbc02d] text-xl shrink-0 group-hover:bg-[#fbc02d] group-hover:text-[#3e2723] transition-colors">
-                      <i className="fa-solid fa-envelope-open-text"></i>
-                    </div>
-                    <div>
-                      <p className="font-black text-[#3e2723] text-sm">Pengajuan Izin</p>
-                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Sakit & Keperluan</p>
-                    </div>
+              {/* AKSES CEPAT (GRID KOTAK) */}
+              <h3 className="font-black text-[#3e2723] text-sm mb-3 ml-1 uppercase tracking-wide">Akses Cepat</h3>
+              <div className="grid grid-cols-3 gap-3 mb-8">
+                
+                <Link to="/izin" className="bg-white p-3 rounded-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#fbc02d]/50 text-center aspect-square group">
+                  <div className="w-10 h-10 bg-[#fff8e1] rounded-full flex items-center justify-center text-[#fbc02d] text-lg group-hover:bg-[#fbc02d] group-hover:text-[#3e2723] transition-colors">
+                    <i className="fa-solid fa-envelope-open-text"></i>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-[#fff8e1] group-hover:text-[#fbc02d] transition-colors">
-                    <i className="fa-solid fa-chevron-right text-xs"></i>
-                  </div>
+                  <p className="font-black text-[#3e2723] text-[10px] leading-tight">Izin</p>
                 </Link>
 
-                <Link to="/cuti" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-blue-400/50 group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-xl shrink-0 group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                      <i className="fa-solid fa-calendar-minus"></i>
-                    </div>
-                    <div>
-                      <p className="font-black text-[#3e2723] text-sm">Cuti Tahunan</p>
-                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Cek Sisa Kuota</p>
-                    </div>
+                <Link to="/cuti" className="bg-white p-3 rounded-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-blue-400/50 text-center aspect-square group">
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 text-lg group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <i className="fa-solid fa-calendar-minus"></i>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
-                    <i className="fa-solid fa-chevron-right text-xs"></i>
-                  </div>
+                  <p className="font-black text-[#3e2723] text-[10px] leading-tight">Cuti</p>
                 </Link>
 
-                <Link to="/absen" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#3e2723]/50 group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 text-xl shrink-0 group-hover:bg-[#3e2723] group-hover:text-[#fbc02d] transition-colors">
-                      <i className="fa-solid fa-clipboard-list"></i>
-                    </div>
-                    <div>
-                      <p className="font-black text-[#3e2723] text-sm">Riwayat Absen</p>
-                      <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Kehadiran Bulanan</p>
-                    </div>
+                <Link to="/lembur" className="bg-white p-3 rounded-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-orange-400/50 text-center aspect-square group">
+                  <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center text-orange-500 text-lg group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                    <i className="fa-solid fa-business-time"></i>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-gray-200 group-hover:text-[#3e2723] transition-colors">
-                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                  <p className="font-black text-[#3e2723] text-[10px] leading-tight">Lembur</p>
+                </Link>
+
+                <Link to="/absen" className="bg-white p-3 rounded-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-[#3e2723]/50 text-center aspect-square group">
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 text-lg group-hover:bg-gray-200 transition-colors">
+                    <i className="fa-solid fa-clipboard-list"></i>
                   </div>
+                  <p className="font-black text-[#3e2723] text-[10px] leading-tight">Riwayat Absen</p>
+                </Link>
+
+                <Link to="/slip-gaji" className="bg-white p-3 rounded-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-green-400/50 text-center aspect-square group">
+                  <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-500 text-lg group-hover:bg-green-500 group-hover:text-white transition-colors">
+                    <i className="fa-solid fa-money-check-dollar"></i>
+                  </div>
+                  <p className="font-black text-[#3e2723] text-[10px] leading-tight">Slip Gaji</p>
                 </Link>
 
                 {outlet && (
-                  <Link to="/shift" className="bg-white p-4 rounded-2xl flex items-center justify-between active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-purple-400/50 group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center text-purple-500 text-xl shrink-0 group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                        <i className="fa-solid fa-calendar-days"></i>
-                      </div>
-                      <div>
-                        <p className="font-black text-[#3e2723] text-sm">Pengajuan Shift</p>
-                        <p className="text-gray-400 text-[10px] font-bold uppercase mt-0.5">Ubah / Tukar Shift</p>
-                      </div>
+                  <Link to="/shift" className="bg-white p-3 rounded-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-all border border-gray-100 shadow-sm hover:border-purple-400/50 text-center aspect-square group">
+                    <div className="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center text-purple-500 text-lg group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                      <i className="fa-solid fa-calendar-days"></i>
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-purple-50 group-hover:text-purple-500 transition-colors">
-                      <i className="fa-solid fa-chevron-right text-xs"></i>
-                    </div>
+                    <p className="font-black text-[#3e2723] text-[10px] leading-tight">Shift Outlet</p>
                   </Link>
                 )}
               </div>
