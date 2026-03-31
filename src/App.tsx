@@ -9,6 +9,7 @@ import Izin from './pages/Izin';
 import Shift from './pages/Shift';
 import SlipGaji from './pages/SlipGaji';
 import DashboardHR from './pages/DashboardHR';
+import Lembur from './pages/Lembur';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <Route path="/izin" element={<Izin />} />
         <Route path="/shift" element={<Shift />} />
         <Route path="/slip-gaji" element={<SlipGaji />} />  {/* ← dash, bukan tanpa dash */}
+        <Route path="/lembur" element={<Lembur />} />
 
         <Route path="/hr-dashboard" element={<DashboardHR />} />
 
