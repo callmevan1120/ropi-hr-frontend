@@ -191,7 +191,7 @@ const Lembur = () => {
                 <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 flex gap-3 shadow-sm items-start mb-6">
                   <i className="fa-solid fa-circle-info text-amber-500 text-lg mt-0.5"></i>
                   <p className="text-[11px] text-amber-900 font-medium leading-relaxed">
-                    Pastikan jam lembur yang diajukan sudah disetujui secara lisan oleh atasan sebelum mengisi form ini.
+                    Pastikan pengajuan lembur dilakukan maksimal dalam waktu 1×24 jam sebelum mengisi form ini!
                   </p>
                 </div>
 
