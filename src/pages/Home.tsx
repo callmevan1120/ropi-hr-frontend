@@ -328,7 +328,7 @@ const Home = () => {
       id: 'lembur', title: '4. Pengajuan Lembur',
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
-          <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat".</li>
+          <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat" atau klik tombol menu dan pilih .</li>
           <li>Isi tanggal, jam mulai, jam selesai, dan keterangan pekerjaan lembur.</li>
           <li>Tunggu status pengajuan disetujui (Approved) oleh HRD. Jam lembur akan otomatis dijumlahkan pada riwayat absen.</li>
         </ul>
