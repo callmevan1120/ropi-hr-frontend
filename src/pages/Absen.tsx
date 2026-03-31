@@ -48,6 +48,7 @@ interface OvertimeRecord {
   start_time: string;
   end_time: string;
   status: string;
+  description?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -961,6 +962,7 @@ const Absen = () => {
   const rekapIzin  = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
   const rekapCuti  = hitungHariKerjaDalamBulan(leaveRecords, r =>  r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
 
+  // 🔥 BARU: Kalkulasi Rekap Lembur 🔥
   const rekapLemburMenit = overtimeRecords.reduce((acc, r) => {
     if (r.status.toLowerCase() === 'approved') {
       const d = parseLokalDate(r.overtime_date);
@@ -1143,16 +1145,17 @@ const Absen = () => {
                 </div>
               )}
 
+              {/* 🔥 BARU: Grid 5 Kolom 🔥 */}
               <div className="mt-4 grid grid-cols-5 gap-1.5">
                 {[
                   { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
                   { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
                   { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
                   { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, 
-                  { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' }, 
+                  { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' },
                 ].map(item => (
-                  <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center">
-                    <p className={`text-sm font-black ${item.color} truncate`}>{item.value}</p>
+                  <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center overflow-hidden">
+                    <p className={`text-sm md:text-base font-black ${item.color} truncate w-full`}>{item.value}</p>
                     <p className="text-[8px] font-black text-white/60 uppercase tracking-wide mt-0.5">{item.label}</p>
                   </div>
                 ))}
@@ -1591,6 +1594,9 @@ const Absen = () => {
 
               const hasVerifImage = !!(detailModal.inData?.custom_verification_image || detailModal.outData?.custom_verification_image);
 
+              // 🔥 MENGAMBIL DATA LEMBUR UNTUK MODAL 🔥
+              const lemburHariIniData = overtimeRecords?.find(o => o.overtime_date === detailModal.tgl && o.status?.toLowerCase() === 'approved') ?? null;
+
               return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
                   <div className="bg-white w-full max-w-sm mx-auto md:max-w-2xl md:rounded-[2rem] rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden mt-auto mb-auto md:mt-0" style={{ maxHeight: '90vh' }}>
@@ -1626,6 +1632,20 @@ const Absen = () => {
 
                     <div className={`flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 bg-gray-50`}>
                       
+                      {/* 🔥 MENAMPILKAN LEMBUR DI MODAL DETAIL 🔥 */}
+                      {lemburHariIniData && (
+                        <div className="bg-purple-50 border border-purple-200 rounded-3xl px-4 py-3 flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2 text-purple-600 font-bold text-[10px] uppercase">
+                            <i className="fa-solid fa-business-time" /> Disetujui Lembur
+                          </div>
+                          <p className="text-sm font-black text-purple-800">
+                            {formatDurasi(toMenit(lemburHariIniData.end_time) - toMenit(lemburHariIniData.start_time))}
+                            <span className="text-xs font-bold text-purple-500 ml-1">({lemburHariIniData.start_time.substring(0, 5)} - {lemburHariIniData.end_time.substring(0, 5)})</span>
+                          </p>
+                          <p className="text-[10px] text-purple-600 leading-snug italic">"{lemburHariIniData.description}"</p>
+                        </div>
+                      )}
+
                       {hasVerifImage ? (
                         <div className="flex flex-col gap-6 w-full">
                            {/* CONTAINER MASUK */}
