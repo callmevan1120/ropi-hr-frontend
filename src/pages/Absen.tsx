@@ -978,7 +978,7 @@ const Absen = () => {
   const tanggalCutiSet = new Set<string>();
   
   leaveRecords.forEach(r => {
-    if (r.status?.toLowerCase() !== 'approved') return; // Hanya yang disetujui yang merubah warna kalender
+    if (r.status?.toLowerCase() !== 'approved') return; 
     
     const isCuti = r.leave_type.toLowerCase().includes('tahunan');
     const from = parseLokalDate(r.from_date);
@@ -1007,7 +1007,7 @@ const Absen = () => {
       const dataIn    = groupedRiwayat[strTgl]?.in;
       const checkin   = dataIn?.time;
       const adaIzin   = tanggalIzinSet.has(strTgl);
-      const adaCuti   = tanggalCutiSet.has(strTgl); 
+      const adaCuti   = tanggalCutiSet.has(strTgl);
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
       
       let dot: React.ReactNode = null;
@@ -1055,7 +1055,7 @@ const Absen = () => {
       .animate-bounceIn { animation: bounceIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
 
-      {/* ── TOAST POPUP NOTIFIKASI (FIXED CSS & OVERLAP) ── */}
+      {/* ── TOAST POPUP NOTIFIKASI ── */}
       {toastMsg && (
         <div className="fixed top-6 left-0 w-full flex justify-center z-[9999] pointer-events-none px-4">
           <div className={`pointer-events-auto animate-bounceIn w-full max-w-sm flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border-2 ${
@@ -1144,31 +1144,20 @@ const Absen = () => {
                 </div>
               )}
 
-              {/* REVISI: GRID KOTAK DIBUAT 2 BARIS PROPORSIONAL */}
-              <div className="mt-5 flex flex-col gap-2">
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
-                    { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
-                    { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
-                  ].map(item => (
-                    <div key={item.label} className="bg-white/10 rounded-xl py-2.5 px-2 flex flex-col justify-center items-center text-center">
-                      <p className={`text-base font-black ${item.color}`}>{item.value}</p>
-                      <p className="text-[10px] font-bold text-white/60 uppercase tracking-wide mt-0.5">{item.label}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, 
-                    { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' }, 
-                  ].map(item => (
-                    <div key={item.label} className="bg-white/10 rounded-xl py-2.5 px-2 flex flex-col justify-center items-center text-center">
-                      <p className={`text-base font-black ${item.color}`}>{item.value}</p>
-                      <p className="text-[10px] font-bold text-white/60 uppercase tracking-wide mt-0.5">{item.label}</p>
-                    </div>
-                  ))}
-                </div>
+              {/* REVISI 1: HEADER PROPORSIONAL (1 BARIS SAJA DENGAN 5 KOLOM) */}
+              <div className="mt-4 grid grid-cols-5 gap-1.5">
+                {[
+                  { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
+                  { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
+                  { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
+                  { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, 
+                  { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' }, 
+                ].map(item => (
+                  <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center overflow-hidden">
+                    <p className={`text-sm font-black ${item.color} truncate w-full`}>{item.value}</p>
+                    <p className="text-[8px] font-black text-white/60 uppercase tracking-wide mt-0.5">{item.label}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -1183,28 +1172,19 @@ const Absen = () => {
                   </div>
                   <div className="grid grid-cols-7 gap-y-0.5 text-center">{renderKalender()}</div>
                   
-                  {/* Keterangan Titik Kalender Terintegrasi dengan Summary */}
-                  <div className="flex flex-wrap items-center justify-between gap-y-2 mt-3 pt-3 border-t border-gray-100">
-                    <div className="flex items-center gap-1.5 w-[30%]">
-                      <span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block shadow-sm" />
-                      <span className="text-[10px] text-gray-500 font-bold">Hadir: <span className="text-[#3e2723] font-black">{rekapHadir}</span></span>
-                    </div>
-                    <div className="flex items-center gap-1.5 w-[30%]">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block shadow-sm" />
-                      <span className="text-[10px] text-gray-500 font-bold">Telat: <span className="text-[#3e2723] font-black">{rekapTelat}</span></span>
-                    </div>
-                    <div className="flex items-center gap-1.5 w-[30%]">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block shadow-sm" />
-                      <span className="text-[10px] text-gray-500 font-bold">Izin: <span className="text-[#3e2723] font-black">{rekapIzin}</span></span>
-                    </div>
-                    <div className="flex items-center gap-1.5 w-[30%] mt-1">
-                      <span className="w-2.5 h-2.5 rounded-full bg-teal-400 inline-block shadow-sm" />
-                      <span className="text-[10px] text-gray-500 font-bold">Cuti: <span className="text-[#3e2723] font-black">{rekapCuti}</span></span>
-                    </div>
-                    <div className="flex items-center gap-1.5 w-[60%] mt-1">
-                      <span className="w-2.5 h-2.5 rounded-full bg-purple-400 inline-block shadow-sm" />
-                      <span className="text-[10px] text-gray-500 font-bold">Lembur: <span className="text-[#3e2723] font-black">{formatDurasi(rekapLemburMenit)}</span></span>
-                    </div>
+                  {/* EVISI 2: MENGEMBALIKAN KETERANGAN TITIK KALENDER SEDERHANA (1 BARIS TANPA ANGKA) */}
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                    {[
+                      { color: 'bg-green-400', label: 'Tepat' }, 
+                      { color: 'bg-red-400', label: 'Telat' }, 
+                      { color: 'bg-blue-400', label: 'Izin' },
+                      { color: 'bg-teal-400', label: 'Cuti' }
+                    ].map(l => (
+                      <div key={l.label} className="flex items-center gap-1">
+                        <span className={`w-2 h-2 rounded-full ${l.color} inline-block`} />
+                        <span className="text-[9px] text-gray-400 font-bold">{l.label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1236,69 +1216,82 @@ const Absen = () => {
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
                         const lemburHariIni = overtimeRecords.find(o => o.overtime_date === tgl && o.status?.toLowerCase() === 'approved');
+                        
+                        // Badge Lembur
                         let badgeLembur: React.ReactNode = null;
                         if (lemburHariIni) {
                            const durasi = toMenit(lemburHariIni.end_time) - toMenit(lemburHariIni.start_time);
-                           badgeLembur = <span className="bg-purple-100 text-purple-600 text-[10px] font-black px-2 py-1 rounded-md border border-purple-200 shadow-sm shrink-0">Lembur {formatDurasi(durasi)}</span>;
+                           badgeLembur = <span className="bg-purple-100 text-purple-600 text-[10px] font-black px-2 py-1 rounded-md shadow-sm border border-purple-200">Lembur {formatDurasi(durasi)}</span>;
                         }
 
+                        // Badge Tepat/Telat Masuk
                         let badgeEl: React.ReactNode = null;
                         if (jamIn !== '-') {
                           const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
                           badgeEl = selisih > 0
-                            ? <span className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm shrink-0">Telat {formatDurasi(selisih)}</span>
-                            : <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-1 rounded-md border border-green-200 shadow-sm shrink-0">Tepat Waktu</span>;
+                            ? <span className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm">Telat {formatDurasi(selisih)}</span>
+                            : <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-1 rounded-md border border-green-200 shadow-sm">Tepat Waktu</span>;
                         }
                         
-                        // Logika prioritas Badge: Jika tidak absen, tampilkan Cuti atau Izin
+                        // Prioritas Badge: Jika tidak absen, tampilkan Cuti atau Izin
                         if (!badgeEl) {
                           if (adaCutiHariIni) {
-                            badgeEl = <span className="bg-teal-100 text-teal-700 text-[10px] font-black px-2 py-1 rounded-md border border-teal-200 shadow-sm shrink-0">Cuti</span>;
+                            badgeEl = <span className="bg-teal-100 text-teal-700 text-[10px] font-black px-2 py-1 rounded-md border border-teal-200 shadow-sm">Cuti</span>;
                           } else if (adaIzinHariIni) {
-                            badgeEl = <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-2 py-1 rounded-md border border-blue-200 shadow-sm shrink-0">Izin</span>;
+                            badgeEl = <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-2 py-1 rounded-md border border-blue-200 shadow-sm">Izin</span>;
                           }
                         }
 
+                        // Badge Keluar Cepat
                         let badgeCepat: React.ReactNode = null;
                         if (jamOut !== '-') {
                           const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
                           if (selisih > 0) {
-                            badgeCepat = <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm shrink-0">Pulang Cepat {formatDurasi(selisih)}</span>;
+                            badgeCepat = <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm">Pulang Cepat {formatDurasi(selisih)}</span>;
                           }
                         }
 
+                        // Badge Belum Keluar
                         let badgeBelumKeluar: React.ReactNode = null;
                         if (jamIn !== '-' && jamOut === '-') {
-                          badgeBelumKeluar = <span className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm shrink-0">Belum Keluar</span>;
+                          badgeBelumKeluar = <span className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm">Belum Keluar</span>;
                         }
 
                         return (
                           <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-4 rounded-2xl border border-gray-100 flex flex-col shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
                             
-                            {/* REVISI: BADGE DI BARIS BARU DENGAN FLEX-WRAP */}
-                            <div className="flex flex-col gap-2.5">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaCutiHariIni ? 'bg-teal-50 text-teal-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
-                                    <i className={`fa-solid ${d.in ? 'fa-check' : (adaCutiHariIni || adaIzinHariIni) ? 'fa-envelope-open-text' : 'fa-minus'}`} />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
-                                    <p className="text-[10px] font-bold text-gray-400 truncate">{shiftLabel || '-'}</p>
-                                  </div>
+                            {/* Baris 1: Ikon, Tanggal, dan Shift */}
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaCutiHariIni ? 'bg-teal-50 text-teal-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
+                                  <i className={`fa-solid ${d.in ? 'fa-check' : (adaCutiHariIni || adaIzinHariIni) ? 'fa-envelope-open-text' : 'fa-minus'}`} />
                                 </div>
-                                <i className="fa-solid fa-chevron-right text-gray-300 text-[10px] shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
+                                  <p className="text-[10px] font-bold text-gray-400 truncate">{shiftLabel || '-'}</p>
+                                </div>
                               </div>
-
-                              <div className="flex flex-wrap items-center gap-1.5 pl-[52px]">
-                                 {badgeEl}
-                                 {badgeCepat}
-                                 {badgeBelumKeluar}
-                                 {badgeLembur}
-                              </div>
+                              <i className="fa-solid fa-chevron-right text-gray-300 text-[10px] shrink-0" />
                             </div>
                             
-                            <div className="bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 flex items-center justify-between mt-3">
+                            {/* REVISI 3: BADGES SATU BARIS RATA KANAN KIRI DI ANTARA TANGGAL & KOTAK AKTUAL */}
+                            {(badgeEl || badgeCepat || badgeBelumKeluar || badgeLembur) && (
+                              <div className="flex items-center justify-between w-full mb-3">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {badgeEl}
+                                  {badgeCepat}
+                                  {badgeBelumKeluar}
+                                </div>
+                                {badgeLembur && (
+                                  <div className="shrink-0 ml-2">
+                                    {badgeLembur}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Baris 3: Kotak Aktual vs Jadwal */}
+                            <div className="bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 flex items-center justify-between">
                               <div className="flex flex-col">
                                 <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Aktual</span>
                                 <div className="flex items-center gap-1.5 text-xs font-black text-[#3e2723]">
@@ -1317,6 +1310,7 @@ const Absen = () => {
                                 </div>
                               </div>
                             </div>
+
                           </div>
                         );
                       })}
