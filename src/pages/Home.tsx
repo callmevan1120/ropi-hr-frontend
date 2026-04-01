@@ -303,12 +303,11 @@ const Home = () => {
       id: 'absen', title: '2. Cara Absen Harian',
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
-          <li><strong>Validasi GPS:</strong> Klik tombol absen. Pastikan Anda berada di area Outlet.</li>
-          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah.</li>
-          <li><strong>Foto Pertama:</strong> Jepret foto <strong>Wajah + Tangan Kanan</strong> Anda.</li>
-          <li><strong>Foto Kedua:</strong> Setelah itu, jepret foto tambahan untuk <strong>Wajah + Tangan Kiri</strong> Anda.</li>
-          <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
-          <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu notifikasi berhasil.</li>
+          <li><strong>Validasi GPS:</strong> Klik tombol absen. Pastikan Anda berada di dalam area radius Outlet.</li>
+          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera pada browser. Tunggu hingga kotak deteksi wajah menyala hijau.</li>
+          <li><strong>Foto Pertama:</strong> Klik jepret saat wajah dan <strong>tangan kanan</strong> terlihat jelas.</li>
+          <li><strong>Foto Kedua:</strong> Arahkan <strong>tangan kiri</strong> ke kamera, lalu jepret foto tambahan.</li>
+          <li><strong>Kirim:</strong> Periksa kembali foto Anda (bisa geser/swipe untuk melihat keduanya), lalu klik "Kirim Absen".</li>
         </ul>
       )
     },
@@ -328,9 +327,10 @@ const Home = () => {
       id: 'lembur', title: '4. Pengajuan Lembur',
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
-          <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat" atau klik tombol menu dan pilih .</li>
+          <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat".</li>
+          <li><strong>Tipe Pengajuan:</strong> Anda bisa mengajukan lembur untuk diri sendiri (Individu) atau sekalian mewakilkan teman satu shift (Kelompok).</li>
           <li>Isi tanggal, jam mulai, jam selesai, dan keterangan pekerjaan lembur.</li>
-          <li>Tunggu status pengajuan disetujui (Approved) oleh HRD. Jam lembur akan otomatis dijumlahkan pada riwayat absen.</li>
+          <li>Pengajuan akan diproses melalui persetujuan (Workflow) PL, Manager, hingga HRD. Jam yang di-ACC akan otomatis masuk ke slip gaji.</li>
         </ul>
       )
     },
@@ -338,8 +338,8 @@ const Home = () => {
       id: 'error', title: '5. Solusi Jika Error',
       content: (
         <ul className="list-disc pl-4 space-y-2">
-          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba lagi.</li>
-          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.</li>
+          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan setelan "Lokasi/GPS" HP diset Akurasi Tinggi. Buka aplikasi Google Maps sebentar agar letak GPS Anda terkunci presisi, lalu coba absen kembali.</li>
+          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru. Pastikan Anda tidak memblokir akses (Permission) kamera.</li>
         </ul>
       )
     }
@@ -351,10 +351,9 @@ const Home = () => {
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
           <li><strong>Validasi GPS:</strong> Klik tombol absen (Masuk/Keluar). Pastikan Anda berada di area kantor.</li>
-          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga sistem mendeteksi wajah.</li>
-          <li><strong>Foto Selfie:</strong> Jepret foto Selfie Wajah Anda dengan jelas.</li>
-          <li><strong>Tanda Tangan (TTD):</strong> Goreskan tanda tangan digital Anda pada kotak yang disediakan.</li>
-          <li><strong>Kirim:</strong> Review kembali foto dan TTD Anda, lalu klik "Kirim" dan tunggu hingga ada notifikasi berhasil.</li>
+          <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera. Posisikan wajah Anda hingga kotak deteksi menyala hijau.</li>
+          <li><strong>Foto Selfie:</strong> Jepret foto wajah Anda dengan jelas.</li>
+          <li><strong>Kirim:</strong> Jika foto sudah bagus, klik tombol "Kirim Absen" dan tunggu hingga ada notifikasi berhasil.</li>
         </ul>
       )
     },
@@ -364,8 +363,8 @@ const Home = () => {
         <>
           <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
           <ul className="list-disc pl-4 space-y-1.5">
-            <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti.</li>
-            <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah direncanakan sebelumnya.</li>
+            <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti (Surat Dokter, dll).</li>
+            <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah disetujui. Kuota cuti bisa dicek saat membuat pengajuan.</li>
           </ul>
         </>
       )
@@ -375,8 +374,8 @@ const Home = () => {
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
           <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat".</li>
-          <li>Isi tanggal, jam mulai, jam selesai, dan keterangan pekerjaan lembur.</li>
-          <li>Tunggu status pengajuan disetujui (Approved) oleh atasan/HRD. Jam lembur akan otomatis dijumlahkan pada riwayat absen.</li>
+          <li>Isi tanggal, jam mulai, jam selesai, dan berikan rincian singkat pekerjaan lembur.</li>
+          <li>Tunggu status pengajuan disetujui (Approved) oleh atasan atau HRD. Total durasi lembur akan otomatis dijumlahkan pada riwayat kehadiran Anda di akhir bulan.</li>
         </ul>
       )
     },
@@ -384,8 +383,8 @@ const Home = () => {
       id: 'error', title: '4. Solusi Jika Error',
       content: (
         <ul className="list-disc pl-4 space-y-2">
-          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP di-setting "Akurasi Tinggi". Buka Google Maps sebentar agar GPS mendeteksi lokasi yang akurat, lalu coba absen lagi.</li>
-          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web ini.</li>
+          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP diset Akurasi Tinggi. Buka aplikasi Google Maps sebentar agar GPS mendeteksi lokasi akurat Anda, lalu coba absen lagi.</li>
+          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web RopiHR.</li>
         </ul>
       )
     }
