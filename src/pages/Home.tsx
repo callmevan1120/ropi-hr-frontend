@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 
 interface User {
-  name: string;
+  name?: string;
+  employee_name?: string; // Fallback jika dari ERPNext namanya employee_name
   role?: string;
   employee_id: string;
   branch?: string;
@@ -25,7 +26,7 @@ interface Notification {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// HELPER LOGIKA WAKTU (PORTED FROM ABSEN.TSX)
+// HELPER LOGIKA WAKTU
 // ─────────────────────────────────────────────────────────────────
 const formatJamLokal = (timeString?: string): string => {
   if (!timeString) return '-';
@@ -51,15 +52,16 @@ const isRamadhan = (): boolean => {
   const now = new Date();
   const curr = (now.getMonth() + 1) * 100 + now.getDate();
   const tahun = now.getFullYear();
-  // Mengikuti periode Ramadhan 2026 sesuai logika Absen.tsx
+  if (tahun === 2025 && curr >= 301  && curr <= 330)  return true; 
   if (tahun === 2026 && curr >= 218 && curr <= 319) return true;
+  if (tahun === 2027 && curr >= 209  && curr <= 309)  return true; 
   return false;
 };
 
 const getJamMasukJadwal = (branch?: string, role?: string): string => {
   const b = (branch || '').toLowerCase();
   const isKantor = b.includes('klaten') || b.includes('ph') || b.includes('jakarta');
-  if (!isKantor) return '07:00'; // Default Outlet
+  if (!isKantor) return '07:00'; 
 
   const ramadhan = isRamadhan();
   const isSatpam = (role || '').toLowerCase().includes('satpam');
@@ -117,33 +119,37 @@ const Home = () => {
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const userData = localStorage.getItem('ropi_user');
-    if (!userData) { navigate('/'); return; }
-    const parsedUser: User = JSON.parse(userData);
-    setUser(parsedUser);
+    try {
+      const userData = localStorage.getItem('ropi_user');
+      if (!userData) { navigate('/'); return; }
+      
+      const parsedUser: User = JSON.parse(userData);
+      setUser(parsedUser);
 
-    if (parsedUser.role === 'HR' || parsedUser.role === 'HR Manager' || parsedUser.role === 'System Manager') {
-      navigate('/hr-dashboard');
-      return;
+      if (parsedUser.role === 'HR' || parsedUser.role === 'HR Manager' || parsedUser.role === 'System Manager') {
+        navigate('/hr-dashboard');
+        return;
+      }
+
+      const cachedStatus = localStorage.getItem('ropi_status_absen');
+      if (cachedStatus) {
+        setStatusAbsen(cachedStatus);
+        setBtnConfig({
+          text: 'Memperbarui...',
+          icon: 'fa-spinner fa-spin',
+          className: 'bg-gray-200 text-gray-500',
+          mode: '',
+        });
+      }
+
+      Promise.all([
+        ambilStatusHariIni(parsedUser.employee_id, parsedUser),
+        fetchNotifications(parsedUser.employee_id),
+      ]).catch(() => {});
+    } catch (error) {
+      console.error("Gagal memuat data user lokal:", error);
+      navigate('/');
     }
-
-    // Tampilkan status cache dulu agar UI tidak kosong saat loading
-    const cachedStatus = localStorage.getItem('ropi_status_absen');
-    if (cachedStatus) {
-      setStatusAbsen(cachedStatus);
-      setBtnConfig({
-        text: 'Memperbarui...',
-        icon: 'fa-spinner fa-spin',
-        className: 'bg-gray-200 text-gray-500',
-        mode: '',
-      });
-    }
-
-    // Semua fetch paralel
-    Promise.all([
-      ambilStatusHariIni(parsedUser.employee_id, parsedUser),
-      fetchNotifications(parsedUser.employee_id),
-    ]).catch(() => {});
   }, [navigate]);
 
   useEffect(() => {
@@ -158,6 +164,7 @@ const Home = () => {
 
   const fetchNotifications = async (employeeId: string) => {
     try {
+      if (!employeeId) return;
       const res = await fetch(`${BACKEND}/api/notifications?employee_id=${encodeURIComponent(employeeId)}`);
       const data = await res.json();
 
@@ -188,6 +195,7 @@ const Home = () => {
 
   const ambilStatusHariIni = async (employeeId: string, userData: User) => {
     try {
+      if (!employeeId) return;
       const now = new Date();
       const yyyy = now.getFullYear();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -225,7 +233,6 @@ const Home = () => {
             setStatusAbsen(statusText);
             localStorage.setItem('ropi_status_absen', statusText);
 
-            // LOGIKA DETEKSI TELAT HARI INI
             const jamJadwal = getJamMasukJadwal(userData.branch, userData.role);
             const selisih = toMenit(jamAbsen) - toMenit(jamJadwal);
             
@@ -285,7 +292,7 @@ const Home = () => {
     setBukaPanduan(bukaPanduan === id ? null : id);
   };
 
-  const outlet = isKaryawanOutlet(user.branch);
+  const outlet = isKaryawanOutlet(user?.branch);
 
   const panduanOutlet = [
     {
@@ -307,7 +314,7 @@ const Home = () => {
           <li><strong>Kamera & Deteksi Wajah:</strong> Izinkan akses kamera pada browser. Tunggu hingga kotak deteksi wajah menyala hijau.</li>
           <li><strong>Foto Pertama:</strong> Klik jepret saat wajah dan <strong>tangan kanan</strong> terlihat jelas.</li>
           <li><strong>Foto Kedua:</strong> Arahkan <strong>tangan kiri</strong> ke kamera, lalu jepret foto tambahan.</li>
-          <li><strong>Kirim:</strong> Periksa kembali foto Anda (bisa geser/swipe untuk melihat keduanya), lalu klik "Kirim Absen".</li>
+          <li><strong>Kirim:</strong> Periksa kembali foto Anda (bisa geser untuk melihat keduanya), lalu klik "Kirim Absen".</li>
         </ul>
       )
     },
@@ -329,8 +336,8 @@ const Home = () => {
         <ul className="list-decimal pl-4 space-y-1.5">
           <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat".</li>
           <li><strong>Tipe Pengajuan:</strong> Anda bisa mengajukan lembur untuk diri sendiri (Individu) atau sekalian mewakilkan teman satu shift (Kelompok).</li>
-          <li>Isi tanggal, jam mulai, jam selesai, dan keterangan pekerjaan lembur.</li>
-          <li>Pengajuan akan diproses melalui persetujuan (Workflow) PL, Manager, hingga HRD. Jam yang di-ACC akan otomatis masuk ke slip gaji.</li>
+          <li>Isi tanggal, jam mulai, jam selesai, dan keterangan lembur.</li>
+          <li>Tunggu hingga di-ACC. Jam yang di-ACC akan otomatis masuk ke slip gaji.</li>
         </ul>
       )
     },
@@ -338,7 +345,7 @@ const Home = () => {
       id: 'error', title: '5. Solusi Jika Error',
       content: (
         <ul className="list-disc pl-4 space-y-2">
-          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan setelan "Lokasi/GPS" HP diset Akurasi Tinggi. Buka aplikasi Google Maps sebentar agar letak GPS Anda terkunci presisi, lalu coba absen kembali.</li>
+          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan setelan "Lokasi/GPS" HP diset Akurasi Tinggi. Buka aplikasi Google Maps sebentar agar letak GPS terkunci, lalu coba absen kembali.</li>
           <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru. Pastikan Anda tidak memblokir akses (Permission) kamera.</li>
         </ul>
       )
@@ -363,7 +370,7 @@ const Home = () => {
         <>
           <p className="mb-2"><strong>Perbedaan Izin & Cuti:</strong></p>
           <ul className="list-disc pl-4 space-y-1.5">
-            <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti (Surat Dokter, dll).</li>
+            <li><strong>Izin:</strong> Untuk sakit atau keperluan mendadak. Wajib melampirkan foto/dokumen bukti.</li>
             <li><strong>Cuti:</strong> Pengambilan jatah cuti tahunan yang sudah disetujui. Kuota cuti bisa dicek saat membuat pengajuan.</li>
           </ul>
         </>
@@ -374,8 +381,8 @@ const Home = () => {
       content: (
         <ul className="list-decimal pl-4 space-y-1.5">
           <li>Pilih menu <strong>Lembur</strong> dari pilihan "Akses Cepat".</li>
-          <li>Isi tanggal, jam mulai, jam selesai, dan berikan rincian singkat pekerjaan lembur.</li>
-          <li>Tunggu status pengajuan disetujui (Approved) oleh atasan atau HRD. Total durasi lembur akan otomatis dijumlahkan pada riwayat kehadiran Anda di akhir bulan.</li>
+          <li>Isi tanggal, jam mulai, jam selesai, dan berikan rincian singkat lembur.</li>
+          <li>Tunggu status pengajuan disetujui (Approved). Total durasi lembur akan otomatis dijumlahkan pada riwayat kehadiran Anda.</li>
         </ul>
       )
     },
@@ -383,14 +390,17 @@ const Home = () => {
       id: 'error', title: '4. Solusi Jika Error',
       content: (
         <ul className="list-disc pl-4 space-y-2">
-          <li><strong>Lokasi Jauh / Ditolak:</strong> Pastikan GPS HP diset Akurasi Tinggi. Buka aplikasi Google Maps sebentar agar GPS mendeteksi lokasi akurat Anda, lalu coba absen lagi.</li>
-          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan pastikan Anda sudah mengizinkan akses kamera untuk web RopiHR.</li>
+          <li><strong>Lokasi Jauh / Ditolak:</strong> Buka aplikasi Google Maps sebentar agar GPS mendeteksi lokasi akurat Anda, lalu coba absen lagi.</li>
+          <li><strong>Kamera Blank:</strong> Gunakan browser Chrome/Safari versi terbaru dan izinkan akses kamera untuk web RopiHR.</li>
         </ul>
       )
     }
   ];
 
   const listBukuPanduan = outlet ? panduanOutlet : panduanKantor;
+  
+  // Mengamankan pemanggilan nama user agar tidak men-trigger error Split Undefined
+  const displayName = (user?.name || user?.employee_name || 'Karyawan').split(' ')[0];
 
   return (
     <div className="bg-gray-100 flex items-center justify-center min-h-screen font-sans text-[#3e2723] selection:bg-[#fbc02d] md:p-6 lg:p-10 w-full overflow-hidden">
@@ -453,15 +463,15 @@ const Home = () => {
         <div className="flex-1 flex justify-center bg-gray-50 relative z-20 w-full md:w-1/2 h-full border-l border-gray-200">
           <div className="w-full max-w-sm bg-gray-50 h-full flex flex-col relative mx-auto shadow-none md:shadow-[0_0_15px_rgba(0,0,0,0.05)] overflow-hidden">
 
-            {/* HEADER — safe-area-aware, compact */}
+            {/* HEADER */}
             <div className="bg-[#3e2723] px-5 pb-10 rounded-b-[2rem] shrink-0 shadow-sm relative z-40" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 1rem)' }}>
               <div className="flex justify-between items-center">
                 {/* KIRI: Salam & Role */}
                 <div className="flex-1 min-w-0 pr-3">
                   <h2 className="text-xl font-black text-[#fbc02d] leading-tight truncate">
-                    Halo, <span>{user.name.split(' ')[0]}</span> 👋
+                    Halo, <span>{displayName}</span> 👋
                   </h2>
-                  <p className="text-white/60 text-xs mt-0.5 truncate">{user.role || 'Staff Roti Ropi'}</p>
+                  <p className="text-white/60 text-xs mt-0.5 truncate">{user?.role || 'Staff Roti Ropi'}</p>
                 </div>
 
                 {/* KANAN: Bell Notification */}
