@@ -86,15 +86,11 @@ const parseLokalDate = (tglStr: string): Date => {
   return new Date(y, m - 1, d);
 };
 
-// Ramadhan 2025 : 1 Mar – 30 Mar 2025
-// Ramadhan 2026 : 18 Feb – 19 Mar 2026
-// Ramadhan 2027 : 9 Feb – 9 Mar 2027 (estimasi, perbarui jika perlu)
 const isRamadhan = (tanggal?: Date): boolean => {
   const now   = tanggal || new Date();
   const tahun = now.getFullYear();
-  const bulan = now.getMonth() + 1; // 1–12
+  const bulan = now.getMonth() + 1;
   const tgl   = now.getDate();
-
   const curr  = bulan * 100 + tgl;
   if (tahun === 2025 && curr >= 301  && curr <= 330)  return true; 
   if (tahun === 2026 && curr >= 218  && curr <= 319)  return true; 
@@ -189,21 +185,13 @@ const validasiShiftName = (
   if (!kantor) {
     return shiftFromRecord || activeShift?.shift_name || 'Shift Outlet';
   }
-
   const shiftLokal = getNamaShiftKantor(tglDate, branch, satpamFlag);
-
   if (isWeekend || !shiftFromRecord) return shiftLokal;
-
   const recordIsFriday = shiftFromRecord.toLowerCase().includes('jumat');
   const recordIsSenKam = shiftFromRecord.toLowerCase().includes('senin');
-
   if (isFriday && recordIsSenKam) return shiftLokal;
   if (!isFriday && !isWeekend && recordIsFriday) return shiftLokal;
-
-  if (shiftFromRecord && !shiftFromRecord.includes('(') && !shiftFromRecord.includes(')')) {
-    return shiftLokal; 
-  }
-
+  if (shiftFromRecord && !shiftFromRecord.includes('(') && !shiftFromRecord.includes(')')) return shiftLokal; 
   return shiftFromRecord;
 };
 
@@ -254,7 +242,6 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
   const pad = 12;
   const gap = 4;
   const logoSize = 46;
-
   const fsJam = 22; 
   const fsTglLoc = 12; 
 
@@ -263,7 +250,6 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
   ctx.font = `600 ${fsTglLoc}px sans-serif`;
   const twTgl = ctx.measureText(tgl).width;
   const twLoc = ctx.measureText(loc).width;
-
   const textW = Math.max(twJam, twTgl, twLoc);
   const bw = pad + logoSize + 10 + textW + pad;
   const bh = pad + fsJam + gap + fsTglLoc + gap + fsTglLoc + pad;
@@ -349,8 +335,6 @@ const Absen = () => {
   const [cameraStep,        setCameraStep]        = useState(1);
   const [fotoBase64,        setFotoBase64]        = useState<string | null>(null);
   const [fotoKiriBase64,    setFotoKiriBase64]    = useState<string | null>(null); 
-  const [ttdBase64,         setTtdBase64]         = useState<string | null>(null);
-  const [isTtdEmpty,        setIsTtdEmpty]        = useState(true);
   const [jepretState,       setJepretState]       = useState({ aktif: false, teks: 'Cek Sistem...' });
   const [isKirimLoading,    setIsKirimLoading]    = useState(false);
   const [koordinatGPS,      setKoordinatGPS]      = useState<{ lat: number; lng: number } | null>(null);
@@ -360,16 +344,12 @@ const Absen = () => {
     inData?: RiwayatAbsen; outData?: RiwayatAbsen;
   }>({ show: false, tgl: '' });
 
-  // ── STATE POPUP NOTIFIKASI ──
   const [toastMsg, setToastMsg] = useState<{ show: boolean; type: 'success' | 'late'; title: string; desc: string } | null>(null);
 
   const videoRef           = useRef<HTMLVideoElement>(null);
   const streamRef          = useRef<MediaStream | null>(null);
   const intervalDeteksiRef = useRef<number | null>(null);
   const intervalJamRef     = useRef<number | null>(null);
-  const ttdCanvasRef       = useRef<HTMLCanvasElement>(null);
-  const isDrawingRef       = useRef(false);
-  const lastPosRef         = useRef<{ x: number; y: number } | null>(null);
   const cameraStepRef      = useRef(cameraStep);
   useEffect(() => { cameraStepRef.current = cameraStep; }, [cameraStep]);
 
@@ -378,15 +358,13 @@ const Absen = () => {
 
   const stepsData = outlet
     ? [
-        { n: 1, icon: 'fa-camera',    label: 'Wajah+Kanan' },
-        { n: 2, icon: 'fa-hand',      label: 'Wajah+Kiri'  },
-        { n: 3, icon: 'fa-pen-nib',   label: 'TTD'         },
-        { n: 4, icon: 'fa-paper-plane', label: 'Kirim'     },
+        { n: 1, icon: 'fa-camera',      label: 'Wajah+Kanan' },
+        { n: 2, icon: 'fa-hand',        label: 'Wajah+Kiri'  },
+        { n: 3, icon: 'fa-paper-plane', label: 'Kirim'       },
       ]
     : [
-        { n: 1, icon: 'fa-camera',    label: 'Selfie'  },
-        { n: 3, icon: 'fa-pen-nib',   label: 'TTD'     },
-        { n: 4, icon: 'fa-paper-plane', label: 'Kirim' },
+        { n: 1, icon: 'fa-camera',      label: 'Selfie'  },
+        { n: 3, icon: 'fa-paper-plane', label: 'Kirim' },
       ];
 
   useEffect(() => {
@@ -421,102 +399,6 @@ const Absen = () => {
   }, [searchParams, user]);
 
   useEffect(() => { return () => matikanKamera(); }, []);
-
-  useEffect(() => {
-    if (cameraStep !== 3) return;
-
-    const timer = setTimeout(() => {
-      const canvas = ttdCanvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const rect  = canvas.getBoundingClientRect();
-      canvas.width  = rect.width || 300;
-      canvas.height = rect.height || 300; 
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth   = 2.5;
-      ctx.lineCap     = 'round';
-      ctx.lineJoin    = 'round';
-
-      const getPos = (e: MouseEvent | TouchEvent) => {
-        const r      = canvas.getBoundingClientRect();
-        const scaleX = canvas.width  / r.width;
-        const scaleY = canvas.height / r.height;
-        if (e instanceof TouchEvent && e.touches.length > 0) {
-          return {
-            x: (e.touches[0].clientX - r.left) * scaleX,
-            y: (e.touches[0].clientY - r.top)  * scaleY,
-          };
-        }
-        return {
-          x: ((e as MouseEvent).clientX - r.left) * scaleX,
-          y: ((e as MouseEvent).clientY - r.top)  * scaleY,
-        };
-      };
-
-      const onStart = (e: MouseEvent | TouchEvent) => {
-        e.preventDefault();
-        isDrawingRef.current  = true;
-        lastPosRef.current    = getPos(e);
-      };
-      const onMove = (e: MouseEvent | TouchEvent) => {
-        e.preventDefault();
-        if (!isDrawingRef.current || !lastPosRef.current) return;
-        const pos = getPos(e);
-        ctx.beginPath();
-        ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-        lastPosRef.current = pos;
-        setIsTtdEmpty(false);
-      };
-      const onEnd = () => { isDrawingRef.current = false; lastPosRef.current = null; };
-
-      canvas.addEventListener('mousedown',  onStart);
-      canvas.addEventListener('mousemove',  onMove);
-      canvas.addEventListener('mouseup',    onEnd);
-      canvas.addEventListener('mouseleave', onEnd);
-      canvas.addEventListener('touchstart', onStart, { passive: false });
-      canvas.addEventListener('touchmove',  onMove,  { passive: false });
-      canvas.addEventListener('touchend',   onEnd);
-
-      (canvas as any)._cleanup = () => {
-        canvas.removeEventListener('mousedown',  onStart);
-        canvas.removeEventListener('mousemove',  onMove);
-        canvas.removeEventListener('mouseup',    onEnd);
-        canvas.removeEventListener('mouseleave', onEnd);
-        canvas.removeEventListener('touchstart', onStart);
-        canvas.removeEventListener('touchmove',  onMove);
-        canvas.removeEventListener('touchend',   onEnd);
-      };
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      const canvas = ttdCanvasRef.current;
-      if (canvas && (canvas as any)._cleanup) (canvas as any)._cleanup();
-    };
-  }, [cameraStep]);
-
-  const bersihkanTTD = () => {
-    const canvas = ttdCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    setIsTtdEmpty(true);
-  };
-
-  const simpanTTD = () => {
-    const canvas = ttdCanvasRef.current;
-    if (!canvas) return;
-    setTtdBase64(canvas.toDataURL('image/png'));
-    setCameraStep(4);
-  };
 
   const ambilActiveShift = async (empId: string) => {
     setShiftLoading(true);
@@ -644,8 +526,6 @@ const Absen = () => {
     setModeAbsen(mode);
     setFotoBase64(null);
     setFotoKiriBase64(null);
-    setTtdBase64(null);
-    setIsTtdEmpty(true);
     setCameraStep(1);
     setIsModalAbsenOpen(true);
     setKameraBorder('border-[#fbc02d]');
@@ -816,20 +696,19 @@ const Absen = () => {
         if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
         matikanKamera();
         setCameraStep(3);
-        setKameraBorder('border-purple-400');
+        setKameraBorder('border-gray-200');
       }
     } else if (cameraStep === 2) {
       setFotoKiriBase64(base64);
       if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
       matikanKamera();
-      setIsTtdEmpty(true);
       setCameraStep(3);
-      setKameraBorder('border-purple-400');
+      setKameraBorder('border-gray-200');
     }
   };
 
   const kirimAbsen = async () => {
-    if (!fotoBase64 || (!fotoKiriBase64 && outlet) || !ttdBase64 || !user) return;
+    if (!fotoBase64 || (!fotoKiriBase64 && outlet) || !user) return;
     setIsKirimLoading(true);
 
     const namaShiftKirim = outlet
@@ -848,7 +727,6 @@ const Absen = () => {
           branch:                    user.branch || '',
           image_verification:        fotoBase64,
           custom_verification_image: outlet ? fotoKiriBase64 : undefined,
-          custom_signature:          ttdBase64,
           shift:                     namaShiftKirim,
         }),
       });
@@ -856,15 +734,13 @@ const Absen = () => {
       if (res.ok) {
         tutupModal();
         
-        // --- LOGIKA POP-UP NOTIFIKASI TOAST ---
         const nowUtc = new Date();
         const wibTime = new Date(nowUtc.getTime() + 7 * 60 * 60 * 1000);
         const yyyy = wibTime.getUTCFullYear();
         const mm = String(wibTime.getUTCMonth() + 1).padStart(2, '0');
         const dd = String(wibTime.getUTCDate()).padStart(2, '0');
-        const tglStr = `${yyyy}-${mm}-${dd}`; // Tanggal hari ini
+        const tglStr = `${yyyy}-${mm}-${dd}`; 
         
-        // Memastikan format jam selalu pakai titik dua (:)
         const jamSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(/\./g, ':');
         
         if (modeAbsen === 'MASUK') {
@@ -872,7 +748,6 @@ const Absen = () => {
            const selisih = toMenit(jamSekarang) - toMenit(shiftInfo.in);
            
            if (selisih > 0) {
-              // Cek apakah hari ini sudah dihitung telat sebelumnya
               const isAlreadyCounted = dataRiwayat.some(r => r.log_type === 'IN' && (r.time?.includes(tglStr) || r.attendance_date?.includes(tglStr)));
               const finalTelatCount = isAlreadyCounted ? rekapTelat : rekapTelat + 1;
               
@@ -893,10 +768,7 @@ const Absen = () => {
            });
         }
         
-        // Toast akan hilang otomatis dalam 8 detik agar sempat dibaca
         setTimeout(() => setToastMsg(null), 8000);
-        
-        // Perbarui data riwayat di belakang layar
         ambilRiwayatAbsen();
       } else {
         const errData = await res.json().catch(() => null);
@@ -973,7 +845,6 @@ const Absen = () => {
     return acc;
   }, 0);
 
-  // MEMISAHKAN SET TANGGAL IZIN DAN CUTI
   const tanggalIzinSet = new Set<string>();
   const tanggalCutiSet = new Set<string>();
   
@@ -1007,7 +878,7 @@ const Absen = () => {
       const dataIn    = groupedRiwayat[strTgl]?.in;
       const checkin   = dataIn?.time;
       const adaIzin   = tanggalIzinSet.has(strTgl);
-      const adaCuti   = tanggalCutiSet.has(strTgl);
+      const adaCuti   = tanggalCutiSet.has(strTgl); 
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
       
       let dot: React.ReactNode = null;
@@ -1144,7 +1015,7 @@ const Absen = () => {
                 </div>
               )}
 
-              {/* REVISI 1: HEADER PROPORSIONAL (1 BARIS SAJA DENGAN 5 KOLOM) */}
+              {/* HEADER PROPORSIONAL (1 BARIS SAJA DENGAN 5 KOLOM) */}
               <div className="mt-4 grid grid-cols-5 gap-1.5">
                 {[
                   { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
@@ -1172,7 +1043,7 @@ const Absen = () => {
                   </div>
                   <div className="grid grid-cols-7 gap-y-0.5 text-center">{renderKalender()}</div>
                   
-                  {/* EVISI 2: MENGEMBALIKAN KETERANGAN TITIK KALENDER SEDERHANA (1 BARIS TANPA ANGKA) */}
+                  {/* KETERANGAN TITIK KALENDER SEDERHANA (1 BARIS TANPA ANGKA) */}
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
                     {[
                       { color: 'bg-green-400', label: 'Tepat' }, 
@@ -1274,7 +1145,7 @@ const Absen = () => {
                               <i className="fa-solid fa-chevron-right text-gray-300 text-[10px] shrink-0" />
                             </div>
                             
-                            {/* REVISI 3: BADGES SATU BARIS RATA KANAN KIRI DI ANTARA TANGGAL & KOTAK AKTUAL */}
+                            {/* BADGES SATU BARIS RATA KANAN KIRI DI ANTARA TANGGAL & KOTAK AKTUAL */}
                             {(badgeEl || badgeCepat || badgeBelumKeluar || badgeLembur) && (
                               <div className="flex items-center justify-between w-full mb-3">
                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1437,36 +1308,8 @@ const Absen = () => {
                       </>
                     )}
 
-                    {/* ── Step 3: Tanda tangan (Square Ratio) ── */}
+                    {/* ── Step 3: Review & kirim (TTD dihapus) ── */}
                     {cameraStep === 3 && (
-                      <>
-                        <div className="bg-purple-50 border border-purple-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm">
-                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-500 shrink-0"><i className="fa-solid fa-pen-nib" /></div>
-                          <div>
-                            <p className="text-purple-800 text-xs font-black leading-tight">Tanda Tangan Digital</p>
-                            <p className="text-purple-500 text-[10px] font-bold mt-0.5">Goreskan jari di dalam kotak putih di bawah ini.</p>
-                          </div>
-                        </div>
-                        <div className="w-full rounded-2xl overflow-hidden border-[3px] border-purple-200 bg-white shadow-inner relative aspect-square" style={{ touchAction: 'none' }}>
-                          <canvas ref={ttdCanvasRef} className="w-full h-full block cursor-crosshair" />
-                          {isTtdEmpty && (
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                              <div className="w-20 h-20 border-4 border-dashed border-gray-200 rounded-full flex items-center justify-center opacity-50">
-                                <span className="text-gray-300 text-xl font-black">TTD</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        {!isTtdEmpty && (
-                          <button onClick={bersihkanTTD} className="text-[10px] font-bold text-red-500 hover:underline text-center w-full mt-1">
-                            <i className="fa-solid fa-eraser mr-1" />Hapus & Ulangi TTD
-                          </button>
-                        )}
-                      </>
-                    )}
-
-                    {/* ── Step 4: Review & kirim ── */}
-                    {cameraStep === 4 && (
                       <div className="flex flex-col gap-4">
                         <div className="bg-blue-50 border border-blue-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm">
                           <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0"><i className="fa-solid fa-eye" /></div>
@@ -1494,35 +1337,20 @@ const Absen = () => {
                                   <img src={fotoKiriBase64 || ''} className="w-full h-full object-contain" alt="Kiri" loading="lazy" decoding="async" />
                                 </div>
                               </div>
-                              {/* TTD */}
-                              <div className="shrink-0 w-[85%] snap-center flex flex-col gap-1.5">
-                                <p className="text-[10px] font-black text-gray-400 uppercase text-center">✍️ Tanda Tangan</p>
-                                <div className="rounded-2xl border-2 border-gray-200 bg-white p-2 shadow-sm aspect-[3/4] flex items-center justify-center">
-                                  <img src={ttdBase64 || ''} className="w-full h-auto max-h-full object-contain mix-blend-multiply" alt="TTD" loading="lazy" decoding="async" />
-                                </div>
-                              </div>
                             </div>
                             <div className="flex justify-center gap-1">
                               <span className="w-2 h-2 rounded-full bg-gray-300 animate-pulse"></span>
                               <span className="w-2 h-2 rounded-full bg-gray-300 animate-pulse delay-75"></span>
-                              <span className="w-2 h-2 rounded-full bg-gray-300 animate-pulse delay-150"></span>
                             </div>
-                            <p className="text-[9px] text-center text-gray-400 font-bold italic">Geser untuk melihat semua foto & TTD →</p>
+                            <p className="text-[9px] text-center text-gray-400 font-bold italic">Geser untuk melihat semua foto →</p>
                           </div>
                         ) : (
-                          // Layout Kantor biasa
+                          // Layout Kantor biasa (Selfie saja)
                           <>
                             <div className="flex flex-col gap-1">
                               <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">📸 Selfie Wajah</p>
                               <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black flex items-center justify-center max-w-[240px] mx-auto w-full aspect-[3/4]">
                                 <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Selfie" loading="lazy" decoding="async" />
-                              </div>
-                            </div>
-
-                            <div className="w-full max-w-[240px] mx-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-sm flex flex-col items-center">
-                              <p className="text-[10px] font-black text-gray-400 uppercase mb-2 border-b border-dashed border-gray-200 w-full text-center pb-1">✍️ Tanda Tangan</p>
-                              <div className="w-full aspect-square flex items-center justify-center">
-                                <img src={ttdBase64 || ''} className="max-w-full max-h-full object-contain mix-blend-multiply" alt="TTD" loading="lazy" decoding="async" />
                               </div>
                             </div>
                           </>
@@ -1557,26 +1385,8 @@ const Absen = () => {
                       </div>
                     )}
 
-                    {/* Step 3: Batal / Lanjut */}
+                    {/* Step 3: Ulangi / Kirim */}
                     {cameraStep === 3 && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <button onClick={tutupModal} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2 shadow-sm">
-                          <i className="fa-solid fa-xmark" /> Batal
-                        </button>
-                        <button
-                          onClick={simpanTTD}
-                          disabled={isTtdEmpty}
-                          className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all shadow-md ${
-                            !isTtdEmpty ? 'bg-purple-500 hover:bg-purple-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          }`}
-                        >
-                          <i className="fa-solid fa-check shrink-0" /> Lanjut
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Step 4: Ulangi / Kirim */}
-                    {cameraStep === 4 && (
                       <div className="grid grid-cols-2 gap-3">
                         <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm shadow-sm">
                           <i className="fa-solid fa-rotate-right shrink-0" /> Ulangi
@@ -1700,14 +1510,6 @@ const Absen = () => {
                                      <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
                                    </div>
                                  </div>
-                                 {/* TTD MASUK */}
-                                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
-                                    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
-                                       {detailModal.inData?.custom_signature ? <img src={prosesUrlFoto(detailModal.inData.custom_signature)} className="w-full h-auto object-contain mix-blend-multiply" alt="TTD Masuk" loading="lazy" decoding="async" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
-                                       <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
-                                    </div>
-                                 </div>
                               </div>
                               <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Masuk →</p>
                            </div>
@@ -1742,23 +1544,15 @@ const Absen = () => {
                                        <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
                                      </div>
                                    </div>
-                                   {/* TTD KELUAR */}
-                                   <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Tanda Tangan</p>
-                                      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
-                                         {detailModal.outData?.custom_signature ? <img src={prosesUrlFoto(detailModal.outData.custom_signature)} className="w-full h-full object-contain p-2 mix-blend-multiply" alt="TTD Keluar" loading="lazy" decoding="async" /> : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada TTD</p></div>}
-                                         <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-md border border-white/20">Keluar</div>
-                                      </div>
-                                   </div>
                                 </div>
                                 <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Keluar →</p>
                              </div>
                            )}
                         </div>
                       ) : (
-                        // Layout Kantor Biasa (Grid statis)
+                        // Layout Kantor Biasa (Grid statis, Selfie saja)
                         <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start w-full">
-                          <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+                          <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 col-span-full">
                             <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
                               <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-gray-500 text-[10px]" /></div>
                               <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Selfie Wajah</p>
@@ -1773,26 +1567,6 @@ const Absen = () => {
                                       : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Belum ada</p></div>
                                     }
                                     <div className={`absolute top-2 left-2 ${badgeCol} text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20`}>{label}</div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-                            <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                              <div className="w-6 h-6 rounded-full bg-purple-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-pen-nib text-purple-500 text-[10px]" /></div>
-                              <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Tanda Tangan</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              {[{ label: 'Masuk', data: detailModal.inData }, { label: 'Keluar', data: detailModal.outData }].map(({ label, data }) => (
-                                <div key={label} className="flex flex-col gap-1.5">
-                                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-                                  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex items-center justify-center relative shadow-inner aspect-[3/4]">
-                                    {data?.custom_signature
-                                      ? <img src={prosesUrlFoto(data.custom_signature)} className="w-full h-auto object-contain mix-blend-multiply" alt={`TTD ${label}`} loading="lazy" decoding="async" />
-                                      : <div className="flex flex-col items-center gap-1"><i className="fa-solid fa-pen-slash text-gray-300 text-xl" /><p className="text-[9px] text-gray-400 font-bold">Belum ada</p></div>
-                                    }
                                   </div>
                                 </div>
                               ))}
