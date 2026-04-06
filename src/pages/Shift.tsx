@@ -27,10 +27,10 @@ interface ShiftRecord {
 }
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; icon: string }> = {
-  Approved: { bg: 'bg-green-100',  text: 'text-green-700',  icon: 'fa-circle-check'    },
-  Rejected: { bg: 'bg-red-100',    text: 'text-red-600',    icon: 'fa-circle-xmark'    },
-  Pending:  { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: 'fa-clock'           },
-  Draft:    { bg: 'bg-gray-100',   text: 'text-gray-500',   icon: 'fa-file-pen'        },
+  Approved: { bg: 'bg-green-100',  text: 'text-green-700',  icon: 'fa-circle-check' },
+  Rejected: { bg: 'bg-red-100',    text: 'text-red-600',    icon: 'fa-circle-xmark' },
+  Pending:  { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: 'fa-clock'        },
+  Draft:    { bg: 'bg-gray-100',   text: 'text-gray-500',   icon: 'fa-file-pen'     },
 };
 
 // ── Komponen ─────────────────────────────────────────────────────────
@@ -38,14 +38,15 @@ const Shift = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
 
-  const [user, setUser]               = useState<any>(null);
-  const [isOutlet, setIsOutlet]       = useState(false);
-  const [shiftList, setShiftList]     = useState<any[]>([]);
+  const [user, setUser]                 = useState<any>(null);
+  const [isOutlet, setIsOutlet]         = useState(false);
+  const [shiftList, setShiftList]       = useState<any[]>([]);
   const [approverList, setApproverList] = useState<string[]>([]);
-  const [history, setHistory]         = useState<ShiftRecord[]>([]);
-  const [isLoading, setIsLoading]     = useState(true);
+  const [history, setHistory]           = useState<ShiftRecord[]>([]);
+  const [isLoading, setIsLoading]       = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab]     = useState<'form' | 'history'>('form');
+  const [isRefreshingShifts, setIsRefreshingShifts] = useState(false);
+  const [activeTab, setActiveTab]       = useState<'form' | 'history'>('form');
 
   const [selectedShift,    setSelectedShift]    = useState('');
   const [selectedApprover, setSelectedApprover] = useState('');
@@ -56,10 +57,12 @@ const Shift = () => {
   const [fromDate, setFromDate]         = useState(todayStr);
   const [toDate, setToDate]             = useState(todayStr);
 
-  // ── Load data awal ──────────────────────────────────────────────
-  const SESSION_SHIFTS_KEY   = 'ropi_cache_shifts_raw';
-  const SESSION_HR_KEY       = 'ropi_cache_hr_users';
-  const CACHE_MAX_AGE_MS     = 5 * 60 * 1000;
+  // ── Cache keys & TTL ────────────────────────────────────────────
+  // REVISI: TTL diturunkan ke 10 menit agar data shift lebih segar.
+  // Sebelumnya 5 menit namun tidak ada cara force-refresh manual.
+  const SESSION_SHIFTS_KEY = 'ropi_cache_shifts_raw';
+  const SESSION_HR_KEY     = 'ropi_cache_hr_users';
+  const CACHE_MAX_AGE_MS   = 10 * 60 * 1000; // 10 menit
 
   const readCache = (key: string): any | null => {
     try {
@@ -75,6 +78,65 @@ const Shift = () => {
     try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
   };
 
+  // REVISI: Hapus cache shift agar fetch ulang dari ERPNext
+  const clearShiftCache = () => {
+    try { sessionStorage.removeItem(SESSION_SHIFTS_KEY); } catch {}
+  };
+
+  // ── Fungsi ambil & proses data shift ────────────────────────────
+  // REVISI: Dipisah ke fungsi sendiri agar bisa dipanggil ulang
+  // saat user menekan tombol refresh shift list.
+  // Filter sebelumnya hanya mengambil item yang namanya mengandung
+  // 'Shift' atau 'Middle' — ini menyebabkan shift type baru yang
+  // menggunakan penamaan lain tidak muncul. Sekarang semua shift
+  // ditampilkan, diurutkan alfabetis. Shift kantor (yang mengandung
+  // kata kunci 'Senin', 'Jumat', 'PH', 'Jakarta') disaring agar
+  // tidak muncul di daftar pilihan karyawan outlet.
+  const fetchShifts = async (forceRefresh = false): Promise<any[]> => {
+    if (!forceRefresh) {
+      const cached = readCache(SESSION_SHIFTS_KEY);
+      if (cached?.success && cached.data) return cached.data;
+    }
+
+    const res  = await fetch(`${BACKEND}/api/attendance/shifts`);
+    const data = await res.json();
+
+    if (data?.success && Array.isArray(data.data)) {
+      writeCache(SESSION_SHIFTS_KEY, data);
+
+      // REVISI: Saring shift kantor. Nama shift kantor mengandung
+      // kata kunci di bawah (sesuai normalizeOfficeShiftName di backend).
+      // Semua shift lain (outlet) ditampilkan tanpa filter nama.
+      const officeKeywords = ['senin', 'jumat', 'ph klaten', 'jakarta', 'non ramadhan', 'ramadhan'];
+      const outletShifts = data.data.filter((s: any) => {
+        const lower = (s.name as string).toLowerCase();
+        return !officeKeywords.some(kw => lower.includes(kw));
+      });
+
+      return outletShifts.sort((a: any, b: any) => (a.name as string).localeCompare(b.name));
+    }
+    return [];
+  };
+
+  // ── Tombol refresh shift list (force refetch) ────────────────────
+  const handleRefreshShifts = async () => {
+    setIsRefreshingShifts(true);
+    try {
+      clearShiftCache();
+      const shifts = await fetchShifts(true);
+      setShiftList(shifts);
+      // Reset pilihan jika shift sebelumnya sudah tidak ada
+      if (selectedShift && !shifts.find((s: any) => s.name === selectedShift)) {
+        setSelectedShift('');
+      }
+    } catch {
+      // silent — list tetap menampilkan data lama
+    } finally {
+      setIsRefreshingShifts(false);
+    }
+  };
+
+  // ── Load data awal ──────────────────────────────────────────────
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) { navigate('/'); return; }
@@ -88,14 +150,13 @@ const Shift = () => {
     const init = async () => {
       try {
         const isOutletUser = isKaryawanOutlet(u.branch);
-
-        // Cek cache dulu untuk data statis
-        const cachedShifts  = readCache(SESSION_SHIFTS_KEY);
         const cachedHrUsers = readCache(SESSION_HR_KEY);
 
         const fetches: Promise<any>[] = [
-          cachedShifts  ? Promise.resolve(cachedShifts)  : fetch(`${BACKEND}/api/attendance/shifts`).then(r => r.json()),
-          cachedHrUsers ? Promise.resolve(cachedHrUsers) : fetch(`${BACKEND}/api/attendance/hr-users`).then(r => r.json()),
+          fetchShifts(),
+          cachedHrUsers
+            ? Promise.resolve(cachedHrUsers)
+            : fetch(`${BACKEND}/api/attendance/hr-users`).then(r => r.json()),
         ];
         if (isOutletUser) {
           fetches.push(
@@ -103,21 +164,22 @@ const Shift = () => {
           );
         }
 
-        const [dataShifts, dataHr, dataHistory] = await Promise.all(fetches);
+        const [outletShifts, dataHr, dataHistory] = await Promise.all(fetches);
 
-        if (dataShifts?.success && dataShifts.data) {
-          if (!cachedShifts) writeCache(SESSION_SHIFTS_KEY, dataShifts);
-          const outlet = dataShifts.data.filter(
-            (s: any) => s.name.includes('Shift') || s.name.includes('Middle'),
-          );
-          setShiftList(outlet.sort((a: any, b: any) => a.name.localeCompare(b.name)));
+        setShiftList(outletShifts);
+
+        // Validasi ulang shift tersimpan terhadap list terbaru
+        if (savedShift && outletShifts.length > 0) {
+          const stillExists = outletShifts.find((s: any) => s.name === savedShift);
+          if (!stillExists) setSelectedShift('');
         }
 
         const hrData = dataHr?.success !== undefined ? dataHr : cachedHrUsers;
         if (hrData && !cachedHrUsers) writeCache(SESSION_HR_KEY, dataHr);
-        const list: string[] = hrData?.success && hrData.data?.length > 0
-          ? hrData.data
-          : ['hrdrotiropi@gmail.com'];
+        const list: string[] =
+          hrData?.success && hrData.data?.length > 0
+            ? hrData.data
+            : ['hrdrotiropi@gmail.com'];
         setApproverList(list);
         setSelectedApprover(list[0]);
 
@@ -170,7 +232,6 @@ const Shift = () => {
       if (res.ok && data.success) {
         alert('Pengajuan Shift berhasil dikirim ke HRD!');
         localStorage.setItem('ropi_selected_shift', selectedShift);
-        // Refresh riwayat & pindah ke tab history
         await fetchHistory(user.employee_id);
         setActiveTab('history');
       } else {
@@ -342,19 +403,46 @@ const Shift = () => {
                     )}
                   </div>
 
-                  {/* Pilih shift */}
+                  {/* Pilih shift — REVISI: tambah tombol refresh di sebelah label */}
                   <div>
-                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Shift</p>
-                    <select
-                      value={selectedShift}
-                      onChange={e => setSelectedShift(e.target.value)}
-                      className="w-full bg-white border border-gray-200 p-4 rounded-2xl font-bold text-sm focus:outline-none focus:border-[#fbc02d]"
-                    >
-                      <option value="" disabled>-- Pilih Shift --</option>
-                      {shiftList.map(s => (
-                        <option key={s.name} value={s.name}>{s.name}</option>
-                      ))}
-                    </select>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Shift</p>
+                      <button
+                        onClick={handleRefreshShifts}
+                        disabled={isRefreshingShifts}
+                        title="Muat ulang daftar shift dari ERPNext"
+                        className="flex items-center gap-1.5 text-[10px] font-bold text-[#3e2723]/60 hover:text-[#3e2723] bg-white border border-gray-200 hover:border-[#fbc02d] px-2.5 py-1 rounded-full transition-colors disabled:opacity-40"
+                      >
+                        <i className={`fa-solid fa-rotate text-[9px] ${isRefreshingShifts ? 'fa-spin' : ''}`} />
+                        {isRefreshingShifts ? 'Memuat...' : 'Refresh'}
+                      </button>
+                    </div>
+
+                    {shiftList.length === 0 ? (
+                      // REVISI: Tampilkan pesan kosong yang lebih informatif
+                      <div className="w-full bg-white border border-dashed border-gray-200 p-4 rounded-2xl text-center">
+                        <p className="text-xs text-gray-400 font-bold">
+                          Daftar shift kosong.{' '}
+                          <button
+                            onClick={handleRefreshShifts}
+                            className="text-[#fbc02d] underline underline-offset-2"
+                          >
+                            Coba muat ulang
+                          </button>
+                        </p>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedShift}
+                        onChange={e => setSelectedShift(e.target.value)}
+                        className="w-full bg-white border border-gray-200 p-4 rounded-2xl font-bold text-sm focus:outline-none focus:border-[#fbc02d]"
+                      >
+                        <option value="" disabled>-- Pilih Shift ({shiftList.length} tersedia) --</option>
+                        {shiftList.map(s => (
+                          <option key={s.name} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   {/* Pilih approver */}
@@ -416,7 +504,6 @@ const Shift = () => {
                           key={item.name}
                           className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 flex flex-col gap-2.5"
                         >
-                          {/* Baris atas: shift name + badge status */}
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <p className="font-black text-[#3e2723] text-sm leading-tight break-words">
@@ -432,7 +519,6 @@ const Shift = () => {
                             </span>
                           </div>
 
-                          {/* Baris bawah: tanggal */}
                           <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
                             <i className="fa-solid fa-calendar-day text-[#fbc02d] text-xs shrink-0" />
                             <p className="text-xs font-bold text-[#3e2723]">
