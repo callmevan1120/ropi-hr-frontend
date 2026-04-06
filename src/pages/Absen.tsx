@@ -215,13 +215,39 @@ const hitungHariKerjaDalamBulan = (records: LeaveRecord[], filterFn: (r: LeaveRe
 // REVISI: cekBranchVsLokasi hanya berlaku untuk karyawan KANTOR.
 // Karyawan outlet bisa absen dari mana saja → selalu return null.
 // ─────────────────────────────────────────────────────────────────────────────
-const cekBranchVsLokasi = (branchUser: string | undefined, namaLokasi: string): string | null => {
+// ─────────────────────────────────────────────────────────────────────────────
+// REVISI: cekBranchVsLokasi sekarang menggunakan data lokasi dinamis dari ERPNext.
+// Validasi dilakukan dengan mencocokkan nama lokasi terdekat (dari geofence)
+// dengan daftar lokasi branch karyawan yang diambil dari API /api/locations/:branch.
+// Jika lokasi terdekat TIDAK ada di daftar lokasi branch karyawan → ditolak.
+// Karyawan outlet tetap tidak ada pembatasan (return null).
+// ─────────────────────────────────────────────────────────────────────────────
+const cekBranchVsLokasi = (
+  branchUser: string | undefined,
+  namaLokasi: string,
+  lokasiBranchList?: Lokasi[]
+): string | null => {
   // Outlet → tidak ada pembatasan lokasi
   if (isKaryawanOutlet(branchUser)) return null;
 
   const branch = (branchUser || '').toLowerCase().trim();
-  const lokasi = namaLokasi.toLowerCase().trim();
   if (!branch) return null;
+
+  // Jika ada daftar lokasi branch dari ERPNext, gunakan validasi dinamis
+  if (lokasiBranchList && lokasiBranchList.length > 0) {
+    const lokasiLower = namaLokasi.toLowerCase().trim();
+    const cocok = lokasiBranchList.some(loc =>
+      lokasiLower.includes(loc.nama.toLowerCase()) ||
+      loc.nama.toLowerCase().includes(lokasiLower)
+    );
+    if (!cocok) {
+      return `Bukan lokasi branch kamu (${branchUser})`;
+    }
+    return null;
+  }
+
+  // Fallback: validasi string matching jika data lokasi belum tersedia
+  const lokasi = namaLokasi.toLowerCase().trim();
   const isLokasiKlaten  = lokasi.includes('klaten') || lokasi.includes('ph');
   const isLokasiJakarta = lokasi.includes('jakarta');
   const isBranchKlaten  = branch.includes('klaten') || branch.includes('ph');
@@ -674,7 +700,7 @@ const Absen = () => {
       }
 
       if (terdekat.valid && akurasi <= MAX_AKURASI) {
-        const errorBranch = cekBranchVsLokasi(user?.branch, terdekat.nama);
+        const errorBranch = cekBranchVsLokasi(user?.branch, terdekat.nama, lokasiAktif);
         if (errorBranch) {
           setGpsStatus({ tipe: 'error', pesan: errorBranch });
           setJepretState({ aktif: false, teks: 'Akses Ditolak' });
