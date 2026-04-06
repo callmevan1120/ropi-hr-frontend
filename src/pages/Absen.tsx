@@ -591,34 +591,11 @@ const Absen = () => {
     // ─────────────────────────────────────────────────────────────────────────────
     if (outlet) {
       const shiftLokasi = activeShiftRef.current;
+      const punyaLokasi = shiftLokasi?.location_lat !== null && shiftLokasi?.location_lng !== null;
 
-      // REVISI: Evaluasi punyaLokasi dengan pengecekan yang benar.
-      // Nilai null, undefined, 0 semuanya dianggap "tidak punya lokasi".
-      // Koordinat 0,0 juga tidak valid (tengah laut) → pakai Number() + Boolean.
-      const punyaLokasi =
-        shiftLokasi != null &&
-        shiftLokasi.location_lat != null &&
-        shiftLokasi.location_lng != null &&
-        shiftLokasi.location_lat !== 0 &&
-        shiftLokasi.location_lng !== 0;
-
-      // REVISI: Jika shift tidak punya lokasi di ERPNext, BLOKIR absen
-      // dengan pesan yang jelas — jangan bypass.
-      // Ini memaksa HRD mengonfigurasi lokasi di Shift Type sebelum
-      // karyawan outlet bisa absen, sehingga tidak ada celah absen dari luar.
-      if (!punyaLokasi) {
-        setGpsStatus({
-          tipe: 'error',
-          pesan: 'Lokasi shift belum dikonfigurasi HRD. Hubungi HRD untuk mengatur lokasi shift.',
-        });
-        setJepretState({ aktif: false, teks: 'Ditolak' });
-        setNamaLokasi('Lokasi Belum Diatur');
-        return;
-      }
-
-      const MAX_AKURASI_OUTLET    = 300;
-      const RADIUS_MIN_OUTLET     = 100;
-      const MAX_TUNGGU_OUTLET_MS  = 15000;
+      const MAX_AKURASI_OUTLET   = 300;
+      const RADIUS_MIN_OUTLET    = 100;
+      const MAX_TUNGGU_OUTLET_MS = 15000;
       const TARGET_AKURASI_OUTLET = 50;
 
       setGpsStatus({ tipe: 'loading', pesan: 'Mengambil posisi GPS...' });
@@ -627,12 +604,22 @@ const Absen = () => {
       const prosesGpsOutlet = async (lat: number, lng: number, akurasi: number) => {
         setKoordinatGPS({ lat, lng });
 
-        // Shift selalu punya lokasi di sini (sudah dicek di atas)
+        if (!punyaLokasi) {
+          // Shift tidak punya lokasi di ERPNext → bypass geofence, langsung kamera
+          const nm = shiftLokasi?.location_name || user?.branch || await reverseGeocode(lat, lng);
+          setNamaLokasi(nm);
+          setGpsStatus({ tipe: 'ok', pesan: `GPS aktif (akurasi ${Math.round(akurasi)}m) ✓` });
+          setJepretState({ aktif: false, teks: 'Buka Kamera...' });
+          await nyalakanKamera();
+          return;
+        }
+
+        // Shift punya lokasi → validasi geofence
         const lokasiShift = {
-          lat:    shiftLokasi.location_lat!,
-          lng:    shiftLokasi.location_lng!,
-          radius: Math.max(shiftLokasi.location_radius ?? 100, RADIUS_MIN_OUTLET),
-          nama:   shiftLokasi.location_name || user?.branch || 'Lokasi Shift',
+          lat:    shiftLokasi!.location_lat!,
+          lng:    shiftLokasi!.location_lng!,
+          radius: Math.max(shiftLokasi!.location_radius ?? 100, RADIUS_MIN_OUTLET),
+          nama:   shiftLokasi!.location_name || user?.branch || 'Lokasi Shift',
         };
 
         setGpsStatus({ tipe: 'loading', pesan: `Memvalidasi lokasi... (akurasi ${Math.round(akurasi)}m)` });
