@@ -92,9 +92,9 @@ const isRamadhan = (tanggal?: Date): boolean => {
   const bulan = now.getMonth() + 1;
   const tgl   = now.getDate();
   const curr  = bulan * 100 + tgl;
-  if (tahun === 2025 && curr >= 301  && curr <= 330)  return true; 
-  if (tahun === 2026 && curr >= 218  && curr <= 319)  return true; 
-  if (tahun === 2027 && curr >= 209  && curr <= 309)  return true; 
+  if (tahun === 2025 && curr >= 301  && curr <= 330)  return true;
+  if (tahun === 2026 && curr >= 218  && curr <= 319)  return true;
+  if (tahun === 2027 && curr >= 209  && curr <= 309)  return true;
   return false;
 };
 
@@ -112,14 +112,14 @@ const isSatpam = (role?: string): boolean => {
 };
 
 const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: string } => {
-  const hari     = tglDate.getDay(); 
+  const hari     = tglDate.getDay();
   const isFriday = hari === 5;
   const ramadhan = isRamadhan(tglDate);
 
-  const jamMasuk  = '07:30'; 
+  const jamMasuk  = '07:30';
   const jamKeluar = isFriday ? '17:00' : '16:30';
 
-  const jamMasukR  = '07:00'; 
+  const jamMasukR  = '07:00';
   const jamKeluarR = isFriday ? '16:00' : '15:30';
 
   const baseIn  = ramadhan ? jamMasukR  : jamMasuk;
@@ -191,7 +191,7 @@ const validasiShiftName = (
   const recordIsSenKam = shiftFromRecord.toLowerCase().includes('senin');
   if (isFriday && recordIsSenKam) return shiftLokal;
   if (!isFriday && !isWeekend && recordIsFriday) return shiftLokal;
-  if (shiftFromRecord && !shiftFromRecord.includes('(') && !shiftFromRecord.includes(')')) return shiftLokal; 
+  if (shiftFromRecord && !shiftFromRecord.includes('(') && !shiftFromRecord.includes(')')) return shiftLokal;
   return shiftFromRecord;
 };
 
@@ -242,8 +242,8 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
   const pad = 12;
   const gap = 4;
   const logoSize = 46;
-  const fsJam = 22; 
-  const fsTglLoc = 12; 
+  const fsJam = 22;
+  const fsTglLoc = 12;
 
   ctx.font = `900 ${fsJam}px sans-serif`;
   const twJam = ctx.measureText(jam).width;
@@ -260,7 +260,7 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
   const grad = ctx.createLinearGradient(x, y, x + bw, y + bh);
   grad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
   grad.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
-  
+
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.roundRect(x, y, bw, bh, 12);
@@ -269,7 +269,7 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
   const textX = x + pad + logoSize + 10;
   let textY = y + pad;
 
-  ctx.fillStyle = '#fbc02d'; 
+  ctx.fillStyle = '#fbc02d';
   ctx.font = `900 ${fsJam}px sans-serif`;
   ctx.textBaseline = 'top';
   ctx.fillText(jam, textX, textY);
@@ -280,7 +280,7 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
   ctx.fillText(tgl, textX, textY);
   textY += fsTglLoc + gap;
 
-  ctx.fillStyle = '#cbd5e1'; 
+  ctx.fillStyle = '#cbd5e1';
   let finalLoc = loc;
   if (finalLoc.length > 30) finalLoc = finalLoc.substring(0, 30) + '...';
   ctx.fillText(finalLoc, textX, textY);
@@ -294,7 +294,7 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
       ctx.drawImage(img, x + pad, logoY, logoSize, logoSize);
       resolve();
     };
-    img.onerror = () => resolve(); 
+    img.onerror = () => resolve();
   });
 };
 
@@ -334,7 +334,7 @@ const Absen = () => {
 
   const [cameraStep,        setCameraStep]        = useState(1);
   const [fotoBase64,        setFotoBase64]        = useState<string | null>(null);
-  const [fotoKiriBase64,    setFotoKiriBase64]    = useState<string | null>(null); 
+  const [fotoKiriBase64,    setFotoKiriBase64]    = useState<string | null>(null);
   const [jepretState,       setJepretState]       = useState({ aktif: false, teks: 'Cek Sistem...' });
   const [isKirimLoading,    setIsKirimLoading]    = useState(false);
   const [koordinatGPS,      setKoordinatGPS]      = useState<{ lat: number; lng: number } | null>(null);
@@ -372,11 +372,15 @@ const Absen = () => {
     if (!userData) { navigate('/'); return; }
     const parsedUser: User = JSON.parse(userData);
     setUser(parsedUser);
-    ambilLokasiKantor(parsedUser.branch);
     ambilMasterShift();
 
     if (isKaryawanOutlet(parsedUser.branch)) {
-      ambilActiveShift(parsedUser.employee_id);
+      // REVISI: Untuk outlet, aktif shift dulu → lalu ambil lokasi dari shift tersebut.
+      // ambilLokasiKantor dipanggil SETELAH ambilActiveShift selesai (via callback).
+      ambilActiveShiftDanLokasi(parsedUser.employee_id, parsedUser.branch);
+    } else {
+      // Kantor: pakai endpoint lokasi berbasis branch (tidak bergantung shift)
+      ambilLokasiKantor(parsedUser.branch);
     }
   }, [navigate]);
 
@@ -400,18 +404,97 @@ const Absen = () => {
 
   useEffect(() => { return () => matikanKamera(); }, []);
 
+  // ─────────────────────────────────────────────────────────────────
+  // REVISI: ambilActiveShiftDanLokasi — satu fungsi gabungan untuk
+  // karyawan outlet agar urutan fetch terjamin:
+  //   1. Fetch active shift dari ERPNext (sudah ada)
+  //   2. Dari nama shift yang aktif, fetch lokasi shift type
+  //   3. Jika tidak dapat lokasi dari shift → fallback ke /api/locations
+  // ─────────────────────────────────────────────────────────────────
+  const ambilActiveShiftDanLokasi = async (empId: string, branch?: string) => {
+    setShiftLoading(true);
+    setShiftError(null);
+    try {
+      const res  = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}&_t=${Date.now()}`);
+      const data = await res.json();
+
+      if (data.success) {
+        const shift: ActiveShift = {
+          shift_name: data.shift_name,
+          start_time: data.start_time,
+          end_time:   data.end_time,
+        };
+        setActiveShift(shift);
+
+        // REVISI: Setelah dapat shift_name, coba tarik lokasi dari
+        // endpoint baru /api/attendance/shift-locations?shift_name=...
+        // yang akan mengembalikan koordinat dari Shift Location ERPNext.
+        const lokasiDariShift = await ambilLokasiDariShift(shift.shift_name, branch);
+        if (lokasiDariShift.length > 0) {
+          setLokasiKantor(lokasiDariShift);
+        } else {
+          // Fallback: coba endpoint lokasi lama berbasis branch
+          await ambilLokasiKantor(branch);
+        }
+      } else {
+        setShiftError(data.message || 'Belum ada Shift. Ajukan HRD.');
+        // Tetap coba ambil lokasi walau belum ada shift aktif
+        await ambilLokasiKantor(branch);
+      }
+    } catch {
+      setShiftError('Gagal membaca shift.');
+      await ambilLokasiKantor(branch);
+    } finally {
+      setShiftLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────
+  // REVISI: Fungsi baru — ambil lokasi dari Shift Type ERPNext
+  // Endpoint baru: GET /api/attendance/shift-locations?shift_name=...
+  // Response: { success: true, locations: [{ nama, lat, lng, radius }] }
+  // ─────────────────────────────────────────────────────────────────
+  const ambilLokasiDariShift = async (shiftName: string, branch?: string): Promise<Lokasi[]> => {
+    try {
+      const res  = await fetch(
+        `${BACKEND}/api/attendance/shift-locations?shift_name=${encodeURIComponent(shiftName)}&_t=${Date.now()}`
+      );
+      const data = await res.json();
+
+      if (data.success && Array.isArray(data.locations) && data.locations.length > 0) {
+        return data.locations as Lokasi[];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────
+  // ambilLokasiKantor — tetap dipakai sebagai fallback untuk kantor
+  // dan outlet yang shift-nya belum punya Shift Location di ERPNext
+  // ─────────────────────────────────────────────────────────────────
+  const ambilLokasiKantor = async (branch?: string) => {
+    try {
+      const url  = branch
+        ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}?_t=${Date.now()}`
+        : `${BACKEND}/api/locations?_t=${Date.now()}`;
+      const res  = await fetch(url);
+      const data = await res.json();
+      if (data.success && data.locations?.length > 0) setLokasiKantor(data.locations);
+    } catch { console.warn('Pakai lokasi fallback'); }
+  };
+
+  // Fungsi ini sekarang hanya dipakai untuk karyawan outlet yang
+  // perlu refresh manual shift (tanpa reload lokasi ulang).
   const ambilActiveShift = async (empId: string) => {
     setShiftLoading(true);
     setShiftError(null);
     try {
-      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}&_t=${Date.now()}`);
+      const res  = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}&_t=${Date.now()}`);
       const data = await res.json();
       if (data.success) {
-        setActiveShift({
-          shift_name: data.shift_name,
-          start_time: data.start_time,
-          end_time: data.end_time
-        });
+        setActiveShift({ shift_name: data.shift_name, start_time: data.start_time, end_time: data.end_time });
       } else {
         setShiftError(data.message || 'Belum ada Shift. Ajukan HRD.');
       }
@@ -424,11 +507,9 @@ const Absen = () => {
 
   const ambilRiwayatLembur = async (employeeId: string) => {
     try {
-      const res = await fetch(`${BACKEND}/api/attendance/overtime-history?employee_id=${employeeId}&_t=${Date.now()}`);
+      const res  = await fetch(`${BACKEND}/api/attendance/overtime-history?employee_id=${employeeId}&_t=${Date.now()}`);
       const data = await res.json();
-      if (data.success && data.data) {
-        setOvertimeRecords(data.data);
-      }
+      if (data.success && data.data) setOvertimeRecords(data.data);
     } catch (e) { console.error(e); }
   };
 
@@ -449,24 +530,15 @@ const Absen = () => {
     } catch { console.error('Gagal menarik shift'); }
   };
 
-  const ambilLokasiKantor = async (branch?: string) => {
-    try {
-      const url  = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}?_t=${Date.now()}` : `${BACKEND}/api/locations?_t=${Date.now()}`;
-      const res  = await fetch(url);
-      const data = await res.json();
-      if (data.success && data.locations?.length > 0) setLokasiKantor(data.locations);
-    } catch { console.warn('Pakai lokasi fallback'); }
-  };
-
   const ambilRiwayatAbsen = async () => {
     if (!user) return;
     try {
       const dari   = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
       const akhir  = new Date(tahunAktif, bulanAktif + 1, 0);
       const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
-      
-      const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}&_t=${Date.now()}`);
-      const data   = await res.json();
+
+      const res  = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}&_t=${Date.now()}`);
+      const data = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
       else setDataRiwayat([]);
     } catch { setDataRiwayat([]); }
@@ -533,21 +605,21 @@ const Absen = () => {
     setGpsStatus({ tipe: 'loading', pesan: 'Mendeteksi koordinat GPS...' });
     setJepretState({ aktif: false, teks: 'Loading...' });
     setNamaLokasi('Mendeteksi...');
-    
+
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
 
-    const MAX_AKURASI = 300; 
-    const RADIUS_MIN = 100;  
+    const MAX_AKURASI = 300;
+    const RADIUS_MIN  = 100;
 
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const coords  = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         const akurasi = pos.coords.accuracy;
         setKoordinatGPS(coords);
-        
+
         let terdekat = { valid: false, nama: '?', jarak: Infinity, radius: 100 };
         for (const k of lokasiKantor) {
-          const r = Math.max(k.radius, RADIUS_MIN);
+          const r     = Math.max(k.radius, RADIUS_MIN);
           const jarak = Math.round(hitungJarak(coords.lat, coords.lng, k.lat, k.lng));
           if (jarak <= r) {
             terdekat = { valid: true, nama: k.nama, jarak, radius: r };
@@ -559,17 +631,17 @@ const Absen = () => {
         }
 
         if (terdekat.valid && akurasi <= MAX_AKURASI) {
-          let errorBranch = cekBranchVsLokasi(user?.branch, terdekat.nama);
-          
+          const errorBranch = cekBranchVsLokasi(user?.branch, terdekat.nama);
+
           if (errorBranch) {
             setGpsStatus({ tipe: 'error', pesan: errorBranch });
             setJepretState({ aktif: false, teks: 'Akses Ditolak' });
           } else {
             let nm = terdekat.nama;
             if (outlet) {
-               nm = user?.branch || await reverseGeocode(coords.lat, coords.lng);
+              nm = user?.branch || await reverseGeocode(coords.lat, coords.lng);
             }
-            
+
             setNamaLokasi(nm);
             setGpsStatus({ tipe: 'ok', pesan: `Valid: ${nm} (Akurasi: ${Math.round(akurasi)}m) ✓` });
             setJepretState({ aktif: false, teks: 'Buka Kamera...' });
@@ -579,7 +651,7 @@ const Absen = () => {
           setNamaLokasi('Lokasi Ditolak');
           let pesanError = `Kamu di luar area (${terdekat.jarak}m, maks ${terdekat.radius}m)`;
           if (akurasi > MAX_AKURASI) pesanError = `Sinyal GPS lemah, pindah ke area terbuka`;
-          
+
           setGpsStatus({ tipe: 'error', pesan: pesanError });
           setJepretState({ aktif: false, teks: 'Ditolak' });
         }
@@ -659,7 +731,7 @@ const Absen = () => {
 
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      const videoRatio = video.videoWidth / video.videoHeight;
+      const videoRatio  = video.videoWidth / video.videoHeight;
       const targetRatio = TARGET_W / TARGET_H;
 
       let sourceX = 0, sourceY = 0, sourceW = video.videoWidth, sourceH = video.videoHeight;
@@ -712,7 +784,7 @@ const Absen = () => {
     setIsKirimLoading(true);
 
     const namaShiftKirim = outlet
-      ? activeShiftRef.current?.shift_name || '' 
+      ? activeShiftRef.current?.shift_name || ''
       : getNamaShiftKantor(new Date(), user.branch, satpam);
 
     try {
@@ -733,47 +805,47 @@ const Absen = () => {
 
       if (res.ok) {
         tutupModal();
-        
-        const nowUtc = new Date();
+
+        const nowUtc  = new Date();
         const wibTime = new Date(nowUtc.getTime() + 7 * 60 * 60 * 1000);
-        const yyyy = wibTime.getUTCFullYear();
-        const mm = String(wibTime.getUTCMonth() + 1).padStart(2, '0');
-        const dd = String(wibTime.getUTCDate()).padStart(2, '0');
-        const tglStr = `${yyyy}-${mm}-${dd}`; 
-        
+        const yyyy    = wibTime.getUTCFullYear();
+        const mm      = String(wibTime.getUTCMonth() + 1).padStart(2, '0');
+        const dd      = String(wibTime.getUTCDate()).padStart(2, '0');
+        const tglStr  = `${yyyy}-${mm}-${dd}`;
+
         const jamSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(/\./g, ':');
-        
+
         if (modeAbsen === 'MASUK') {
-           const shiftInfo = getJamShift(namaShiftKirim, tglStr, user.branch, user.role, masterShifts, activeShiftRef.current);
-           const selisih = toMenit(jamSekarang) - toMenit(shiftInfo.in);
-           
-           if (selisih > 0) {
-              const isAlreadyCounted = dataRiwayat.some(r => r.log_type === 'IN' && (r.time?.includes(tglStr) || r.attendance_date?.includes(tglStr)));
-              const finalTelatCount = isAlreadyCounted ? rekapTelat : rekapTelat + 1;
-              
-              setToastMsg({
-                show: true,
-                type: 'late',
-                title: 'Kamu Terlambat!',
-                desc: `Masuk telat ${formatDurasi(selisih)} hari ini. (Total ${finalTelatCount}x telat bulan ini)`
-              });
-           } else {
-              setToastMsg({
-                show: true, type: 'success', title: 'Absen Masuk Berhasil', desc: 'Kamu datang tepat waktu. Semangat bekerja!'
-              });
-           }
+          const shiftInfo  = getJamShift(namaShiftKirim, tglStr, user.branch, user.role, masterShifts, activeShiftRef.current);
+          const selisih    = toMenit(jamSekarang) - toMenit(shiftInfo.in);
+
+          if (selisih > 0) {
+            const isAlreadyCounted = dataRiwayat.some(r => r.log_type === 'IN' && (r.time?.includes(tglStr) || r.attendance_date?.includes(tglStr)));
+            const finalTelatCount  = isAlreadyCounted ? rekapTelat : rekapTelat + 1;
+
+            setToastMsg({
+              show: true,
+              type: 'late',
+              title: 'Kamu Terlambat!',
+              desc: `Masuk telat ${formatDurasi(selisih)} hari ini. (Total ${finalTelatCount}x telat bulan ini)`
+            });
+          } else {
+            setToastMsg({
+              show: true, type: 'success', title: 'Absen Masuk Berhasil', desc: 'Kamu datang tepat waktu. Semangat bekerja!'
+            });
+          }
         } else {
-           setToastMsg({
-              show: true, type: 'success', title: 'Absen Keluar Berhasil', desc: 'Hati-hati di jalan pulang, selamat beristirahat!'
-           });
+          setToastMsg({
+            show: true, type: 'success', title: 'Absen Keluar Berhasil', desc: 'Hati-hati di jalan pulang, selamat beristirahat!'
+          });
         }
-        
+
         setTimeout(() => setToastMsg(null), 8000);
         ambilRiwayatAbsen();
       } else {
         const errData = await res.json().catch(() => null);
-        const errMsg = errData?.message || 'Absen gagal dikirim ke sistem.';
-        
+        const errMsg  = errData?.message || 'Absen gagal dikirim ke sistem.';
+
         if (errMsg.length > 100) {
           alert('Terjadi kesalahan pada sistem. Silakan coba lagi atau lapor admin.\n\nDetail:\n' + errMsg.substring(0, 150) + '...');
         } else {
@@ -789,7 +861,7 @@ const Absen = () => {
   dataRiwayat.forEach(item => {
     const tgl = item.time?.substring(0, 10) || item.attendance_date || '';
     if (!groupedRiwayat[tgl]) groupedRiwayat[tgl] = {};
-    
+
     if (item.log_type === 'IN') {
       const curr = groupedRiwayat[tgl].in;
       if (!curr) {
@@ -804,7 +876,7 @@ const Absen = () => {
         }
       }
     }
-    
+
     if (item.log_type === 'OUT') {
       const curr = groupedRiwayat[tgl].out;
       if (!curr) {
@@ -847,10 +919,10 @@ const Absen = () => {
 
   const tanggalIzinSet = new Set<string>();
   const tanggalCutiSet = new Set<string>();
-  
+
   leaveRecords.forEach(r => {
-    if (r.status?.toLowerCase() !== 'approved') return; 
-    
+    if (r.status?.toLowerCase() !== 'approved') return;
+
     const isCuti = r.leave_type.toLowerCase().includes('tahunan');
     const from = parseLokalDate(r.from_date);
     const to   = parseLokalDate(r.to_date);
@@ -878,9 +950,9 @@ const Absen = () => {
       const dataIn    = groupedRiwayat[strTgl]?.in;
       const checkin   = dataIn?.time;
       const adaIzin   = tanggalIzinSet.has(strTgl);
-      const adaCuti   = tanggalCutiSet.has(strTgl); 
+      const adaCuti   = tanggalCutiSet.has(strTgl);
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
-      
+
       let dot: React.ReactNode = null;
       if (isHariIni) {
         kelas += 'bg-[#3e2723] text-[#fbc02d] font-black';
@@ -930,8 +1002,8 @@ const Absen = () => {
       {toastMsg && (
         <div className="fixed top-6 left-0 w-full flex justify-center z-[9999] pointer-events-none px-4">
           <div className={`pointer-events-auto animate-bounceIn w-full max-w-sm flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border-2 ${
-            toastMsg.type === 'late' 
-              ? 'bg-[#dc2626] border-[#ef4444] shadow-red-600/50' 
+            toastMsg.type === 'late'
+              ? 'bg-[#dc2626] border-[#ef4444] shadow-red-600/50'
               : 'bg-[#16a34a] border-[#22c55e] shadow-green-600/50'
           }`}>
             <div className="shrink-0 flex items-center justify-center">
@@ -1018,11 +1090,11 @@ const Absen = () => {
               {/* HEADER PROPORSIONAL (1 BARIS SAJA DENGAN 5 KOLOM) */}
               <div className="mt-4 grid grid-cols-5 gap-1.5">
                 {[
-                  { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
-                  { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
-                  { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
-                  { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' }, 
-                  { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' }, 
+                  { label: 'Hadir',  value: rekapHadir,                   color: 'text-green-400'  },
+                  { label: 'Telat',  value: rekapTelat,                   color: 'text-red-400'    },
+                  { label: 'Izin',   value: rekapIzin,                    color: 'text-blue-300'   },
+                  { label: 'Cuti',   value: rekapCuti,                    color: 'text-teal-400'   },
+                  { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' },
                 ].map(item => (
                   <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center overflow-hidden">
                     <p className={`text-sm font-black ${item.color} truncate w-full`}>{item.value}</p>
@@ -1042,14 +1114,13 @@ const Absen = () => {
                     {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map(h => <div key={h}>{h}</div>)}
                   </div>
                   <div className="grid grid-cols-7 gap-y-0.5 text-center">{renderKalender()}</div>
-                  
-                  {/* KETERANGAN TITIK KALENDER SEDERHANA (1 BARIS TANPA ANGKA) */}
+
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
                     {[
-                      { color: 'bg-green-400', label: 'Tepat' }, 
-                      { color: 'bg-red-400', label: 'Telat' }, 
-                      { color: 'bg-blue-400', label: 'Izin' },
-                      { color: 'bg-teal-400', label: 'Cuti' }
+                      { color: 'bg-green-400', label: 'Tepat' },
+                      { color: 'bg-red-400',   label: 'Telat' },
+                      { color: 'bg-blue-400',  label: 'Izin'  },
+                      { color: 'bg-teal-400',  label: 'Cuti'  },
                     ].map(l => (
                       <div key={l.label} className="flex items-center gap-1">
                         <span className={`w-2 h-2 rounded-full ${l.color} inline-block`} />
@@ -1081,115 +1152,74 @@ const Absen = () => {
                         const tglDate    = parseLokalDate(tgl);
                         const shiftInfo  = getJamShift(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, masterShifts, activeShift);
                         const shiftLabel = validasiShiftName(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, activeShift);
-                        
+
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
-                        const adaCutiHariIni = tanggalCutiSet.has(tgl); 
+                        const adaCutiHariIni = tanggalCutiSet.has(tgl);
                         const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
                         const lemburHariIni = overtimeRecords.find(o => o.overtime_date === tgl && o.status?.toLowerCase() === 'approved');
-                        
-                        // Badge Lembur
+
                         let badgeLembur: React.ReactNode = null;
                         if (lemburHariIni) {
-                           const durasi = toMenit(lemburHariIni.end_time) - toMenit(lemburHariIni.start_time);
-                           badgeLembur = <span className="bg-purple-100 text-purple-600 text-[10px] font-black px-2 py-1 rounded-md shadow-sm border border-purple-200">Lembur {formatDurasi(durasi)}</span>;
+                          const durasi = toMenit(lemburHariIni.end_time) - toMenit(lemburHariIni.start_time);
+                          badgeLembur = <span className="bg-purple-100 text-purple-600 text-[10px] font-black px-2 py-1 rounded-md shadow-sm border border-purple-200">Lembur {formatDurasi(durasi)}</span>;
                         }
 
-                        // Badge Tepat/Telat Masuk
                         let badgeEl: React.ReactNode = null;
                         if (jamIn !== '-') {
-                          const selisih = toMenit(jamIn) - toMenit(shiftInfo.in);
-                          badgeEl = selisih > 0
-                            ? <span className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm">Telat {formatDurasi(selisih)}</span>
-                            : <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-1 rounded-md border border-green-200 shadow-sm">Tepat Waktu</span>;
-                        }
-                        
-                        // Prioritas Badge: Jika tidak absen, tampilkan Cuti atau Izin
-                        if (!badgeEl) {
-                          if (adaCutiHariIni) {
-                            badgeEl = <span className="bg-teal-100 text-teal-700 text-[10px] font-black px-2 py-1 rounded-md border border-teal-200 shadow-sm">Cuti</span>;
-                          } else if (adaIzinHariIni) {
-                            badgeEl = <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-2 py-1 rounded-md border border-blue-200 shadow-sm">Izin</span>;
-                          }
-                        }
-
-                        // Badge Keluar Cepat
-                        let badgeCepat: React.ReactNode = null;
-                        if (jamOut !== '-') {
-                          const selisih = toMenit(shiftInfo.out) - toMenit(jamOut);
-                          if (selisih > 0) {
-                            badgeCepat = <span className="bg-orange-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm">Pulang Cepat {formatDurasi(selisih)}</span>;
-                          }
-                        }
-
-                        // Badge Belum Keluar
-                        let badgeBelumKeluar: React.ReactNode = null;
-                        if (jamIn !== '-' && jamOut === '-') {
-                          badgeBelumKeluar = <span className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-sm">Belum Keluar</span>;
+                          const isTelat = toMenit(jamIn) > toMenit(shiftInfo.in);
+                          badgeEl = (
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-md shadow-sm border ${isTelat ? 'bg-red-50 text-red-500 border-red-200' : 'bg-green-50 text-green-600 border-green-200'}`}>
+                              {isTelat ? `Telat ${formatDurasi(toMenit(jamIn) - toMenit(shiftInfo.in))}` : 'Tepat Waktu'}
+                            </span>
+                          );
                         }
 
                         return (
-                          <div key={tgl} onClick={() => bukaDetail(tgl)} className="cursor-pointer bg-white px-4 py-4 rounded-2xl border border-gray-100 flex flex-col shadow-sm active:scale-95 transition-transform hover:border-[#fbc02d]/40">
-                            
-                            {/* Baris 1: Ikon, Tanggal, dan Shift */}
-                            <div className="flex items-center justify-between gap-3 mb-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 ${d.in ? 'bg-green-50 text-green-500' : adaCutiHariIni ? 'bg-teal-50 text-teal-500' : adaIzinHariIni ? 'bg-blue-50 text-blue-400' : 'bg-gray-50 text-gray-300'}`}>
-                                  <i className={`fa-solid ${d.in ? 'fa-check' : (adaCutiHariIni || adaIzinHariIni) ? 'fa-envelope-open-text' : 'fa-minus'}`} />
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="font-bold text-[#3e2723] text-sm truncate">{dateLabel}</p>
-                                  <p className="text-[10px] font-bold text-gray-400 truncate">{shiftLabel || '-'}</p>
-                                </div>
+                          <button
+                            key={tgl}
+                            onClick={() => bukaDetail(tgl)}
+                            className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 text-left active:scale-[0.98] transition-transform hover:border-[#fbc02d]/50"
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div>
+                                <p className="text-xs font-black text-[#3e2723]">{dateLabel}</p>
+                                <p className="text-[10px] text-gray-400 font-bold mt-0.5 truncate max-w-[140px]">{shiftLabel}</p>
                               </div>
-                              <i className="fa-solid fa-chevron-right text-gray-300 text-[10px] shrink-0" />
-                            </div>
-                            
-                            {/* BADGES SATU BARIS RATA KANAN KIRI DI ANTARA TANGGAL & KOTAK AKTUAL */}
-                            {(badgeEl || badgeCepat || badgeBelumKeluar || badgeLembur) && (
-                              <div className="flex items-center justify-between w-full mb-3">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  {badgeEl}
-                                  {badgeCepat}
-                                  {badgeBelumKeluar}
-                                </div>
-                                {badgeLembur && (
-                                  <div className="shrink-0 ml-2">
-                                    {badgeLembur}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Baris 3: Kotak Aktual vs Jadwal */}
-                            <div className="bg-gray-50 border border-gray-100 rounded-xl py-2.5 px-4 flex items-center justify-between">
-                              <div className="flex flex-col">
-                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Aktual</span>
-                                <div className="flex items-center gap-1.5 text-xs font-black text-[#3e2723]">
-                                  <span>{jamIn}</span>
-                                  <i className="fa-solid fa-arrow-right text-gray-300 text-[9px]" />
-                                  <span>{jamOut === '-' && badgeBelumKeluar ? <span className="text-red-400 italic">?</span> : jamOut}</span>
-                                </div>
-                              </div>
-                              <div className="h-6 w-px bg-gray-200" />
-                              <div className="flex flex-col items-end">
-                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Jadwal</span>
-                                <div className="flex items-center gap-1.5 text-xs font-black text-[#fbc02d]">
-                                  <span>{shiftInfo.in}</span>
-                                  <span className="text-gray-300 text-[10px]">-</span>
-                                  <span>{shiftInfo.out}</span>
-                                </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                {badgeEl}
+                                {badgeLembur}
+                                {adaIzinHariIni && !d.in && <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-2 py-1 rounded-md border border-blue-200">Izin</span>}
+                                {adaCutiHariIni && !d.in && <span className="bg-teal-50 text-teal-600 text-[10px] font-black px-2 py-1 rounded-md border border-teal-200">Cuti</span>}
                               </div>
                             </div>
-
-                          </div>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                                  <i className="fa-solid fa-right-to-bracket text-green-600 text-[8px]" />
+                                </div>
+                                <span className="text-xs font-black text-[#3e2723]">{jamIn}</span>
+                                <span className="text-[9px] text-gray-400">({shiftInfo.in})</span>
+                              </div>
+                              <i className="fa-solid fa-arrow-right text-gray-300 text-[8px]" />
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                                  <i className="fa-solid fa-right-from-bracket text-orange-500 text-[8px]" />
+                                </div>
+                                <span className="text-xs font-black text-[#3e2723]">{jamOut}</span>
+                                <span className="text-[9px] text-gray-400">({shiftInfo.out})</span>
+                              </div>
+                            </div>
+                          </button>
                         );
                       })}
 
                       {sortedTglKeys.length > 5 && (
-                        <button onClick={() => setLihatSemua(v => !v)} className="w-full mt-1 py-3 rounded-2xl border border-dashed border-gray-300 text-xs font-black text-gray-400 hover:border-[#fbc02d] hover:text-[#3e2723] hover:bg-white transition-colors flex items-center justify-center gap-2">
-                          <i className={`fa-solid ${lihatSemua ? 'fa-chevron-up' : 'fa-chevron-down'}`} />
-                          {lihatSemua ? 'Lebih Sedikit' : `Lihat Semua (${sortedTglKeys.length} hari)`}
+                        <button
+                          onClick={() => setLihatSemua(!lihatSemua)}
+                          className="w-full bg-white border border-dashed border-gray-200 rounded-2xl py-3 text-xs font-black text-gray-400 hover:border-[#fbc02d] hover:text-[#3e2723] transition-colors"
+                        >
+                          {lihatSemua ? 'Sembunyikan' : `Lihat Semua (${sortedTglKeys.length})`}
                         </button>
                       )}
                     </>
@@ -1198,397 +1228,328 @@ const Absen = () => {
               </div>
             </div>
 
-            {/* BOTTOM NAV */}
             <BottomNav />
+          </div>
+        </div>
+      </div>
 
-            {/* ══════════════════════════════════
-                MODAL ABSEN
-            ══════════════════════════════════ */}
-            {isModalAbsenOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
-                <div className="bg-white w-full max-w-sm mx-auto md:max-w-lg md:rounded-[2rem] rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden mt-auto mb-auto md:mt-0" style={{ maxHeight: '90vh' }}>
+      {/* ── MODAL ABSEN ── */}
+      {isModalAbsenOpen && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4">
+          <div className="w-full md:max-w-sm bg-white md:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]">
 
-                  {/* Header modal */}
-                  <div className="bg-[#3e2723] px-5 pt-4 pb-4 shrink-0">
-                    <div className="flex items-start justify-between w-full">
-                      <div className="flex flex-col gap-1 w-[70%]">
-                        <p className="text-white text-2xl font-black leading-none">{jamModal}</p>
-                        <p className="text-[#fbc02d] text-[9px] font-bold tracking-wide mt-1">
-                          <i className="fa-solid fa-clock mr-1" />
-                          {outlet 
-                            ? activeShiftRef.current 
-                                ? `${activeShiftRef.current.shift_name} • ${activeShiftRef.current.start_time}-${activeShiftRef.current.end_time}` 
-                                : 'Jadwal Shift belum diatur HRD'
-                            : `${getNamaShiftKantor(new Date(), user?.branch, satpam)} • ${getJamShiftKantor(new Date(), satpam).in}-${getJamShiftKantor(new Date(), satpam).out}`
-                          }
-                        </p>
+            {/* Modal Header */}
+            <div className={`shrink-0 px-5 pt-5 pb-4 ${modeAbsen === 'MASUK' ? 'bg-[#3e2723]' : 'bg-orange-700'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${modeAbsen === 'MASUK' ? 'bg-green-400/20 text-green-400' : 'bg-orange-300/20 text-orange-300'}`}>
+                    <i className={`fa-solid ${modeAbsen === 'MASUK' ? 'fa-right-to-bracket' : 'fa-right-from-bracket'} text-sm`} />
+                  </div>
+                  <div>
+                    <h2 className="text-white font-black text-base leading-tight">Absen {modeAbsen}</h2>
+                    <p className="text-white/60 text-[10px] font-bold">{jamModal}</p>
+                  </div>
+                </div>
+                <button onClick={tutupModal} className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all">
+                  <i className="fa-solid fa-xmark text-sm" />
+                </button>
+              </div>
+
+              {/* Step indicator */}
+              <div className="flex items-center gap-2">
+                {stepsData.map((step, idx) => {
+                  const done    = cameraStep > step.n;
+                  const current = cameraStep === step.n;
+                  return (
+                    <React.Fragment key={step.n}>
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all ${
+                        done    ? 'bg-green-400/20 text-green-400' :
+                        current ? 'bg-white/20 text-white' :
+                                  'bg-white/5 text-white/30'
+                      }`}>
+                        <i className={`fa-solid ${done ? 'fa-check' : step.icon} text-[10px]`} />
+                        <span className="text-[10px] font-black">{step.label}</span>
                       </div>
-                      <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 h-fit shrink-0 ${modeAbsen === 'MASUK' ? 'bg-green-500/30 border border-green-400/40' : 'bg-orange-500/30 border border-orange-400/40'}`}>
-                        <div className={`w-2 h-2 rounded-full ${modeAbsen === 'MASUK' ? 'bg-green-400' : 'bg-orange-400'} animate-pulse`} />
-                        <p className={`font-black text-xs uppercase tracking-wider ${modeAbsen === 'MASUK' ? 'text-green-300' : 'text-orange-300'}`}>{modeAbsen}</p>
+                      {idx < stepsData.length - 1 && <div className="flex-1 h-px bg-white/10" />}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto hide-scrollbar">
+
+              {/* GPS Status */}
+              <div className={`mx-4 mt-4 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-xs font-bold ${
+                gpsStatus.tipe === 'ok'      ? 'bg-green-50 text-green-700 border border-green-200' :
+                gpsStatus.tipe === 'error'   ? 'bg-red-50 text-red-600 border border-red-200' :
+                                               'bg-gray-50 text-gray-500 border border-gray-200'
+              }`}>
+                <i className={`fa-solid ${
+                  gpsStatus.tipe === 'ok'    ? 'fa-location-dot text-green-500' :
+                  gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation text-red-400' :
+                                               'fa-spinner fa-spin text-gray-400'
+                } text-sm shrink-0`} />
+                <span className="leading-tight">{gpsStatus.pesan}</span>
+              </div>
+
+              {/* Kamera (step 1 & 2) */}
+              {(cameraStep === 1 || cameraStep === 2) && (
+                <div className="px-4 pt-4 flex flex-col gap-3">
+                  {cameraStep === 2 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-2xl px-4 py-2.5 flex items-center gap-2">
+                      <i className="fa-solid fa-hand text-blue-500 text-sm" />
+                      <p className="text-xs font-bold text-blue-700">Sekarang foto dari sisi <span className="font-black">kiri</span> wajahmu</p>
+                    </div>
+                  )}
+
+                  <div className={`relative rounded-2xl overflow-hidden border-4 ${kameraBorder} transition-colors shadow-sm bg-black aspect-[3/4]`}>
+                    <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline style={{ transform: 'scaleX(-1)' }} />
+
+                    {wajahStatus.show && (
+                      <div className={`absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-black ${
+                        wajahStatus.ok ? 'bg-green-500 text-white' : 'bg-orange-400 text-white'
+                      }`}>
+                        <i className={`fa-solid ${wajahStatus.ok ? 'fa-face-smile' : 'fa-face-frown'} text-xs`} />
+                        {wajahStatus.ok ? 'Wajah Terdeteksi' : 'Cari Wajah...'}
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <button
+                        onClick={jepretFoto}
+                        disabled={!jepretState.aktif}
+                        className={`w-full py-3 rounded-xl font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                          jepretState.aktif
+                            ? 'bg-[#fbc02d] text-[#3e2723] shadow-lg'
+                            : 'bg-black/50 text-white/50 cursor-not-allowed'
+                        }`}
+                      >
+                        <i className="fa-solid fa-camera" />
+                        {jepretState.teks}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Preview & Kirim (step 3) */}
+              {cameraStep === 3 && (
+                <div className="px-4 pt-4 flex flex-col gap-4">
+                  {outlet ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Wajah + Kanan', src: fotoBase64 },
+                        { label: 'Wajah + Kiri',  src: fotoKiriBase64 },
+                      ].map(({ label, src }) => (
+                        <div key={label} className="flex flex-col gap-1">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide pl-1 text-center">{label}</p>
+                          <div className="rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm aspect-[3/4]">
+                            {src && <img src={src} className="w-full h-full object-contain" alt={label} />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="max-w-[200px] mx-auto w-full">
+                      <div className="rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm aspect-[3/4]">
+                        {fotoBase64 && <img src={fotoBase64} className="w-full h-full object-contain" alt="Selfie" />}
                       </div>
                     </div>
+                  )}
 
-                    <div className="flex items-center justify-between w-full mt-3">
-                      {/* Status GPS */}
-                      {(cameraStep === 1 || cameraStep === 2) ? (
-                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold ${gpsStatus.tipe === 'error' ? 'bg-red-900/50 text-red-300' : gpsStatus.tipe === 'ok' ? 'bg-green-900/40 text-green-300' : 'bg-white/10 text-white/70'}`}>
-                          {gpsStatus.tipe === 'loading' ? <i className="fa-solid fa-spinner fa-spin" /> : <i className={`fa-solid ${gpsStatus.tipe === 'error' ? 'fa-triangle-exclamation' : 'fa-location-dot'}`} />}
-                          <span className="line-clamp-2 max-w-[200px] leading-tight">{gpsStatus.pesan}</span>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => { setCameraStep(1); setFotoBase64(null); setFotoKiriBase64(null); nyalakanKamera(); }}
+                      className="flex-1 bg-gray-100 text-gray-600 font-black py-3.5 rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-2 text-sm"
+                    >
+                      <i className="fa-solid fa-rotate-left" /> Ulangi
+                    </button>
+                    <button
+                      onClick={kirimAbsen}
+                      disabled={isKirimLoading}
+                      className={`flex-1 font-black py-3.5 rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-2 text-sm shadow-lg ${
+                        isKirimLoading ? 'bg-gray-200 text-gray-400' : 'bg-[#3e2723] text-[#fbc02d]'
+                      }`}
+                    >
+                      {isKirimLoading
+                        ? <><i className="fa-solid fa-spinner fa-spin" /> Mengirim...</>
+                        : <><i className="fa-solid fa-paper-plane" /> Kirim</>
+                      }
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DETAIL ── */}
+      {detailModal.show && (() => {
+        const lemburHariIniData = overtimeRecords.find(o => o.overtime_date === detailModal.tgl && o.status?.toLowerCase() === 'approved');
+        const dIn  = detailModal.inData;
+        const dOut = detailModal.outData;
+        const hasVerifImage = !!(dIn?.custom_verification_image || dOut?.custom_verification_image);
+
+        const jamIn      = formatJamLokal(dIn?.time);
+        const jamOut     = formatJamLokal(dOut?.time);
+        const shiftInfo  = getJamShift(dIn?.shift || dOut?.shift, detailModal.tgl, user?.branch, user?.role, masterShifts, activeShift);
+        const shiftLabel = validasiShiftName(dIn?.shift || dOut?.shift, detailModal.tgl, user?.branch, user?.role, activeShift);
+        const tglDate    = parseLokalDate(detailModal.tgl);
+        const tglLabel   = tglDate.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+        const durasiKerja = (jamIn !== '-' && jamOut !== '-')
+          ? Math.max(0, toMenit(jamOut) - toMenit(jamIn))
+          : null;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4">
+            <div className="w-full md:max-w-sm bg-white md:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]">
+
+              <div className="bg-[#3e2723] px-5 pt-5 pb-4 shrink-0">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-white font-black text-base">{tglLabel}</h2>
+                    <p className="text-white/60 text-[10px] font-bold mt-0.5">{shiftLabel}</p>
+                  </div>
+                  <button onClick={() => setDetailModal({ show: false, tgl: '' })} className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20">
+                    <i className="fa-solid fa-xmark text-sm" />
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Masuk',  value: jamIn,  sub: shiftInfo.in,  icon: 'fa-right-to-bracket',   color: 'text-green-400'  },
+                    { label: 'Keluar', value: jamOut, sub: shiftInfo.out, icon: 'fa-right-from-bracket', color: 'text-orange-400' },
+                    { label: 'Durasi', value: durasiKerja !== null ? formatDurasi(durasiKerja) : '-', sub: 'jam kerja', icon: 'fa-clock', color: 'text-blue-300' },
+                  ].map(item => (
+                    <div key={item.label} className="bg-white/10 rounded-xl p-2.5 text-center">
+                      <i className={`fa-solid ${item.icon} ${item.color} text-xs mb-1 block`} />
+                      <p className={`text-sm font-black ${item.color}`}>{item.value}</p>
+                      <p className="text-[9px] text-white/50 font-bold">({item.sub})</p>
+                      <p className="text-[8px] text-white/40 uppercase tracking-wide mt-0.5">{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 bg-gray-50">
+
+                {lemburHariIniData && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-3xl px-4 py-3 flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2 text-purple-600 font-bold text-[10px] uppercase">
+                      <i className="fa-solid fa-business-time" /> Disetujui Lembur
+                    </div>
+                    <p className="text-sm font-black text-purple-800">
+                      {formatDurasi(toMenit(lemburHariIniData.end_time) - toMenit(lemburHariIniData.start_time))}
+                      <span className="text-xs font-bold text-purple-500 ml-1">({lemburHariIniData.start_time.substring(0, 5)} - {lemburHariIniData.end_time.substring(0, 5)})</span>
+                    </p>
+                    <p className="text-[10px] text-purple-600 leading-snug italic">"{lemburHariIniData.description}"</p>
+                  </div>
+                )}
+
+                {hasVerifImage ? (
+                  <div className="flex flex-col gap-6 w-full">
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
+                      <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
+                        <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-blue-500 text-[10px]" /></div>
+                        <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Masuk</p>
+                      </div>
+                      <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                        <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
+                          <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                            {dIn?.custom_foto_absen
+                              ? <img src={prosesUrlFoto(dIn.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Masuk" loading="lazy" decoding="async" />
+                              : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                            }
+                            <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
+                          </div>
                         </div>
-                      ) : <div className="flex-1" />}
+                        <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
+                          <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                            {dIn?.custom_verification_image
+                              ? <img src={prosesUrlFoto(dIn.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Masuk" loading="lazy" decoding="async" />
+                              : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                            }
+                            <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Masuk →</p>
+                    </div>
 
-                      {/* Step indicator */}
-                      <div className="flex items-center gap-1 ml-2">
-                        {stepsData.map((s, i) => (
-                          <div key={s.n} className="flex items-center gap-1">
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black ${cameraStep > s.n ? 'bg-green-400 text-white' : cameraStep === s.n ? 'bg-[#fbc02d] text-[#3e2723]' : 'bg-white/20 text-white/50'}`}>
-                              {cameraStep > s.n ? <i className="fa-solid fa-check" /> : <i className={`fa-solid ${s.icon}`} />}
+                    {dOut && (
+                      <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
+                        <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
+                          <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-orange-500 text-[10px]" /></div>
+                          <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Keluar</p>
+                        </div>
+                        <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                          <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
+                            <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                              {dOut?.custom_foto_absen
+                                ? <img src={prosesUrlFoto(dOut.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Keluar" loading="lazy" decoding="async" />
+                                : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                              }
+                              <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
                             </div>
-                            {i < stepsData.length - 1 && <div className={`w-1.5 h-0.5 rounded-full ${cameraStep > s.n ? 'bg-green-400' : 'bg-white/20'}`} />}
+                          </div>
+                          <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
+                            <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                              {dOut?.custom_verification_image
+                                ? <img src={prosesUrlFoto(dOut.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Keluar" loading="lazy" decoding="async" />
+                                : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                              }
+                              <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Keluar →</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start w-full">
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 col-span-full">
+                      <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-gray-500 text-[10px]" /></div>
+                        <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Selfie Wajah</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[{ label: 'Masuk', data: dIn, badgeCol: 'bg-green-500' }, { label: 'Keluar', data: dOut, badgeCol: 'bg-orange-500' }].map(({ label, data, badgeCol }) => (
+                          <div key={label} className="flex flex-col gap-1.5">
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
+                            <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                              {data?.custom_foto_absen
+                                ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-contain" alt={label} loading="lazy" decoding="async" />
+                                : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Belum ada</p></div>
+                              }
+                              <div className={`absolute top-2 left-2 ${badgeCol} text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20`}>{label}</div>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
-
-                  {/* Body modal */}
-                  <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-
-                    {/* ── Step 1 & 2: Kamera Wajah digabung agar tidak black screen ── */}
-                    {(cameraStep === 1 || cameraStep === 2) && (
-                      <>
-                        <div className={`bg-${cameraStep === 1 ? 'red' : 'blue'}-50 border border-${cameraStep === 1 ? 'red' : 'blue'}-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm`}>
-                          <div className={`w-8 h-8 rounded-full bg-${cameraStep === 1 ? 'red' : 'blue'}-100 flex items-center justify-center text-${cameraStep === 1 ? 'red' : 'blue'}-500 shrink-0`}>
-                            <i className={`fa-solid ${cameraStep === 1 ? 'fa-camera-rotate' : 'fa-hand'}`} />
-                          </div>
-                          <div>
-                            <p className={`text-${cameraStep === 1 ? 'red' : 'blue'}-700 text-xs font-black leading-tight`}>
-                              {cameraStep === 1 
-                                ? (outlet ? 'Selfie + Tangan Kanan' : satpam ? 'Selfie Wajah (Satpam)' : 'Selfie Wajah')
-                                : 'Selfie + Tangan Kiri'
-                              }
-                            </p>
-                            <p className={`text-${cameraStep === 1 ? 'red' : 'blue'}-500 text-[10px] font-bold leading-snug`}>
-                              {cameraStep === 1 
-                                ? (outlet ? 'Perlihatkan wajah & kuku tangan kananmu dengan jelas.' : 'Pastikan wajah terlihat jelas di kamera.')
-                                : 'Perlihatkan wajah & kuku tangan kirimu dengan jelas.'
-                              }
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Kontainer Video 3:4 */}
-                        <div className={`w-full rounded-2xl overflow-hidden border-[3px] ${kameraBorder} bg-black relative transition-colors shadow-inner flex items-center justify-center aspect-[3/4]`}>
-                          
-                          {/* Instruksi khusus Step 2 outlet */}
-                          {cameraStep === 2 && outlet && (
-                            <div className="absolute top-4 z-30 flex justify-center px-4 pointer-events-none">
-                              <span className="bg-white/90 text-[#3e2723] text-[10px] font-black px-4 py-2 rounded-full shadow-lg border border-gray-200">Arahkan tangan kiri ke kamera</span>
-                            </div>
-                          )}
-
-                          {/* Video */}
-                          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
-                          
-                          {/* Live Overlay Info (Tampilan di layar HP sebelum jepret) */}
-                          <div className="absolute bottom-3 left-3 z-20 bg-black/60 rounded-md px-2 py-1.5 pointer-events-none select-none">
-                            <p className="text-white text-[9px] font-mono leading-tight">{jamModal}</p>
-                            <p className="text-yellow-200 text-[9px] font-mono leading-tight">📍 {namaLokasi}</p>
-                          </div>
-
-                          {/* Indikator Wajah AI */}
-                          {wajahStatus.show && (
-                            <div className={`absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black shadow-md ${wajahStatus.ok ? 'bg-green-500 text-white' : 'bg-orange-400 text-white'}`}>
-                              <i className={`fa-solid ${wajahStatus.ok ? 'fa-face-smile' : 'fa-face-meh'} text-xs`} />
-                              {wajahStatus.ok ? 'Wajah Terdeteksi' : 'Cari Wajah...'}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-
-                    {/* ── Step 3: Review & kirim (TTD dihapus) ── */}
-                    {cameraStep === 3 && (
-                      <div className="flex flex-col gap-4">
-                        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-3 py-2.5 flex gap-3 items-center shadow-sm">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 shrink-0"><i className="fa-solid fa-eye" /></div>
-                          <div>
-                            <p className="text-blue-800 text-xs font-black leading-tight">Review Bukti Absen</p>
-                            <p className="text-blue-500 text-[10px] font-bold mt-0.5">Pastikan semua foto jelas sebelum dikirim.</p>
-                          </div>
-                        </div>
-
-                        {/* CAROUSEL KHUSUS OUTLET ATAU KOTAK KANTOR */}
-                        {outlet ? (
-                          <div className="flex flex-col gap-2 w-full">
-                            <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory hide-scrollbar w-full">
-                              {/* Foto 1 */}
-                              <div className="shrink-0 w-[85%] snap-center flex flex-col gap-1.5">
-                                <p className="text-[10px] font-black text-gray-400 uppercase text-center">📸 Wajah + Kanan</p>
-                                <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black aspect-[3/4] flex items-center justify-center">
-                                  <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Kanan" loading="lazy" decoding="async" />
-                                </div>
-                              </div>
-                              {/* Foto 2 */}
-                              <div className="shrink-0 w-[85%] snap-center flex flex-col gap-1.5">
-                                <p className="text-[10px] font-black text-gray-400 uppercase text-center">📸 Wajah + Kiri</p>
-                                <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black aspect-[3/4] flex items-center justify-center">
-                                  <img src={fotoKiriBase64 || ''} className="w-full h-full object-contain" alt="Kiri" loading="lazy" decoding="async" />
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex justify-center gap-1">
-                              <span className="w-2 h-2 rounded-full bg-gray-300 animate-pulse"></span>
-                              <span className="w-2 h-2 rounded-full bg-gray-300 animate-pulse delay-75"></span>
-                            </div>
-                            <p className="text-[9px] text-center text-gray-400 font-bold italic">Geser untuk melihat semua foto →</p>
-                          </div>
-                        ) : (
-                          // Layout Kantor biasa (Selfie saja)
-                          <>
-                            <div className="flex flex-col gap-1">
-                              <p className="text-[10px] font-black text-gray-400 uppercase pl-1 text-center">📸 Selfie Wajah</p>
-                              <div className="rounded-2xl overflow-hidden border-2 border-gray-200 shadow-sm bg-black flex items-center justify-center max-w-[240px] mx-auto w-full aspect-[3/4]">
-                                <img src={fotoBase64 || ''} className="w-full h-full object-contain" alt="Selfie" loading="lazy" decoding="async" />
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer modal – tombol aksi */}
-                  <div className="px-5 pb-6 pt-3 shrink-0 border-t border-gray-100 bg-gray-50">
-
-                    {/* Step 1 & 2: Batal / Jepret */}
-                    {(cameraStep === 1 || cameraStep === 2) && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <button onClick={tutupModal} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 text-sm flex items-center justify-center gap-2 shadow-sm">
-                          <i className="fa-solid fa-xmark" /> Batal
-                        </button>
-                        <button
-                          disabled={!jepretState.aktif}
-                          onClick={jepretFoto}
-                          className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all shadow-md ${
-                            jepretState.aktif
-                              ? cameraStep === 2
-                                ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                : 'bg-green-500 hover:bg-green-600 text-white'
-                              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          }`}
-                        >
-                          <i className="fa-solid fa-camera shrink-0" />
-                          <span>{jepretState.teks}</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Step 3: Ulangi / Kirim */}
-                    {cameraStep === 3 && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <button onClick={() => bukaModalAbsen(modeAbsen)} className="bg-white border border-gray-200 text-gray-500 font-black py-3.5 rounded-2xl active:scale-95 flex items-center justify-center gap-2 text-sm shadow-sm">
-                          <i className="fa-solid fa-rotate-right shrink-0" /> Ulangi
-                        </button>
-                        <button
-                          onClick={kirimAbsen}
-                          disabled={isKirimLoading}
-                          className="bg-[#3e2723] hover:bg-[#4e342e] text-[#fbc02d] font-black py-3.5 rounded-2xl shadow-md flex items-center justify-center gap-2 active:scale-95 text-sm transition-colors"
-                        >
-                          {isKirimLoading ? <i className="fa-solid fa-spinner fa-spin shrink-0" /> : <i className="fa-solid fa-paper-plane shrink-0" />}
-                          {isKirimLoading ? 'Mengirim...' : 'Kirim Absen'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
+                )}
               </div>
-            )}
 
-            {/* ══════════════════════════════════
-                MODAL DETAIL RIWAYAT
-            ══════════════════════════════════ */}
-            {detailModal.show && (() => {
-              const tglDate   = parseLokalDate(detailModal.tgl);
-              const shiftInfo = getJamShift(
-                detailModal.inData?.shift || detailModal.outData?.shift,
-                detailModal.tgl, user?.branch, user?.role, masterShifts, activeShift
-              );
-              const shiftLabel = validasiShiftName(
-                detailModal.inData?.shift || detailModal.outData?.shift,
-                detailModal.tgl, user?.branch, user?.role, activeShift
-              );
-              const hariLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'long' });
-              const tglLabel  = tglDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-              const inJam     = detailModal.inData?.time  ? formatJamLokal(detailModal.inData.time)  : null;
-              const outJam    = detailModal.outData?.time ? formatJamLokal(detailModal.outData.time) : null;
-
-              const hasVerifImage = !!(detailModal.inData?.custom_verification_image || detailModal.outData?.custom_verification_image);
-
-              // MENGAMBIL DATA LEMBUR UNTUK MODAL
-              const lemburHariIniData = overtimeRecords?.find(o => o.overtime_date === detailModal.tgl && o.status?.toLowerCase() === 'approved') ?? null;
-
-              return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" style={{ background: 'rgba(62,39,35,0.92)', backdropFilter: 'blur(6px)' }}>
-                  <div className="bg-white w-full max-w-sm mx-auto md:max-w-2xl md:rounded-[2rem] rounded-[2.5rem] flex flex-col shadow-2xl overflow-hidden mt-auto mb-auto md:mt-0" style={{ maxHeight: '90vh' }}>
-
-                    <div className="bg-[#3e2723] px-5 pt-5 pb-5 shrink-0 relative">
-                      <button onClick={() => setDetailModal({ show: false, tgl: '' })} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/50 hover:text-white hover:bg-red-500 transition-colors">
-                        <i className="fa-solid fa-xmark" />
-                      </button>
-                      <div className="pr-10">
-                        <p className="text-[#fbc02d] text-[10px] font-black uppercase tracking-widest mb-0.5">{hariLabel}</p>
-                        <h2 className="text-white text-xl font-black leading-tight">{tglLabel}</h2>
-                      </div>
-                      <div className="mt-5 grid grid-cols-2 gap-3">
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col justify-center relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/10 rounded-full -mr-6 -mt-6 blur-md" />
-                          <div className="flex items-center gap-1.5 mb-1"><i className="fa-solid fa-right-to-bracket text-green-400 text-xs" /><p className="text-green-400 text-[10px] font-black uppercase">Masuk</p></div>
-                          <p className="text-white font-black text-2xl leading-none">{inJam ?? <span className="text-white/20">–</span>}</p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col justify-center relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-16 h-16 bg-orange-500/10 rounded-full -mr-6 -mt-6 blur-md" />
-                          <div className="flex items-center gap-1.5 mb-1"><i className="fa-solid fa-right-from-bracket text-orange-400 text-xs" /><p className="text-orange-400 text-[10px] font-black uppercase">Keluar</p></div>
-                          <p className="text-white font-black text-2xl leading-none">{outJam ?? <span className="text-white/20">–</span>}</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-white/50 bg-black/20 rounded-xl py-1.5 px-3 flex-wrap text-center">
-                        <i className="fa-solid fa-clock" />
-                        <span>Jadwal: <span className="text-white/80 font-bold">{shiftLabel || '-'}</span></span>
-                        <span className="text-white/30">·</span>
-                        <span className="text-white/80 font-bold">{shiftInfo.in} – {shiftInfo.out}</span>
-                        {satpam && <span className="text-yellow-300 font-black text-[9px] ml-1">(Satpam)</span>}
-                      </div>
-                    </div>
-
-                    <div className={`flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6 bg-gray-50`}>
-                      
-                      {/* MENAMPILKAN LEMBUR DI MODAL DETAIL */}
-                      {lemburHariIniData && (
-                        <div className="bg-purple-50 border border-purple-200 rounded-3xl px-4 py-3 flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2 text-purple-600 font-bold text-[10px] uppercase">
-                            <i className="fa-solid fa-business-time" /> Disetujui Lembur
-                          </div>
-                          <p className="text-sm font-black text-purple-800">
-                            {formatDurasi(toMenit(lemburHariIniData.end_time) - toMenit(lemburHariIniData.start_time))}
-                            <span className="text-xs font-bold text-purple-500 ml-1">({lemburHariIniData.start_time.substring(0, 5)} - {lemburHariIniData.end_time.substring(0, 5)})</span>
-                          </p>
-                          <p className="text-[10px] text-purple-600 leading-snug italic">"{lemburHariIniData.description}"</p>
-                        </div>
-                      )}
-
-                      {hasVerifImage ? (
-                        <div className="flex flex-col gap-6 w-full">
-                           {/* CONTAINER MASUK */}
-                           <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
-                              <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
-                                <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-blue-500 text-[10px]" /></div>
-                                <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Masuk</p>
-                              </div>
-                              <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
-                                 {/* FOTO MASUK KANAN */}
-                                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
-                                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                     {detailModal.inData?.custom_foto_absen
-                                       ? <img src={prosesUrlFoto(detailModal.inData.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Masuk" loading="lazy" decoding="async" />
-                                       : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                                     }
-                                     <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
-                                   </div>
-                                 </div>
-                                 {/* FOTO MASUK KIRI */}
-                                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
-                                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                     {detailModal.inData?.custom_verification_image
-                                       ? <img src={prosesUrlFoto(detailModal.inData.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Masuk" loading="lazy" decoding="async" />
-                                       : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                                     }
-                                     <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
-                                   </div>
-                                 </div>
-                              </div>
-                              <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Masuk →</p>
-                           </div>
-
-                           {/* CONTAINER KELUAR */}
-                           {detailModal.outData && (
-                             <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
-                                <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
-                                  <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-orange-500 text-[10px]" /></div>
-                                  <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Keluar</p>
-                                </div>
-                                <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
-                                   {/* FOTO KELUAR KANAN */}
-                                   <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
-                                     <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                       {detailModal.outData?.custom_foto_absen
-                                         ? <img src={prosesUrlFoto(detailModal.outData.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Keluar" loading="lazy" decoding="async" />
-                                         : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                                       }
-                                       <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
-                                     </div>
-                                   </div>
-                                   {/* FOTO KELUAR KIRI */}
-                                   <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
-                                     <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                       {detailModal.outData?.custom_verification_image
-                                         ? <img src={prosesUrlFoto(detailModal.outData.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Keluar" loading="lazy" decoding="async" />
-                                         : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                                       }
-                                       <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
-                                     </div>
-                                   </div>
-                                </div>
-                                <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Keluar →</p>
-                             </div>
-                           )}
-                        </div>
-                      ) : (
-                        // Layout Kantor Biasa (Grid statis, Selfie saja)
-                        <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start w-full">
-                          <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 col-span-full">
-                            <div className="flex items-center gap-2 mb-3 border-b border-gray-50 pb-2">
-                              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-gray-500 text-[10px]" /></div>
-                              <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Selfie Wajah</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              {[{ label: 'Masuk', data: detailModal.inData, badgeCol: 'bg-green-500' }, { label: 'Keluar', data: detailModal.outData, badgeCol: 'bg-orange-500' }].map(({ label, data, badgeCol }) => (
-                                <div key={label} className="flex flex-col gap-1.5">
-                                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">{label}</p>
-                                  <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                    {data?.custom_foto_absen
-                                      ? <img src={prosesUrlFoto(data.custom_foto_absen)} className="w-full h-full object-contain" alt={label} loading="lazy" decoding="async" />
-                                      : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Belum ada</p></div>
-                                    }
-                                    <div className={`absolute top-2 left-2 ${badgeCol} text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20`}>{label}</div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="p-4 shrink-0 bg-white border-t border-gray-100">
-                      <button onClick={() => setDetailModal({ show: false, tgl: '' })} className="w-full bg-gray-100 hover:bg-gray-200 text-[#3e2723] font-black py-4 rounded-2xl active:scale-95 transition-colors flex items-center justify-center gap-2">
-                        <i className="fa-solid fa-check text-[#fbc02d]" /> Mengerti & Tutup
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
+              <div className="p-4 shrink-0 bg-white border-t border-gray-100">
+                <button onClick={() => setDetailModal({ show: false, tgl: '' })} className="w-full bg-gray-100 hover:bg-gray-200 text-[#3e2723] font-black py-4 rounded-2xl active:scale-95 transition-colors flex items-center justify-center gap-2">
+                  <i className="fa-solid fa-check text-[#fbc02d]" /> Mengerti & Tutup
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
+
     </div>
   );
 };
