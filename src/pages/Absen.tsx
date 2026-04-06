@@ -399,7 +399,7 @@ const Absen = () => {
     }
 
     if (isKaryawanOutlet(parsedUser.branch)) {
-      ambilActiveShift(parsedUser.employee_id);
+      ambilActiveShift(parsedUser.employee_id, parsedUser.branch);
     }
   }, [navigate]);
 
@@ -423,11 +423,12 @@ const Absen = () => {
 
   useEffect(() => { return () => matikanKamera(); }, []);
 
-  const ambilActiveShift = async (empId: string) => {
+  const ambilActiveShift = async (empId: string, branch?: string) => {
     setShiftLoading(true);
     setShiftError(null);
     try {
-      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}&_t=${Date.now()}`);
+      const branchParam = branch ? `&branch=${encodeURIComponent(branch)}` : '';
+      const res = await fetch(`${BACKEND}/api/attendance/active-shift?employee_id=${encodeURIComponent(empId)}${branchParam}&_t=${Date.now()}`);
       const data = await res.json();
       if (data.success) {
         setActiveShift({
