@@ -40,6 +40,7 @@ interface ActiveShift {
   shift_name: string;
   start_time: string;
   end_time: string;
+  shift_location?: string | null;
 }
 
 interface OvertimeRecord {
@@ -453,7 +454,8 @@ const Absen = () => {
         setActiveShift({
           shift_name: data.shift_name,
           start_time: data.start_time,
-          end_time: data.end_time
+          end_time: data.end_time,
+          shift_location: data.shift_location ?? null,
         });
       } else {
         setShiftError(data.message || 'Belum ada Shift. Ajukan HRD.');
@@ -922,6 +924,7 @@ const Absen = () => {
           image_verification:        fotoBase64,
           custom_verification_image: outlet ? fotoKiriBase64 : undefined,
           shift:                     namaShiftKirim,
+          shift_location:            outlet ? (activeShiftRef.current?.shift_location ?? null) : null,
         }),
       });
 
