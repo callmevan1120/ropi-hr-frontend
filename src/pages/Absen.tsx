@@ -610,7 +610,7 @@ const Absen = () => {
         if (lat !== undefined && lng !== undefined) {
           setKoordinatGPS({ lat, lng });
           // Nama lokasi: prioritaskan branch user, fallback ke reverse geocode
-          const nm = user?.branch || await reverseGeocode(lat, lng);
+          const nm = activeShiftRef.current?.shift_location || user?.branch || await reverseGeocode(lat, lng);
           setNamaLokasi(nm);
           const akurasiInfo = akurasi !== undefined ? ` (akurasi ${Math.round(akurasi)}m)` : '';
           setGpsStatus({ tipe: 'ok', pesan: `GPS aktif${akurasiInfo} ✓` });
