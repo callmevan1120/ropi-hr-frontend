@@ -630,9 +630,14 @@ const Absen = () => {
         }
       } else {
         setNamaLokasi('Lokasi Ditolak');
-        const pesanError = akurasi > MAX_AKURASI
-          ? `Sinyal GPS lemah (${Math.round(akurasi)}m), pindah ke area terbuka`
-          : `Di luar area absen (${terdekat.jarak}m dari ${terdekat.nama}, maks ${terdekat.radius}m)`;
+        let pesanError = '';
+        if (lokasiAktif.length === 0) {
+           pesanError = 'Lokasi absensi kamu belum didaftarkan di sistem oleh HRD.';
+        } else if (akurasi > MAX_AKURASI) {
+           pesanError = `Sinyal GPS lemah (${Math.round(akurasi)}m), pindah ke area terbuka`;
+        } else {
+           pesanError = `Di luar area absen (${terdekat.jarak}m dari ${terdekat.nama}, maks ${terdekat.radius}m)`;
+        }
         setGpsStatus({ tipe: 'error', pesan: pesanError });
         setJepretState({ aktif: false, teks: 'Ditolak' });
       }
