@@ -337,12 +337,10 @@ const Absen = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
-  const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
 
   const [user, setUser] = useState<User | null>(null);
-  // REVISI: lokasiKantor HANYA dipakai untuk karyawan kantor.
-  // Karyawan outlet tidak menggunakan array ini untuk geofence.
-  const [lokasiKantor, setLokasiKantor] = useState<Lokasi[]>(LOKASI_FALLBACK);
+  // Lokasi default kosong untuk menghindari lolos absen di Klaten secara magis
+  const [lokasiKantor, setLokasiKantor] = useState<Lokasi[]>([]);
   const [dataRiwayat, setDataRiwayat] = useState<RiwayatAbsen[]>([]);
   const [bulanAktif, setBulanAktif] = useState(new Date().getMonth());
   const [tahunAktif, setTahunAktif] = useState(new Date().getFullYear());
@@ -829,8 +827,8 @@ const Absen = () => {
     // Jika GPS tidak tersedia, kirim 0,0 agar tidak muncul sebagai "ada di PH Klaten"
     // di dashboard HR. Backend/ERPNext akan menerima koordinat 0,0 sebagai
     // tanda GPS tidak tersedia — lebih jujur daripada koordinat yang salah.
-    const fallbackLat = outlet ? 0 : LOKASI_FALLBACK[0].lat;
-    const fallbackLng = outlet ? 0 : LOKASI_FALLBACK[0].lng;
+    const fallbackLat = outlet ? 0 : -7.6146229; // hardcoded PH Klaten lat
+    const fallbackLng = outlet ? 0 : 110.6867057; // hardcoded PH Klaten lng
 
     try {
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
