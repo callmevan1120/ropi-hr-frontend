@@ -412,12 +412,7 @@ const Absen = () => {
     setUser(parsedUser);
     ambilMasterShift();
 
-    // REVISI: ambilLokasiKantor HANYA dipanggil untuk karyawan kantor.
-    // Karyawan outlet tidak perlu data lokasi kantor sama sekali karena
-    // mereka tidak melalui validasi geofence.
-    if (!isKaryawanOutlet(parsedUser.branch)) {
-      ambilLokasiKantor(parsedUser.branch);
-    }
+    ambilLokasiKantor(parsedUser.branch);
 
     if (isKaryawanOutlet(parsedUser.branch)) {
       ambilActiveShift(parsedUser.employee_id);
@@ -457,6 +452,9 @@ const Absen = () => {
           end_time: data.end_time,
           shift_location: data.shift_location ?? null,
         });
+        if (data.shift_location) {
+          await ambilLokasiKantor(data.shift_location);
+        }
       } else {
         setShiftError(data.message || 'Belum ada Shift. Ajukan HRD.');
       }
@@ -595,89 +593,7 @@ const Absen = () => {
 
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
 
-    // ── OUTLET: Flow GPS tanpa validasi geofence ──────────────────────────────
-    // Tujuan hanya untuk: (1) catat koordinat, (2) tampilkan nama lokasi di foto.
-    // Karyawan outlet TIDAK perlu berada di radius tertentu → langsung kamera.
-    if (outlet) {
-      setGpsStatus({ tipe: 'loading', pesan: 'Mengambil posisi GPS...' });
-
-      let sudahBukaKamera = false;
-
-      const bukakameraOutlet = async (lat?: number, lng?: number, akurasi?: number) => {
-        if (sudahBukaKamera) return;
-        sudahBukaKamera = true;
-
-        if (lat !== undefined && lng !== undefined) {
-          setKoordinatGPS({ lat, lng });
-          // Nama lokasi: prioritaskan branch user, fallback ke reverse geocode
-          const nm = activeShiftRef.current?.shift_location || user?.branch || await reverseGeocode(lat, lng);
-          setNamaLokasi(nm);
-          const akurasiInfo = akurasi !== undefined ? ` (akurasi ${Math.round(akurasi)}m)` : '';
-          setGpsStatus({ tipe: 'ok', pesan: `GPS aktif${akurasiInfo} ✓` });
-        } else {
-          // GPS tidak tersedia — tetap lanjut tanpa koordinat
-          setKoordinatGPS(null);
-          setNamaLokasi(user?.branch || 'Lokasi Tidak Diketahui');
-          setGpsStatus({ tipe: 'ok', pesan: 'Melanjutkan tanpa GPS ✓' });
-        }
-
-        setJepretState({ aktif: false, teks: 'Buka Kamera...' });
-        await nyalakanKamera();
-      };
-
-      const MAX_TUNGGU_OUTLET_MS = 10000; // 10 detik cukup untuk outlet
-      let watchIdOutlet: number | null = null;
-      let bestPosOutlet: GeolocationPosition | null = null;
-
-      const timeoutOutlet = window.setTimeout(() => {
-        if (watchIdOutlet !== null) navigator.geolocation.clearWatch(watchIdOutlet);
-        // Timeout → pakai posisi terbaik yang ada, atau tanpa koordinat
-        bukakameraOutlet(
-          bestPosOutlet?.coords.latitude,
-          bestPosOutlet?.coords.longitude,
-          bestPosOutlet?.coords.accuracy,
-        );
-      }, MAX_TUNGGU_OUTLET_MS);
-
-      watchIdOutlet = navigator.geolocation.watchPosition(
-        (pos) => {
-          if (!sudahBukaKamera) {
-            setGpsStatus({ tipe: 'loading', pesan: `Mengunci GPS... (akurasi ${Math.round(pos.coords.accuracy)}m)` });
-          }
-          if (!bestPosOutlet || pos.coords.accuracy < bestPosOutlet.coords.accuracy) {
-            bestPosOutlet = pos;
-          }
-          // Untuk outlet: langsung pakai begitu ada sample pertama yang cukup akurat
-          // (tidak perlu sangat presisi karena tidak ada radius check)
-          if (pos.coords.accuracy <= 200) {
-            window.clearTimeout(timeoutOutlet);
-            navigator.geolocation.clearWatch(watchIdOutlet!);
-            bukakameraOutlet(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-          }
-        },
-        (err) => {
-          window.clearTimeout(timeoutOutlet);
-          if (watchIdOutlet !== null) navigator.geolocation.clearWatch(watchIdOutlet);
-          if (err.code === 1) {
-            // Permission denied → tetap lanjut tanpa GPS
-            bukakameraOutlet();
-          } else if (bestPosOutlet) {
-            bukakameraOutlet(
-              bestPosOutlet.coords.latitude,
-              bestPosOutlet.coords.longitude,
-              bestPosOutlet.coords.accuracy,
-            );
-          } else {
-            bukakameraOutlet();
-          }
-        },
-        { enableHighAccuracy: true, maximumAge: 5000, timeout: MAX_TUNGGU_OUTLET_MS },
-      );
-
-      return; // selesai untuk outlet, tidak lanjut ke flow kantor
-    }
-
-    // ── KANTOR: Flow GPS dengan validasi geofence (tidak berubah) ────────────
+    // ── FLOW GPS DENGAN VALIDASI GEOFENCE (BERLAKU UNTUK KANTOR DAN OUTLET) ────────────
     const MAX_AKURASI   = 300;
     const RADIUS_MIN    = 100;
     const MAX_TUNGGU_MS = 15000;
