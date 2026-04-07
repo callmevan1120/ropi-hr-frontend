@@ -19,6 +19,7 @@ const formatTgl = (str?: string): string => {
 interface ShiftRecord {
   name: string;
   shift_type: string;
+  shift_location?: string; // REVISI: Tambah field ini
   from_date: string;
   to_date: string;
   status: string;
@@ -27,10 +28,10 @@ interface ShiftRecord {
 }
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; icon: string }> = {
-  Approved: { bg: 'bg-green-100',  text: 'text-green-700',  icon: 'fa-circle-check' },
-  Rejected: { bg: 'bg-red-100',    text: 'text-red-600',    icon: 'fa-circle-xmark' },
-  Pending:  { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: 'fa-clock'        },
-  Draft:    { bg: 'bg-gray-100',   text: 'text-gray-500',   icon: 'fa-file-pen'     },
+  Approved: { bg: 'bg-green-100',  text: 'text-green-700',  icon: 'fa-circle-check'    },
+  Rejected: { bg: 'bg-red-100',    text: 'text-red-600',    icon: 'fa-circle-xmark'    },
+  Pending:  { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: 'fa-clock'           },
+  Draft:    { bg: 'bg-gray-100',   text: 'text-gray-500',   icon: 'fa-file-pen'        },
 };
 
 // ── Komponen ─────────────────────────────────────────────────────────
@@ -38,17 +39,19 @@ const Shift = () => {
   const navigate = useNavigate();
   const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
 
-  const [user, setUser]                 = useState<any>(null);
-  const [isOutlet, setIsOutlet]         = useState(false);
-  const [shiftList, setShiftList]       = useState<any[]>([]);
+  const [user, setUser]               = useState<any>(null);
+  const [isOutlet, setIsOutlet]       = useState(false);
+  const [shiftList, setShiftList]     = useState<any[]>([]);
+  const [lokasiList, setLokasiList]   = useState<string[]>([]); // 🔥 REVISI: State untuk daftar lokasi
   const [approverList, setApproverList] = useState<string[]>([]);
-  const [history, setHistory]           = useState<ShiftRecord[]>([]);
-  const [isLoading, setIsLoading]       = useState(true);
+  const [history, setHistory]         = useState<ShiftRecord[]>([]);
+  const [isLoading, setIsLoading]     = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingShifts, setIsRefreshingShifts] = useState(false);
-  const [activeTab, setActiveTab]       = useState<'form' | 'history'>('form');
+  const [activeTab, setActiveTab]     = useState<'form' | 'history'>('form');
 
-  const [selectedShift,    setSelectedShift]    = useState('');
+  const [selectedShift,     setSelectedShift]    = useState('');
+  const [selectedLokasi,    setSelectedLokasi]   = useState(''); // 🔥 REVISI: State pilihan lokasi
   const [selectedApprover, setSelectedApprover] = useState('');
   const [mode, setMode]                         = useState<'single' | 'range'>('single');
 
@@ -57,12 +60,10 @@ const Shift = () => {
   const [fromDate, setFromDate]         = useState(todayStr);
   const [toDate, setToDate]             = useState(todayStr);
 
-  // ── Cache keys & TTL ────────────────────────────────────────────
-  // REVISI: TTL diturunkan ke 10 menit agar data shift lebih segar.
-  // Sebelumnya 5 menit namun tidak ada cara force-refresh manual.
-  const SESSION_SHIFTS_KEY = 'ropi_cache_shifts_raw';
-  const SESSION_HR_KEY     = 'ropi_cache_hr_users';
-  const CACHE_MAX_AGE_MS   = 10 * 60 * 1000; // 10 menit
+  // ── Load data awal ──────────────────────────────────────────────
+  const SESSION_SHIFTS_KEY   = 'ropi_cache_shifts_raw';
+  const SESSION_HR_KEY       = 'ropi_cache_hr_users';
+  const CACHE_MAX_AGE_MS     = 10 * 60 * 1000;
 
   const readCache = (key: string): any | null => {
     try {
@@ -78,20 +79,10 @@ const Shift = () => {
     try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
   };
 
-  // REVISI: Hapus cache shift agar fetch ulang dari ERPNext
   const clearShiftCache = () => {
     try { sessionStorage.removeItem(SESSION_SHIFTS_KEY); } catch {}
   };
 
-  // ── Fungsi ambil & proses data shift ────────────────────────────
-  // REVISI: Dipisah ke fungsi sendiri agar bisa dipanggil ulang
-  // saat user menekan tombol refresh shift list.
-  // Filter sebelumnya hanya mengambil item yang namanya mengandung
-  // 'Shift' atau 'Middle' — ini menyebabkan shift type baru yang
-  // menggunakan penamaan lain tidak muncul. Sekarang semua shift
-  // ditampilkan, diurutkan alfabetis. Shift kantor (yang mengandung
-  // kata kunci 'Senin', 'Jumat', 'PH', 'Jakarta') disaring agar
-  // tidak muncul di daftar pilihan karyawan outlet.
   const fetchShifts = async (forceRefresh = false): Promise<any[]> => {
     if (!forceRefresh) {
       const cached = readCache(SESSION_SHIFTS_KEY);
@@ -104,9 +95,6 @@ const Shift = () => {
     if (data?.success && Array.isArray(data.data)) {
       writeCache(SESSION_SHIFTS_KEY, data);
 
-      // REVISI: Saring shift kantor. Nama shift kantor mengandung
-      // kata kunci di bawah (sesuai normalizeOfficeShiftName di backend).
-      // Semua shift lain (outlet) ditampilkan tanpa filter nama.
       const officeKeywords = ['senin', 'jumat', 'ph klaten', 'jakarta', 'non ramadhan', 'ramadhan'];
       const outletShifts = data.data.filter((s: any) => {
         const lower = (s.name as string).toLowerCase();
@@ -118,25 +106,22 @@ const Shift = () => {
     return [];
   };
 
-  // ── Tombol refresh shift list (force refetch) ────────────────────
   const handleRefreshShifts = async () => {
     setIsRefreshingShifts(true);
     try {
       clearShiftCache();
       const shifts = await fetchShifts(true);
       setShiftList(shifts);
-      // Reset pilihan jika shift sebelumnya sudah tidak ada
       if (selectedShift && !shifts.find((s: any) => s.name === selectedShift)) {
         setSelectedShift('');
       }
     } catch {
-      // silent — list tetap menampilkan data lama
+      // silent
     } finally {
       setIsRefreshingShifts(false);
     }
   };
 
-  // ── Load data awal ──────────────────────────────────────────────
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
     if (!userData) { navigate('/'); return; }
@@ -146,32 +131,47 @@ const Shift = () => {
 
     const savedShift = localStorage.getItem('ropi_selected_shift');
     if (savedShift) setSelectedShift(savedShift);
+    
+    // REVISI: Tarik lokasi dari lokal storage
+    const savedLokasi = localStorage.getItem('ropi_selected_lokasi');
+    if (savedLokasi) setSelectedLokasi(savedLokasi);
 
     const init = async () => {
       try {
         const isOutletUser = isKaryawanOutlet(u.branch);
         const cachedHrUsers = readCache(SESSION_HR_KEY);
 
+        // REVISI: Tarik data lokasi berbarengan dengan data lain
         const fetches: Promise<any>[] = [
           fetchShifts(),
           cachedHrUsers
             ? Promise.resolve(cachedHrUsers)
             : fetch(`${BACKEND}/api/attendance/hr-users`).then(r => r.json()),
+          fetch(`${BACKEND}/api/locations`).then(r => r.json()), // 🔥 REVISI: Fetch API lokasi
         ];
+        
         if (isOutletUser) {
           fetches.push(
             fetch(`${BACKEND}/api/attendance/shift-history?employee_id=${encodeURIComponent(u.employee_id)}`).then(r => r.json()),
           );
         }
 
-        const [outletShifts, dataHr, dataHistory] = await Promise.all(fetches);
+        const [outletShifts, dataHr, dataLokasi, dataHistory] = await Promise.all(fetches);
 
         setShiftList(outletShifts);
 
-        // Validasi ulang shift tersimpan terhadap list terbaru
         if (savedShift && outletShifts.length > 0) {
           const stillExists = outletShifts.find((s: any) => s.name === savedShift);
           if (!stillExists) setSelectedShift('');
+        }
+
+        // REVISI: Olah data lokasi (Hanya ambil nama outlet, buang kantor pusat)
+        if (dataLokasi?.success && dataLokasi.locations) {
+           const locs = dataLokasi.locations
+              .map((l: any) => l.nama)
+              .filter((n: string) => !n.toLowerCase().includes('klaten') && !n.toLowerCase().includes('jakarta'))
+              .sort();
+           setLokasiList(locs);
         }
 
         const hrData = dataHr?.success !== undefined ? dataHr : cachedHrUsers;
@@ -208,9 +208,12 @@ const Shift = () => {
   const tanganiSubmit = async () => {
     const finalFrom = mode === 'single' ? selectedDate : fromDate;
     const finalTo   = mode === 'single' ? selectedDate : toDate;
-    if (!selectedShift || !finalFrom || !finalTo || !selectedApprover) {
-      alert('Harap lengkapi semua field!'); return;
+    
+    // REVISI: Wajib pilih lokasi khusus outlet
+    if (!selectedShift || !finalFrom || !finalTo || !selectedApprover || (isOutlet && !selectedLokasi)) {
+      alert('Harap lengkapi semua field (termasuk lokasi outlet)!'); return;
     }
+    
     if (new Date(finalTo) < new Date(finalFrom)) {
       alert('Tanggal akhir tidak boleh sebelum tanggal mulai!'); return;
     }
@@ -221,17 +224,20 @@ const Shift = () => {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          employee_id:  user.employee_id,
-          shift_type:   selectedShift,
-          from_date:    finalFrom,
-          to_date:      finalTo,
-          approver:     selectedApprover,
+          employee_id:    user.employee_id,
+          shift_type:     selectedShift,
+          shift_location: isOutlet ? selectedLokasi : null, // 🔥 REVISI: Kirim lokasi
+          from_date:      finalFrom,
+          to_date:        finalTo,
+          approver:       selectedApprover,
         }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         alert('Pengajuan Shift berhasil dikirim ke HRD!');
         localStorage.setItem('ropi_selected_shift', selectedShift);
+        if (isOutlet) localStorage.setItem('ropi_selected_lokasi', selectedLokasi); // 🔥 Simpan lokasi terakhir di device
+        
         await fetchHistory(user.employee_id);
         setActiveTab('history');
       } else {
@@ -284,7 +290,6 @@ const Shift = () => {
                 <h1 className="text-xl font-black text-[#fbc02d]">Jadwal Shift</h1>
               </div>
 
-              {/* Tab — hanya tampil untuk outlet */}
               {isOutlet && (
                 <div className="grid grid-cols-2 gap-1 bg-white/10 p-1 rounded-xl">
                   {(['form', 'history'] as const).map(tab => (
@@ -311,7 +316,6 @@ const Shift = () => {
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5 pb-24 no-scrollbar">
 
-              {/* ═══ KARYAWAN KANTOR — blocked ═══ */}
               {!isOutlet && (
                 <div className="flex flex-col items-center justify-center h-full gap-5 text-center px-4">
                   <div className="w-20 h-20 rounded-full bg-[#fff8e1] flex items-center justify-center shadow-inner">
@@ -335,7 +339,6 @@ const Shift = () => {
                 </div>
               )}
 
-              {/* ═══ KARYAWAN OUTLET ═══ */}
               {isOutlet && isLoading && (
                 <div className="flex items-center justify-center h-40">
                   <i className="fa-solid fa-spinner fa-spin text-2xl text-[#fbc02d]" />
@@ -351,7 +354,6 @@ const Shift = () => {
                     </p>
                   </div>
 
-                  {/* Toggle 1 hari / beberapa hari */}
                   <div>
                     <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Periode</p>
                     <div className="grid grid-cols-2 gap-2 bg-gray-200 p-1 rounded-2xl">
@@ -369,7 +371,6 @@ const Shift = () => {
                     </div>
                   </div>
 
-                  {/* Input tanggal */}
                   <div>
                     <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Tanggal</p>
                     {mode === 'single' ? (
@@ -403,10 +404,25 @@ const Shift = () => {
                     )}
                   </div>
 
-                  {/* Pilih shift — REVISI: tambah tombol refresh di sebelah label */}
+                  {/* REVISI: Dropdown Pilih Lokasi Outlet */}
+                  <div>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Lokasi Outlet</p>
+                    <select
+                      value={selectedLokasi}
+                      onChange={e => setSelectedLokasi(e.target.value)}
+                      className="w-full bg-white border border-gray-200 p-4 rounded-2xl font-bold text-sm focus:outline-none focus:border-[#fbc02d]"
+                    >
+                      <option value="" disabled>-- Pilih Lokasi Shift --</option>
+                      {lokasiList.map(loc => (
+                        <option key={loc} value={loc}>{loc}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Pilih shift */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Shift</p>
+                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Jam Shift</p>
                       <button
                         onClick={handleRefreshShifts}
                         disabled={isRefreshingShifts}
@@ -419,14 +435,10 @@ const Shift = () => {
                     </div>
 
                     {shiftList.length === 0 ? (
-                      // REVISI: Tampilkan pesan kosong yang lebih informatif
                       <div className="w-full bg-white border border-dashed border-gray-200 p-4 rounded-2xl text-center">
                         <p className="text-xs text-gray-400 font-bold">
                           Daftar shift kosong.{' '}
-                          <button
-                            onClick={handleRefreshShifts}
-                            className="text-[#fbc02d] underline underline-offset-2"
-                          >
+                          <button onClick={handleRefreshShifts} className="text-[#fbc02d] underline underline-offset-2">
                             Coba muat ulang
                           </button>
                         </p>
@@ -437,9 +449,9 @@ const Shift = () => {
                         onChange={e => setSelectedShift(e.target.value)}
                         className="w-full bg-white border border-gray-200 p-4 rounded-2xl font-bold text-sm focus:outline-none focus:border-[#fbc02d]"
                       >
-                        <option value="" disabled>-- Pilih Shift ({shiftList.length} tersedia) --</option>
+                        <option value="" disabled>-- Pilih Jam Shift ({shiftList.length} tersedia) --</option>
                         {shiftList.map(s => (
-                          <option key={s.name} value={s.name}>{s.name}</option>
+                          <option key={s.name} value={s.name}>{s.name} ({s.start_time.substring(0,5)} - {s.end_time.substring(0,5)})</option>
                         ))}
                       </select>
                     )}
@@ -461,9 +473,9 @@ const Shift = () => {
 
                   <button
                     onClick={tanganiSubmit}
-                    disabled={isSubmitting || !selectedShift}
+                    disabled={isSubmitting || !selectedShift || !selectedLokasi}
                     className={`w-full font-black py-4 mt-2 rounded-2xl shadow-lg text-base active:scale-95 transition-all flex items-center justify-center gap-2 ${
-                      isSubmitting || !selectedShift
+                      isSubmitting || !selectedShift || !selectedLokasi
                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                         : 'bg-[#3e2723] text-[#fbc02d]'
                     }`}
@@ -509,8 +521,9 @@ const Shift = () => {
                               <p className="font-black text-[#3e2723] text-sm leading-tight break-words">
                                 {item.shift_type}
                               </p>
+                              {/* REVISI: Tampilkan lokasi yang diajukan di histori */}
                               <p className="text-[10px] text-gray-400 font-bold mt-0.5">
-                                {item.name}
+                                {item.name} {item.shift_location ? `• ${item.shift_location}` : ''}
                               </p>
                             </div>
                             <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black shrink-0 ${s.bg} ${s.text}`}>
