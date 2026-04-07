@@ -88,14 +88,14 @@ const parseLokalDate = (tglStr: string): Date => {
 };
 
 const isRamadhan = (tanggal?: Date): boolean => {
-  const now   = tanggal || new Date();
+  const now = tanggal || new Date();
   const tahun = now.getFullYear();
   const bulan = now.getMonth() + 1;
-  const tgl   = now.getDate();
-  const curr  = bulan * 100 + tgl;
-  if (tahun === 2025 && curr >= 301  && curr <= 330)  return true;
-  if (tahun === 2026 && curr >= 218  && curr <= 319)  return true;
-  if (tahun === 2027 && curr >= 209  && curr <= 309)  return true;
+  const tgl = now.getDate();
+  const curr = bulan * 100 + tgl;
+  if (tahun === 2025 && curr >= 301 && curr <= 330) return true;
+  if (tahun === 2026 && curr >= 218 && curr <= 319) return true;
+  if (tahun === 2027 && curr >= 209 && curr <= 309) return true;
   return false;
 };
 
@@ -113,17 +113,17 @@ const isSatpam = (role?: string): boolean => {
 };
 
 const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: string } => {
-  const hari     = tglDate.getDay();
+  const hari = tglDate.getDay();
   const isFriday = hari === 5;
   const ramadhan = isRamadhan(tglDate);
 
-  const jamMasuk  = '07:30';
+  const jamMasuk = '07:30';
   const jamKeluar = isFriday ? '17:00' : '16:30';
 
-  const jamMasukR  = '07:00';
+  const jamMasukR = '07:00';
   const jamKeluarR = isFriday ? '16:00' : '15:30';
 
-  const baseIn  = ramadhan ? jamMasukR  : jamMasuk;
+  const baseIn = ramadhan ? jamMasukR : jamMasuk;
   const baseOut = ramadhan ? jamKeluarR : jamKeluar;
 
   if (satpam) {
@@ -133,12 +133,12 @@ const getJamShiftKantor = (tglDate: Date, satpam: boolean): { in: string; out: s
 };
 
 const getNamaShiftKantor = (tglDate: Date, branchUser: string | undefined, _satpamFlag: boolean): string => {
-  const hari         = tglDate.getDay();
-  const isFriday     = hari === 5;
-  const ramadhan     = isRamadhan(tglDate);
+  const hari = tglDate.getDay();
+  const isFriday = hari === 5;
+  const ramadhan = isRamadhan(tglDate);
 
-  const branchLabel  = (branchUser || '').toLowerCase().includes('jakarta') ? 'Jakarta' : 'PH Klaten';
-  const hariLabel    = isFriday ? 'Jumat' : 'Senin - Kamis';
+  const branchLabel = (branchUser || '').toLowerCase().includes('jakarta') ? 'Jakarta' : 'PH Klaten';
+  const hariLabel = isFriday ? 'Jumat' : 'Senin - Kamis';
   const periodeLabel = ramadhan ? 'Ramadhan' : 'Non Ramadhan';
 
   return `${hariLabel} (${branchLabel} ${periodeLabel})`;
@@ -153,7 +153,7 @@ const getJamShift = (
   activeShift: ActiveShift | null
 ): { in: string; out: string } => {
   const tglDate = parseLokalDate(tgl);
-  const kantor  = isKaryawanKantor(branchUser);
+  const kantor = isKaryawanKantor(branchUser);
 
   if (!kantor) {
     if (activeShift && shiftNameFromRecord === activeShift.shift_name) {
@@ -176,11 +176,11 @@ const validasiShiftName = (
   role: string | undefined,
   activeShift: ActiveShift | null
 ): string => {
-  const tglDate   = parseLokalDate(tgl);
-  const hari      = tglDate.getDay();
-  const isFriday  = hari === 5;
+  const tglDate = parseLokalDate(tgl);
+  const hari = tglDate.getDay();
+  const isFriday = hari === 5;
   const isWeekend = hari === 0 || hari === 6;
-  const kantor    = isKaryawanKantor(branch);
+  const kantor = isKaryawanKantor(branch);
   const satpamFlag = isSatpam(role);
 
   if (!kantor) {
@@ -200,10 +200,10 @@ const hitungHariKerjaDalamBulan = (records: LeaveRecord[], filterFn: (r: LeaveRe
   const bulanMulai = new Date(tahunAktif, bulanAktif, 1);
   const bulanAkhir = new Date(tahunAktif, bulanAktif + 1, 0);
   return records.filter(filterFn).reduce((acc, r) => {
-    const from  = parseLokalDate(r.from_date);
-    const to    = parseLokalDate(r.to_date);
+    const from = parseLokalDate(r.from_date);
+    const to = parseLokalDate(r.to_date);
     const start = from < bulanMulai ? bulanMulai : from;
-    const end   = to > bulanAkhir ? bulanAkhir : to;
+    const end = to > bulanAkhir ? bulanAkhir : to;
     let hari = 0;
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       if (d.getDay() !== 0 && d.getDay() !== 6) hari++;
@@ -249,21 +249,21 @@ const cekBranchVsLokasi = (
 
   // Fallback: validasi string matching jika data lokasi belum tersedia
   const lokasi = namaLokasi.toLowerCase().trim();
-  const isLokasiKlaten  = lokasi.includes('klaten') || lokasi.includes('ph');
+  const isLokasiKlaten = lokasi.includes('klaten') || lokasi.includes('ph');
   const isLokasiJakarta = lokasi.includes('jakarta');
-  const isBranchKlaten  = branch.includes('klaten') || branch.includes('ph');
+  const isBranchKlaten = branch.includes('klaten') || branch.includes('ph');
   const isBranchJakarta = branch.includes('jakarta');
 
-  if (isLokasiKlaten  && !isBranchKlaten)  return `Bukan lokasi kamu`;
+  if (isLokasiKlaten && !isBranchKlaten) return `Bukan lokasi kamu`;
   if (isLokasiJakarta && !isBranchJakarta) return `Bukan lokasi kamu`;
   return null;
 };
 
 const hitungJarak = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-  const R    = 6371000;
+  const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a    = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
@@ -333,27 +333,27 @@ const drawOverlay = async (ctx: CanvasRenderingContext2D, w: number, h: number, 
 };
 
 const Absen = () => {
-  const navigate      = useNavigate();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const BACKEND      = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
+  const BACKEND = (import.meta as any).env?.VITE_API_URL || 'https://ropi-hr-backend.vercel.app';
   const LOKASI_FALLBACK: Lokasi[] = [{ nama: 'PH Klaten', lat: -7.6146229, lng: 110.6867057, radius: 70 }];
 
-  const [user,          setUser]          = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   // REVISI: lokasiKantor HANYA dipakai untuk karyawan kantor.
   // Karyawan outlet tidak menggunakan array ini untuk geofence.
-  const [lokasiKantor,  setLokasiKantor]  = useState<Lokasi[]>(LOKASI_FALLBACK);
-  const [dataRiwayat,   setDataRiwayat]   = useState<RiwayatAbsen[]>([]);
-  const [bulanAktif,    setBulanAktif]    = useState(new Date().getMonth());
-  const [tahunAktif,    setTahunAktif]    = useState(new Date().getFullYear());
-  const [masterShifts,  setMasterShifts]  = useState<Record<string, { in: string; out: string }>>({});
-  const [leaveRecords,  setLeaveRecords]  = useState<LeaveRecord[]>([]);
+  const [lokasiKantor, setLokasiKantor] = useState<Lokasi[]>(LOKASI_FALLBACK);
+  const [dataRiwayat, setDataRiwayat] = useState<RiwayatAbsen[]>([]);
+  const [bulanAktif, setBulanAktif] = useState(new Date().getMonth());
+  const [tahunAktif, setTahunAktif] = useState(new Date().getFullYear());
+  const [masterShifts, setMasterShifts] = useState<Record<string, { in: string; out: string }>>({});
+  const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>([]);
   const [overtimeRecords, setOvertimeRecords] = useState<OvertimeRecord[]>([]);
-  const [lihatSemua,    setLihatSemua]    = useState(false);
+  const [lihatSemua, setLihatSemua] = useState(false);
 
-  const [activeShift,   setActiveShift]   = useState<ActiveShift | null>(null);
-  const [shiftLoading,  setShiftLoading]  = useState(false);
-  const [shiftError,    setShiftError]    = useState<string | null>(null);
+  const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
+  const [shiftLoading, setShiftLoading] = useState(false);
+  const [shiftError, setShiftError] = useState<string | null>(null);
 
   const shiftLoadingRef = useRef(shiftLoading);
   useEffect(() => { shiftLoadingRef.current = shiftLoading; }, [shiftLoading]);
@@ -363,19 +363,19 @@ const Absen = () => {
   useEffect(() => { lokasiKantorRef.current = lokasiKantor; }, [lokasiKantor]);
 
   const [isModalAbsenOpen, setIsModalAbsenOpen] = useState(false);
-  const [modeAbsen,        setModeAbsen]        = useState('MASUK');
-  const [jamModal,         setJamModal]         = useState('--:--');
-  const [gpsStatus,        setGpsStatus]        = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
-  const [wajahStatus,      setWajahStatus]      = useState({ show: false, ok: false });
-  const [kameraBorder,     setKameraBorder]     = useState('border-[#fbc02d]');
-  const [namaLokasi,       setNamaLokasi]       = useState<string>('Mendeteksi...');
+  const [modeAbsen, setModeAbsen] = useState('MASUK');
+  const [jamModal, setJamModal] = useState('--:--');
+  const [gpsStatus, setGpsStatus] = useState({ tipe: 'loading', pesan: 'Mendeteksi lokasi...' });
+  const [wajahStatus, setWajahStatus] = useState({ show: false, ok: false });
+  const [kameraBorder, setKameraBorder] = useState('border-[#fbc02d]');
+  const [namaLokasi, setNamaLokasi] = useState<string>('Mendeteksi...');
 
-  const [cameraStep,        setCameraStep]        = useState(1);
-  const [fotoBase64,        setFotoBase64]        = useState<string | null>(null);
-  const [fotoKiriBase64,    setFotoKiriBase64]    = useState<string | null>(null);
-  const [jepretState,       setJepretState]       = useState({ aktif: false, teks: 'Cek Sistem...' });
-  const [isKirimLoading,    setIsKirimLoading]    = useState(false);
-  const [koordinatGPS,      setKoordinatGPS]      = useState<{ lat: number; lng: number } | null>(null);
+  const [cameraStep, setCameraStep] = useState(1);
+  const [fotoBase64, setFotoBase64] = useState<string | null>(null);
+  const [fotoKiriBase64, setFotoKiriBase64] = useState<string | null>(null);
+  const [jepretState, setJepretState] = useState({ aktif: false, teks: 'Cek Sistem...' });
+  const [isKirimLoading, setIsKirimLoading] = useState(false);
+  const [koordinatGPS, setKoordinatGPS] = useState<{ lat: number; lng: number } | null>(null);
 
   const [detailModal, setDetailModal] = useState<{
     show: boolean; tgl: string;
@@ -384,26 +384,26 @@ const Absen = () => {
 
   const [toastMsg, setToastMsg] = useState<{ show: boolean; type: 'success' | 'late'; title: string; desc: string } | null>(null);
 
-  const videoRef           = useRef<HTMLVideoElement>(null);
-  const streamRef          = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const intervalDeteksiRef = useRef<number | null>(null);
-  const intervalJamRef     = useRef<number | null>(null);
-  const cameraStepRef      = useRef(cameraStep);
+  const intervalJamRef = useRef<number | null>(null);
+  const cameraStepRef = useRef(cameraStep);
   useEffect(() => { cameraStepRef.current = cameraStep; }, [cameraStep]);
 
-  const outlet  = isKaryawanOutlet(user?.branch);
-  const satpam  = isSatpam(user?.role);
+  const outlet = isKaryawanOutlet(user?.branch);
+  const satpam = isSatpam(user?.role);
 
   const stepsData = outlet
     ? [
-        { n: 1, icon: 'fa-camera',      label: 'Wajah+Kanan' },
-        { n: 2, icon: 'fa-hand',        label: 'Wajah+Kiri'  },
-        { n: 3, icon: 'fa-paper-plane', label: 'Kirim'       },
-      ]
+      { n: 1, icon: 'fa-camera', label: 'Wajah+Kanan' },
+      { n: 2, icon: 'fa-hand', label: 'Wajah+Kiri' },
+      { n: 3, icon: 'fa-paper-plane', label: 'Kirim' },
+    ]
     : [
-        { n: 1, icon: 'fa-camera',      label: 'Selfie'  },
-        { n: 3, icon: 'fa-paper-plane', label: 'Kirim' },
-      ];
+      { n: 1, icon: 'fa-camera', label: 'Selfie' },
+      { n: 3, icon: 'fa-paper-plane', label: 'Kirim' },
+    ];
 
   useEffect(() => {
     const userData = localStorage.getItem('ropi_user');
@@ -431,7 +431,7 @@ const Absen = () => {
 
   useEffect(() => {
     const modeAuto = searchParams.get('mode');
-    const isAuto   = searchParams.get('auto');
+    const isAuto = searchParams.get('auto');
     if (isAuto === 'true' && modeAuto && user) {
       setTimeout(() => bukaModalAbsen(modeAuto), 500);
     }
@@ -477,14 +477,14 @@ const Absen = () => {
 
   const ambilMasterShift = async () => {
     try {
-      const res  = await fetch(`${BACKEND}/api/attendance/shifts?_t=${Date.now()}`);
+      const res = await fetch(`${BACKEND}/api/attendance/shifts?_t=${Date.now()}`);
       const data = await res.json();
       if (data.success && data.data) {
         const tempMap: Record<string, { in: string; out: string }> = {};
         data.data.forEach((s: any) => {
           tempMap[s.name] = {
-            in:  s.start_time ? s.start_time.substring(0, 5) : '07:00',
-            out: s.end_time   ? s.end_time.substring(0, 5)   : '15:30',
+            in: s.start_time ? s.start_time.substring(0, 5) : '07:00',
+            out: s.end_time ? s.end_time.substring(0, 5) : '15:30',
           };
         });
         setMasterShifts(tempMap);
@@ -494,8 +494,8 @@ const Absen = () => {
 
   const ambilLokasiKantor = async (branch?: string) => {
     try {
-      const url  = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}?_t=${Date.now()}` : `${BACKEND}/api/locations?_t=${Date.now()}`;
-      const res  = await fetch(url);
+      const url = branch ? `${BACKEND}/api/locations/${encodeURIComponent(branch)}?_t=${Date.now()}` : `${BACKEND}/api/locations?_t=${Date.now()}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success && data.locations?.length > 0) setLokasiKantor(data.locations);
     } catch { console.warn('Pakai lokasi fallback'); }
@@ -504,12 +504,12 @@ const Absen = () => {
   const ambilRiwayatAbsen = async () => {
     if (!user) return;
     try {
-      const dari   = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
-      const akhir  = new Date(tahunAktif, bulanAktif + 1, 0);
+      const dari = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-01`;
+      const akhir = new Date(tahunAktif, bulanAktif + 1, 0);
       const sampai = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(akhir.getDate()).padStart(2, '0')}`;
 
-      const res    = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}&_t=${Date.now()}`);
-      const data   = await res.json();
+      const res = await fetch(`${BACKEND}/api/attendance?employee_id=${encodeURIComponent(user.employee_id)}&from=${dari}&to=${sampai}&_t=${Date.now()}`);
+      const data = await res.json();
       if (data.success && data.data) setDataRiwayat(data.data);
       else setDataRiwayat([]);
     } catch { setDataRiwayat([]); }
@@ -517,12 +517,12 @@ const Absen = () => {
 
   const ambilRiwayatIzin = async (employeeId: string) => {
     try {
-      const res  = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}&_t=${Date.now()}`);
+      const res = await fetch(`${BACKEND}/api/attendance/leave-history?employee_id=${employeeId}&_t=${Date.now()}`);
       const data = await res.json();
       if (data.success && data.data) {
         const filtered = data.data.filter((item: LeaveRecord) => {
-          const from       = parseLokalDate(item.from_date);
-          const to         = parseLokalDate(item.to_date);
+          const from = parseLokalDate(item.from_date);
+          const to = parseLokalDate(item.to_date);
           const bulanMulai = new Date(tahunAktif, bulanAktif, 1);
           const bulanAkhir = new Date(tahunAktif, bulanAktif + 1, 0);
           return from <= bulanAkhir && to >= bulanMulai;
@@ -533,7 +533,7 @@ const Absen = () => {
   };
 
   const matikanKamera = () => {
-    if (intervalJamRef.current)     window.clearInterval(intervalJamRef.current);
+    if (intervalJamRef.current) window.clearInterval(intervalJamRef.current);
     if (intervalDeteksiRef.current) window.clearInterval(intervalDeteksiRef.current);
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
   };
@@ -594,8 +594,8 @@ const Absen = () => {
     intervalJamRef.current = window.setInterval(() => setJamModal(new Date().toLocaleTimeString('id-ID')), 1000);
 
     // ── FLOW GPS DENGAN VALIDASI GEOFENCE (BERLAKU UNTUK KANTOR DAN OUTLET) ────────────
-    const MAX_AKURASI   = 300;
-    const RADIUS_MIN    = 100;
+    const MAX_AKURASI = 300;
+    const RADIUS_MIN = 100;
     const MAX_TUNGGU_MS = 15000;
     const TARGET_AKURASI = 50;
 
@@ -606,7 +606,7 @@ const Absen = () => {
 
       let terdekat = { valid: false, nama: '?', jarak: Infinity, radius: RADIUS_MIN };
       for (const k of lokasiAktif) {
-        const r     = Math.max(k.radius, RADIUS_MIN);
+        const r = Math.max(k.radius, RADIUS_MIN);
         const jarak = Math.round(hitungJarak(coords.lat, coords.lng, k.lat, k.lng));
         if (jarak <= r) {
           terdekat = { valid: true, nama: k.nama, jarak, radius: r };
@@ -632,11 +632,11 @@ const Absen = () => {
         setNamaLokasi('Lokasi Ditolak');
         let pesanError = '';
         if (lokasiAktif.length === 0) {
-           pesanError = 'Lokasi absensi kamu belum didaftarkan di sistem oleh HRD.';
+          pesanError = 'Lokasi absensi kamu belum didaftarkan di sistem oleh HRD.';
         } else if (akurasi > MAX_AKURASI) {
-           pesanError = `Sinyal GPS lemah (${Math.round(akurasi)}m), pindah ke area terbuka`;
+          pesanError = `Sinyal GPS lemah (${Math.round(akurasi)}m), pindah ke area terbuka`;
         } else {
-           pesanError = `Di luar area absen (${terdekat.jarak}m dari ${terdekat.nama}, maks ${terdekat.radius}m)`;
+          pesanError = `Di luar area absen (${terdekat.jarak}m dari ${terdekat.nama}, maks ${terdekat.radius}m)`;
         }
         setGpsStatus({ tipe: 'error', pesan: pesanError });
         setJepretState({ aktif: false, teks: 'Ditolak' });
@@ -730,9 +730,9 @@ const Absen = () => {
   const muatFaceAPI = () => {
     setWajahStatus({ show: true, ok: false });
     if (window.faceapi?.nets?.tinyFaceDetector?.isLoaded) { mulaiDeteksi(); return; }
-    const script    = document.createElement('script');
-    script.src      = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';
-    script.onload   = async () => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';
+    script.onload = async () => {
       await window.faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model');
       mulaiDeteksi();
     };
@@ -834,18 +834,18 @@ const Absen = () => {
 
     try {
       const res = await fetch(`${BACKEND}/api/attendance/checkin`, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          employee_id:               user.employee_id,
-          tipe:                      modeAbsen === 'MASUK' ? 'IN' : 'OUT',
-          latitude:                  koordinatGPS?.lat ?? fallbackLat,
-          longitude:                 koordinatGPS?.lng ?? fallbackLng,
-          branch:                    user.branch || '',
-          image_verification:        fotoBase64,
+          employee_id: user.employee_id,
+          tipe: modeAbsen === 'MASUK' ? 'IN' : 'OUT',
+          latitude: koordinatGPS?.lat ?? fallbackLat,
+          longitude: koordinatGPS?.lng ?? fallbackLng,
+          branch: user.branch || '',
+          image_verification: fotoBase64,
           custom_verification_image: outlet ? fotoKiriBase64 : undefined,
-          shift:                     namaShiftKirim,
-          shift_location:            outlet ? (activeShiftRef.current?.shift_location ?? null) : null,
+          shift: namaShiftKirim,
+          shift_location: outlet ? (activeShiftRef.current?.shift_location ?? null) : null,
         }),
       });
 
@@ -862,28 +862,28 @@ const Absen = () => {
         const jamSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(/\./g, ':');
 
         if (modeAbsen === 'MASUK') {
-           const shiftInfo = getJamShift(namaShiftKirim, tglStr, user.branch, user.role, masterShifts, activeShiftRef.current);
-           const selisih = toMenit(jamSekarang) - toMenit(shiftInfo.in);
+          const shiftInfo = getJamShift(namaShiftKirim, tglStr, user.branch, user.role, masterShifts, activeShiftRef.current);
+          const selisih = toMenit(jamSekarang) - toMenit(shiftInfo.in);
 
-           if (selisih > 0) {
-              const isAlreadyCounted = dataRiwayat.some(r => r.log_type === 'IN' && (r.time?.includes(tglStr) || r.attendance_date?.includes(tglStr)));
-              const finalTelatCount = isAlreadyCounted ? rekapTelat : rekapTelat + 1;
+          if (selisih > 0) {
+            const isAlreadyCounted = dataRiwayat.some(r => r.log_type === 'IN' && (r.time?.includes(tglStr) || r.attendance_date?.includes(tglStr)));
+            const finalTelatCount = isAlreadyCounted ? rekapTelat : rekapTelat + 1;
 
-              setToastMsg({
-                show: true,
-                type: 'late',
-                title: 'Kamu Terlambat!',
-                desc: `Masuk telat ${formatDurasi(selisih)} hari ini. (Total ${finalTelatCount}x telat bulan ini)`
-              });
-           } else {
-              setToastMsg({
-                show: true, type: 'success', title: 'Absen Masuk Berhasil', desc: 'Kamu datang tepat waktu. Semangat bekerja!'
-              });
-           }
+            setToastMsg({
+              show: true,
+              type: 'late',
+              title: 'Kamu Terlambat!',
+              desc: `Masuk telat ${formatDurasi(selisih)} hari ini. (Total ${finalTelatCount}x telat bulan ini)`
+            });
+          } else {
+            setToastMsg({
+              show: true, type: 'success', title: 'Absen Masuk Berhasil', desc: 'Kamu datang tepat waktu. Semangat bekerja!'
+            });
+          }
         } else {
-           setToastMsg({
-              show: true, type: 'success', title: 'Absen Keluar Berhasil', desc: 'Hati-hati di jalan pulang, selamat beristirahat!'
-           });
+          setToastMsg({
+            show: true, type: 'success', title: 'Absen Keluar Berhasil', desc: 'Hati-hati di jalan pulang, selamat beristirahat!'
+          });
         }
 
         setTimeout(() => setToastMsg(null), 8000);
@@ -943,14 +943,14 @@ const Absen = () => {
   const rekapHadir = Object.keys(groupedRiwayat).length;
   Object.entries(groupedRiwayat).forEach(([tgl, d]) => {
     if (d.in?.time) {
-      const jamAbsen  = formatJamLokal(d.in.time);
+      const jamAbsen = formatJamLokal(d.in.time);
       const shiftInfo = getJamShift(d.in.shift, tgl, user?.branch, user?.role, masterShifts, activeShift);
       if (toMenit(jamAbsen) > toMenit(shiftInfo.in)) rekapTelat++;
     }
   });
 
-  const rekapIzin  = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
-  const rekapCuti  = hitungHariKerjaDalamBulan(leaveRecords, r =>  r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
+  const rekapIzin = hitungHariKerjaDalamBulan(leaveRecords, r => !r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
+  const rekapCuti = hitungHariKerjaDalamBulan(leaveRecords, r => r.leave_type.toLowerCase().includes('tahunan') && r.status?.toLowerCase() === 'approved', tahunAktif, bulanAktif);
 
   const rekapLemburMenit = overtimeRecords.reduce((acc, r) => {
     if (r.status.toLowerCase() === 'approved') {
@@ -971,7 +971,7 @@ const Absen = () => {
 
     const isCuti = r.leave_type.toLowerCase().includes('tahunan');
     const from = parseLokalDate(r.from_date);
-    const to   = parseLokalDate(r.to_date);
+    const to = parseLokalDate(r.to_date);
     for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       if (isCuti) {
@@ -983,20 +983,20 @@ const Absen = () => {
   });
 
   const sortedTglKeys = Object.keys(groupedRiwayat).sort((a, b) => b.localeCompare(a));
-  const tampilKeys    = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
+  const tampilKeys = lihatSemua ? sortedTglKeys : sortedTglKeys.slice(0, 5);
 
   const renderKalender = () => {
     const hariPertama = new Date(tahunAktif, bulanAktif, 1).getDay();
-    const totalHari   = new Date(tahunAktif, bulanAktif + 1, 0).getDate();
-    const blanks      = Array.from({ length: hariPertama }, (_, i) => <div key={`b-${i}`} />);
-    const days        = Array.from({ length: totalHari }, (_, i) => {
-      const d         = i + 1;
+    const totalHari = new Date(tahunAktif, bulanAktif + 1, 0).getDate();
+    const blanks = Array.from({ length: hariPertama }, (_, i) => <div key={`b-${i}`} />);
+    const days = Array.from({ length: totalHari }, (_, i) => {
+      const d = i + 1;
       const isHariIni = d === new Date().getDate() && bulanAktif === new Date().getMonth() && tahunAktif === new Date().getFullYear();
-      const strTgl    = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dataIn    = groupedRiwayat[strTgl]?.in;
-      const checkin   = dataIn?.time;
-      const adaIzin   = tanggalIzinSet.has(strTgl);
-      const adaCuti   = tanggalCutiSet.has(strTgl);
+      const strTgl = `${tahunAktif}-${String(bulanAktif + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dataIn = groupedRiwayat[strTgl]?.in;
+      const checkin = dataIn?.time;
+      const adaIzin = tanggalIzinSet.has(strTgl);
+      const adaCuti = tanggalCutiSet.has(strTgl);
       let kelas = 'w-7 h-7 flex items-center justify-center mx-auto rounded-full text-xs relative ';
 
       let dot: React.ReactNode = null;
@@ -1010,7 +1010,7 @@ const Absen = () => {
         dot = <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />;
       } else if (checkin) {
         const shiftInfo = getJamShift(dataIn?.shift, strTgl, user?.branch, user?.role, masterShifts, activeShift);
-        const isTelat   = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in);
+        const isTelat = toMenit(formatJamLokal(checkin)) > toMenit(shiftInfo.in);
         kelas += isTelat ? 'bg-red-100 text-red-600 font-bold' : 'bg-green-100 text-green-700 font-bold';
         dot = <span className={`absolute -bottom-0.5 w-1 h-1 rounded-full ${isTelat ? 'bg-red-400' : 'bg-green-400'}`} />;
       } else {
@@ -1047,20 +1047,19 @@ const Absen = () => {
       {/* ── TOAST POPUP NOTIFIKASI ── */}
       {toastMsg && (
         <div className="fixed top-6 left-0 w-full flex justify-center z-[9999] pointer-events-none px-4">
-          <div className={`pointer-events-auto animate-bounceIn w-full max-w-sm flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border-2 ${
-            toastMsg.type === 'late'
-              ? 'bg-[#dc2626] border-[#ef4444] shadow-red-600/50'
-              : 'bg-[#16a34a] border-[#22c55e] shadow-green-600/50'
-          }`}>
+          <div className={`pointer-events-auto animate-bounceIn w-full max-w-sm flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border-2 ${toastMsg.type === 'late'
+            ? 'bg-[#dc2626] border-[#ef4444] shadow-red-600/50'
+            : 'bg-[#16a34a] border-[#22c55e] shadow-green-600/50'
+            }`}>
             <div className="shrink-0 flex items-center justify-center">
-               <i className={`fa-solid ${toastMsg.type === 'late' ? 'fa-triangle-exclamation text-3xl animate-pulse text-yellow-300' : 'fa-circle-check text-3xl text-white'}`}></i>
+              <i className={`fa-solid ${toastMsg.type === 'late' ? 'fa-triangle-exclamation text-3xl animate-pulse text-yellow-300' : 'fa-circle-check text-3xl text-white'}`}></i>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-black text-white uppercase tracking-wider leading-tight drop-shadow-sm">{toastMsg.title}</p>
               <p className="text-[11px] font-medium text-white/90 mt-0.5 leading-snug">{toastMsg.desc}</p>
             </div>
             <button onClick={() => setToastMsg(null)} className="shrink-0 text-white/60 hover:text-white active:scale-95 p-1 ml-1 transition-colors">
-               <i className="fa-solid fa-xmark text-xl"></i>
+              <i className="fa-solid fa-xmark text-xl"></i>
             </button>
           </div>
         </div>
@@ -1138,8 +1137,8 @@ const Absen = () => {
                 {[
                   { label: 'Hadir', value: rekapHadir, color: 'text-green-400' },
                   { label: 'Telat', value: rekapTelat, color: 'text-red-400' },
-                  { label: 'Izin',  value: rekapIzin,  color: 'text-blue-300' },
-                  { label: 'Cuti',  value: rekapCuti,  color: 'text-teal-400' },
+                  { label: 'Izin', value: rekapIzin, color: 'text-blue-300' },
+                  { label: 'Cuti', value: rekapCuti, color: 'text-teal-400' },
                   { label: 'Lembur', value: formatDurasi(rekapLemburMenit), color: 'text-purple-400' },
                 ].map(item => (
                   <div key={item.label} className="bg-white/10 rounded-xl py-2 px-1 flex flex-col justify-center items-center text-center overflow-hidden">
@@ -1192,23 +1191,23 @@ const Absen = () => {
                   ) : (
                     <>
                       {tampilKeys.map(tgl => {
-                        const d          = groupedRiwayat[tgl];
-                        const jamIn      = formatJamLokal(d.in?.time);
-                        const jamOut     = formatJamLokal(d.out?.time);
-                        const tglDate    = parseLokalDate(tgl);
-                        const shiftInfo  = getJamShift(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, masterShifts, activeShift);
+                        const d = groupedRiwayat[tgl];
+                        const jamIn = formatJamLokal(d.in?.time);
+                        const jamOut = formatJamLokal(d.out?.time);
+                        const tglDate = parseLokalDate(tgl);
+                        const shiftInfo = getJamShift(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, masterShifts, activeShift);
                         const shiftLabel = validasiShiftName(d.in?.shift || d.out?.shift, tgl, user?.branch, user?.role, activeShift);
 
                         const adaIzinHariIni = tanggalIzinSet.has(tgl);
                         const adaCutiHariIni = tanggalCutiSet.has(tgl);
-                        const dateLabel  = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+                        const dateLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
                         const lemburHariIni = overtimeRecords.find(o => o.overtime_date === tgl && o.status?.toLowerCase() === 'approved');
 
                         let badgeLembur: React.ReactNode = null;
                         if (lemburHariIni) {
-                           const durasi = toMenit(lemburHariIni.end_time) - toMenit(lemburHariIni.start_time);
-                           badgeLembur = <span className="bg-purple-100 text-purple-600 text-[10px] font-black px-2 py-1 rounded-md shadow-sm border border-purple-200">Lembur {formatDurasi(durasi)}</span>;
+                          const durasi = toMenit(lemburHariIni.end_time) - toMenit(lemburHariIni.start_time);
+                          badgeLembur = <span className="bg-purple-100 text-purple-600 text-[10px] font-black px-2 py-1 rounded-md shadow-sm border border-purple-200">Lembur {formatDurasi(durasi)}</span>;
                         }
 
                         let badgeEl: React.ReactNode = null;
@@ -1326,8 +1325,8 @@ const Absen = () => {
                           <i className="fa-solid fa-clock mr-1" />
                           {outlet
                             ? activeShiftRef.current
-                                ? `${activeShiftRef.current.shift_name} • ${activeShiftRef.current.start_time}-${activeShiftRef.current.end_time}`
-                                : 'Jadwal Shift belum diatur HRD'
+                              ? `${activeShiftRef.current.shift_name} • ${activeShiftRef.current.start_time}-${activeShiftRef.current.end_time}`
+                              : 'Jadwal Shift belum diatur HRD'
                             : `${getNamaShiftKantor(new Date(), user?.branch, satpam)} • ${getJamShiftKantor(new Date(), satpam).in}-${getJamShiftKantor(new Date(), satpam).out}`
                           }
                         </p>
@@ -1471,13 +1470,12 @@ const Absen = () => {
                         <button
                           disabled={!jepretState.aktif}
                           onClick={jepretFoto}
-                          className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all shadow-md ${
-                            jepretState.aktif
-                              ? cameraStep === 2
-                                ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                : 'bg-green-500 hover:bg-green-600 text-white'
-                              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          }`}
+                          className={`font-black py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 text-sm transition-all shadow-md ${jepretState.aktif
+                            ? cameraStep === 2
+                              ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                              : 'bg-green-500 hover:bg-green-600 text-white'
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            }`}
                         >
                           <i className="fa-solid fa-camera shrink-0" />
                           <span>{jepretState.teks}</span>
@@ -1510,7 +1508,7 @@ const Absen = () => {
                 MODAL DETAIL RIWAYAT
             ══════════════════════════════════ */}
             {detailModal.show && (() => {
-              const tglDate   = parseLokalDate(detailModal.tgl);
+              const tglDate = parseLokalDate(detailModal.tgl);
               const shiftInfo = getJamShift(
                 detailModal.inData?.shift || detailModal.outData?.shift,
                 detailModal.tgl, user?.branch, user?.role, masterShifts, activeShift
@@ -1520,9 +1518,9 @@ const Absen = () => {
                 detailModal.tgl, user?.branch, user?.role, activeShift
               );
               const hariLabel = tglDate.toLocaleDateString('id-ID', { weekday: 'long' });
-              const tglLabel  = tglDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-              const inJam     = detailModal.inData?.time  ? formatJamLokal(detailModal.inData.time)  : null;
-              const outJam    = detailModal.outData?.time ? formatJamLokal(detailModal.outData.time) : null;
+              const tglLabel = tglDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+              const inJam = detailModal.inData?.time ? formatJamLokal(detailModal.inData.time) : null;
+              const outJam = detailModal.outData?.time ? formatJamLokal(detailModal.outData.time) : null;
 
               const hasVerifImage = !!(detailModal.inData?.custom_verification_image || detailModal.outData?.custom_verification_image);
 
@@ -1578,67 +1576,67 @@ const Absen = () => {
 
                       {hasVerifImage ? (
                         <div className="flex flex-col gap-6 w-full">
-                           <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
+                          <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
+                            <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
+                              <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-blue-500 text-[10px]" /></div>
+                              <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Masuk</p>
+                            </div>
+                            <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
+                              <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
+                                <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                  {detailModal.inData?.custom_foto_absen
+                                    ? <img src={prosesUrlFoto(detailModal.inData.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Masuk" loading="lazy" decoding="async" />
+                                    : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                                  }
+                                  <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
+                                <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                  {detailModal.inData?.custom_verification_image
+                                    ? <img src={prosesUrlFoto(detailModal.inData.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Masuk" loading="lazy" decoding="async" />
+                                    : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                                  }
+                                  <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
+                                </div>
+                              </div>
+                            </div>
+                            <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Masuk →</p>
+                          </div>
+
+                          {detailModal.outData && (
+                            <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
                               <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
-                                <div className="w-6 h-6 rounded-full bg-blue-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-blue-500 text-[10px]" /></div>
-                                <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Masuk</p>
+                                <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-orange-500 text-[10px]" /></div>
+                                <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Keluar</p>
                               </div>
                               <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
-                                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
-                                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                     {detailModal.inData?.custom_foto_absen
-                                       ? <img src={prosesUrlFoto(detailModal.inData.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Masuk" loading="lazy" decoding="async" />
-                                       : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                                     }
-                                     <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
-                                   </div>
-                                 </div>
-                                 <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
-                                   <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                     {detailModal.inData?.custom_verification_image
-                                       ? <img src={prosesUrlFoto(detailModal.inData.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Masuk" loading="lazy" decoding="async" />
-                                       : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                                     }
-                                     <div className="absolute top-2 left-2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Masuk</div>
-                                   </div>
-                                 </div>
+                                <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
+                                  <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                    {detailModal.outData?.custom_foto_absen
+                                      ? <img src={prosesUrlFoto(detailModal.outData.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Keluar" loading="lazy" decoding="async" />
+                                      : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                                    }
+                                    <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
+                                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
+                                  <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
+                                    {detailModal.outData?.custom_verification_image
+                                      ? <img src={prosesUrlFoto(detailModal.outData.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Keluar" loading="lazy" decoding="async" />
+                                      : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
+                                    }
+                                    <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
+                                  </div>
+                                </div>
                               </div>
-                              <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Masuk →</p>
-                           </div>
-
-                           {detailModal.outData && (
-                             <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-3">
-                                <div className="flex items-center gap-2 border-b border-gray-50 pb-2">
-                                  <div className="w-6 h-6 rounded-full bg-orange-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-camera text-orange-500 text-[10px]" /></div>
-                                  <p className="text-xs font-black text-[#3e2723] uppercase tracking-wider">Foto Keluar</p>
-                                </div>
-                                <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory hide-scrollbar">
-                                   <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kanan</p>
-                                     <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                       {detailModal.outData?.custom_foto_absen
-                                         ? <img src={prosesUrlFoto(detailModal.outData.custom_foto_absen)} className="w-full h-full object-contain" alt="Kanan Keluar" loading="lazy" decoding="async" />
-                                         : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                                       }
-                                       <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
-                                     </div>
-                                   </div>
-                                   <div className="flex flex-col gap-1 w-full max-w-[240px] mx-auto shrink-0 snap-center">
-                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide pl-1 text-center">Wajah + Kiri</p>
-                                     <div className="relative rounded-2xl overflow-hidden bg-black border border-gray-200 shadow-sm flex items-center justify-center aspect-[3/4]">
-                                       {detailModal.outData?.custom_verification_image
-                                         ? <img src={prosesUrlFoto(detailModal.outData.custom_verification_image)} className="w-full h-full object-contain" alt="Kiri Keluar" loading="lazy" decoding="async" />
-                                         : <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"><i className="fa-solid fa-image-slash text-2xl text-gray-500" /><p className="text-[10px] text-gray-500 font-bold">Tidak ada foto</p></div>
-                                       }
-                                       <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm border border-white/20">Keluar</div>
-                                     </div>
-                                   </div>
-                                </div>
-                                <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Keluar →</p>
-                             </div>
-                           )}
+                              <p className="text-[9px] text-center text-gray-400 italic">Geser untuk melihat semua foto Keluar →</p>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start w-full">
